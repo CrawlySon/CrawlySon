@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="sk">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>NutriAI – ukážka dizajnu</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: { extend: { colors: { brand: {
+      50:'#f0fdf4',100:'#dcfce7',200:'#bbf7d0',300:'#86efac',400:'#4ade80',
+      500:'#22c55e',600:'#16a34a',700:'#15803d',800:'#166534',900:'#14532d' } } } }
+  }
+</script>
+<style>
+  body{background:#0f172a}
+  .phone{width:390px;height:auto;min-height:780px}
+  .card{border-radius:1rem;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.06);border:1px solid #f1f5f9}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;border-radius:.75rem;padding:.625rem 1rem;font-weight:500}
+  .btn-primary{background:#16a34a;color:#fff}
+  .btn-ghost{background:#f1f5f9;color:#334155}
+  .input{width:100%;border-radius:.75rem;border:1px solid #e2e8f0;padding:.625rem .75rem}
+  .label{display:block;font-size:.875rem;font-weight:500;color:#475569;margin-bottom:.25rem}
+</style>
+</head>
+<body class="min-h-screen p-6 text-slate-800">
+
+<div class="mx-auto max-w-7xl">
+  <div class="mb-6 text-center text-slate-200">
+    <h1 class="text-2xl font-bold">🥗 NutriAI — ukážka dizajnu</h1>
+    <p class="text-slate-400 text-sm">Verná ukážka (rovnaké Tailwind triedy ako appka). Vzorové dáta.</p>
+  </div>
+
+  <div class="flex flex-wrap justify-center gap-6 items-start">
+
+    <!-- 1) LOGIN -->
+    <div class="phone rounded-[2rem] bg-gradient-to-b from-brand-50 to-slate-100 p-6 flex flex-col items-center justify-center shadow-2xl">
+      <div class="card w-full max-w-sm p-6">
+        <div class="mb-6 text-center">
+          <div class="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-600 text-3xl">🥗</div>
+          <h1 class="text-2xl font-bold text-slate-800">NutriAI</h1>
+          <p class="text-sm text-slate-500">Tvoj osobný nutričný denník</p>
+        </div>
+        <label class="label">Heslo</label>
+        <input class="input mb-3" type="password" value="••••••••" />
+        <button class="btn btn-primary w-full">Prihlásiť sa</button>
+      </div>
+      <p class="mt-4 text-xs text-slate-400 text-center">① Prihlásenie heslom</p>
+    </div>
+
+    <!-- 2) DNES / DASHBOARD -->
+    <div class="phone rounded-[2rem] bg-slate-50 p-4 shadow-2xl relative overflow-hidden">
+      <header class="mb-4 flex items-center justify-between">
+        <button class="rounded-full bg-white p-2 shadow-sm w-9">‹</button>
+        <h1 class="text-lg font-bold text-slate-800">Dnes</h1>
+        <button class="rounded-full bg-white p-2 shadow-sm w-9 opacity-30">›</button>
+      </header>
+
+      <!-- Macro summary -->
+      <div class="card p-5">
+        <div class="flex items-center gap-5">
+          <div class="relative shrink-0">
+            <svg viewBox="0 0 120 120" class="h-32 w-32 -rotate-90">
+              <circle cx="60" cy="60" r="52" fill="none" stroke="#e2e8f0" stroke-width="12"/>
+              <circle cx="60" cy="60" r="52" fill="none" stroke="#16a34a" stroke-width="12" stroke-linecap="round"
+                stroke-dasharray="326.7" stroke-dashoffset="111"/>
+            </svg>
+            <div class="absolute inset-0 flex flex-col items-center justify-center">
+              <span class="text-2xl font-bold text-slate-800">1450</span>
+              <span class="text-xs text-slate-400">/ 2200 kcal</span>
+            </div>
+          </div>
+          <div class="min-w-0 flex-1 space-y-3">
+            <div>
+              <div class="flex justify-between text-sm"><span class="font-medium text-slate-600">Bielkoviny</span><span class="text-slate-500">95 / 150 g</span></div>
+              <div class="mt-1 h-2 w-full overflow-hidden rounded-full bg-slate-100"><div class="h-full rounded-full" style="width:63%;background:#3b82f6"></div></div>
+            </div>
+            <div>
+              <div class="flex justify-between text-sm"><span class="font-medium text-slate-600">Sacharidy</span><span class="text-slate-500">160 / 240 g</span></div>
+              <div class="mt-1 h-2 w-full overflow-hidden rounded-full bg-slate-100"><div class="h-full rounded-full" style="width:66%;background:#f59e0b"></div></div>
+            </div>
+            <div>
+              <div class="flex justify-between text-sm"><span class="font-medium text-slate-600">Tuky</span><span class="text-slate-500">48 / 70 g</span></div>
+              <div class="mt-1 h-2 w-full overflow-hidden rounded-full bg-slate-100"><div class="h-full rounded-full" style="width:68%;background:#ef4444"></div></div>
+            </div>
+          </div>
+        </div>
+        <div class="mt-4 rounded-xl bg-slate-50 p-3 text-center text-sm text-slate-600">Ostáva ti <b class="text-brand-700">750 kcal</b> do cieľa</div>
+      </div>
+
+      <!-- meals -->
+      <div class="mt-4 space-y-3">
+        <section class="card overflow-hidden">
+          <div class="flex items-center justify-between px-4 py-2.5">
+            <div class="flex items-baseline gap-2"><h2 class="font-semibold text-slate-700">Raňajky</h2><span class="text-xs text-slate-400">420 kcal</span></div>
+            <button class="text-sm font-medium text-brand-600">+ pridať</button>
+          </div>
+          <ul class="divide-y divide-slate-50">
+            <li class="flex items-center gap-3 px-4 py-2.5"><div class="min-w-0 flex-1"><p class="text-sm font-medium text-slate-800">Ovsené vločky <span class="text-[10px] text-brand-500">✨</span></p><p class="text-xs text-slate-400">60 g · B 8 · S 40 · T 4</p></div><span class="text-sm font-semibold text-slate-600">227</span><button class="text-slate-300">✕</button></li>
+            <li class="flex items-center gap-3 px-4 py-2.5"><div class="min-w-0 flex-1"><p class="text-sm font-medium text-slate-800">Banán</p><p class="text-xs text-slate-400">120 g · B 1 · S 27 · T 0</p></div><span class="text-sm font-semibold text-slate-600">107</span><button class="text-slate-300">✕</button></li>
+          </ul>
+        </section>
+        <section class="card overflow-hidden">
+          <div class="flex items-center justify-between px-4 py-2.5">
+            <div class="flex items-baseline gap-2"><h2 class="font-semibold text-slate-700">Obed</h2><span class="text-xs text-slate-400">647 kcal</span></div>
+            <button class="text-sm font-medium text-brand-600">+ pridať</button>
+          </div>
+          <ul class="divide-y divide-slate-50">
+            <li class="flex items-center gap-3 px-4 py-2.5"><div class="min-w-0 flex-1"><p class="text-sm font-medium text-slate-800">Sviečková na smotane <span class="text-[10px] text-brand-500">✨</span></p><p class="text-xs text-slate-400">250 g · B 10 · S 22 · T 20</p></div><span class="text-sm font-semibold text-slate-600">325</span><button class="text-slate-300">✕</button></li>
+            <li class="flex items-center gap-3 px-4 py-2.5"><div class="min-w-0 flex-1"><p class="text-sm font-medium text-slate-800">Knedľa <span class="text-[10px] text-brand-500">✨</span></p><p class="text-xs text-slate-400">150 g · B 10 · S 64 · T 2</p></div><span class="text-sm font-semibold text-slate-600">322</span><button class="text-slate-300">✕</button></li>
+          </ul>
+        </section>
+      </div>
+
+      <button class="absolute bottom-20 left-1/2 -translate-x-1/2 rounded-full bg-brand-600 px-6 py-3.5 font-semibold text-white shadow-lg">✨ Pridať jedlo</button>
+
+      <!-- bottom nav -->
+      <nav class="absolute bottom-0 inset-x-0 border-t border-slate-200 bg-white/95 backdrop-blur">
+        <div class="flex">
+          <div class="flex flex-1 flex-col items-center gap-0.5 py-2 text-xs text-brand-600 font-semibold"><span class="text-xl">🍽️</span>Dnes</div>
+          <div class="flex flex-1 flex-col items-center gap-0.5 py-2 text-xs text-slate-400"><span class="text-xl">📊</span>História</div>
+          <div class="flex flex-1 flex-col items-center gap-0.5 py-2 text-xs text-slate-400"><span class="text-xl">🥗</span>Potraviny</div>
+          <div class="flex flex-1 flex-col items-center gap-0.5 py-2 text-xs text-slate-400"><span class="text-xl">👤</span>Profil</div>
+        </div>
+      </nav>
+      <p class="absolute top-1 left-1/2 -translate-x-1/2 text-[10px] text-slate-400">② Hlavná obrazovka „Dnes"</p>
+    </div>
+
+    <!-- 3) AI ADD SHEET -->
+    <div class="phone rounded-[2rem] bg-slate-900/40 p-0 shadow-2xl relative overflow-hidden flex flex-col justify-end" style="background:rgba(15,23,42,.4)">
+      <div class="rounded-t-3xl bg-slate-50 p-4">
+        <div class="mx-auto mb-3 h-1.5 w-12 rounded-full bg-slate-300"></div>
+        <div class="mb-3 flex gap-2 overflow-x-auto pb-1">
+          <span class="whitespace-nowrap rounded-full bg-white text-slate-600 border border-slate-200 px-3 py-1.5 text-sm">Raňajky</span>
+          <span class="whitespace-nowrap rounded-full bg-brand-600 text-white px-3 py-1.5 text-sm">Obed</span>
+          <span class="whitespace-nowrap rounded-full bg-white text-slate-600 border border-slate-200 px-3 py-1.5 text-sm">Večera</span>
+        </div>
+        <div class="mb-3 flex rounded-xl bg-slate-200 p-1">
+          <div class="flex-1 rounded-lg bg-white shadow py-1.5 text-center text-sm font-medium">✨ AI / diktovanie</div>
+          <div class="flex-1 py-1.5 text-center text-sm font-medium text-slate-500">🔍 Z databázy</div>
+        </div>
+        <div class="card p-3">
+          <div class="input min-h-[90px] text-slate-700 text-sm">Zjedol som zhruba 400 g porciu sviečkovej s knedľou a vypil pol litra coly.</div>
+          <div class="mt-2 flex gap-2">
+            <button class="btn btn-ghost">🎤 Diktovať</button>
+            <button class="btn btn-primary flex-1">Spracovať AI</button>
+          </div>
+        </div>
+
+        <h3 class="mt-3 px-1 text-sm font-semibold text-slate-500">Návrh (3) — skontroluj a uprav:</h3>
+        <div class="mt-2 space-y-2">
+          <!-- item 1 -->
+          <div class="card p-3">
+            <div class="flex items-start gap-2">
+              <div class="min-w-0 flex-1">
+                <p class="font-medium text-slate-800">Sviečková na smotane</p>
+                <p class="text-xs text-slate-500">250 g · <b>325 kcal</b> · B 10 · S 22 · T 20</p>
+              </div>
+              <div class="flex flex-col items-end gap-1">
+                <span class="rounded-full bg-brand-100 text-brand-700 px-2 py-0.5 text-[10px]">85 %</span>
+                <span class="text-xs text-slate-400">upraviť</span>
+                <span class="text-xs text-red-400">zmazať</span>
+              </div>
+            </div>
+          </div>
+          <!-- item 2 -->
+          <div class="card p-3">
+            <div class="flex items-start gap-2">
+              <div class="min-w-0 flex-1">
+                <p class="font-medium text-slate-800">Knedľa</p>
+                <p class="text-xs text-slate-500">150 g · <b>322 kcal</b> · B 10 · S 64 · T 2</p>
+                <p class="mt-0.5 text-xs italic text-amber-600">⚠ predpoklad ~150 g (6 plátkov)</p>
+              </div>
+              <div class="flex flex-col items-end gap-1">
+                <span class="rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 text-[10px]">70 %</span>
+                <span class="text-xs text-slate-400">upraviť</span>
+                <span class="text-xs text-red-400">zmazať</span>
+              </div>
+            </div>
+          </div>
+          <!-- item 3 -->
+          <div class="card p-3">
+            <div class="flex items-start gap-2">
+              <div class="min-w-0 flex-1">
+                <p class="font-medium text-slate-800">Coca-Cola</p>
+                <p class="text-xs text-slate-500">500 ml · <b>210 kcal</b> · B 0 · S 53 · T 0</p>
+              </div>
+              <div class="flex flex-col items-end gap-1">
+                <span class="rounded-full bg-brand-100 text-brand-700 px-2 py-0.5 text-[10px]">95 %</span>
+                <span class="text-xs text-slate-400">upraviť</span>
+                <span class="text-xs text-red-400">zmazať</span>
+              </div>
+            </div>
+          </div>
+          <div class="card flex items-center justify-between p-3 text-sm">
+            <span class="font-semibold text-slate-700">Spolu</span>
+            <span class="text-slate-600"><b>857 kcal</b> · B 20 · S 139 · T 22</span>
+          </div>
+        </div>
+        <div class="mt-4 flex gap-2">
+          <button class="btn btn-ghost flex-1">Zrušiť</button>
+          <button class="btn btn-primary flex-1">Pridať (3)</button>
+        </div>
+      </div>
+      <p class="absolute top-2 left-1/2 -translate-x-1/2 text-[10px] text-slate-200">③ AI vkladanie + návrh na potvrdenie</p>
+    </div>
+
+    <!-- 4) HISTÓRIA -->
+    <div class="phone rounded-[2rem] bg-slate-50 p-4 shadow-2xl relative overflow-hidden">
+      <h1 class="mb-4 text-xl font-bold text-slate-800">História</h1>
+      <div class="mb-4 flex gap-2">
+        <span class="rounded-full bg-white text-slate-600 border border-slate-200 px-3 py-1.5 text-sm">7 dní</span>
+        <span class="rounded-full bg-brand-600 text-white px-3 py-1.5 text-sm">14 dní</span>
+        <span class="rounded-full bg-white text-slate-600 border border-slate-200 px-3 py-1.5 text-sm">30 dní</span>
+      </div>
+      <div class="card mb-4 p-4">
+        <p class="text-sm text-slate-500">Priemerný denný príjem</p>
+        <p class="text-2xl font-bold text-slate-800">2065 <span class="text-base font-normal text-slate-400">kcal / cieľ 2200</span></p>
+      </div>
+      <div class="card divide-y divide-slate-50">
+        <script>
+          document.write([['ut 3.6.',1980,55],['st 2.6.',2310,105],['ut 1.6.',1870,60],['ne 31.5.',2450,110],['so 30.5.',1750,50],['pi 29.5.',2090,67]].map(function(d){
+            var over=d[1]>2200; var pct=Math.min(100,d[1]/2450*100);
+            return '<div class="px-4 py-3"><div class="flex justify-between text-sm"><span class="font-medium capitalize text-slate-700">'+d[0]+'</span><span class="'+(over?'text-red-500':'text-slate-600')+'">'+d[1]+' kcal</span></div><div class="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-slate-100"><div class="h-full rounded-full '+(over?'bg-red-400':'bg-brand-500')+'" style="width:'+pct+'%"></div></div><div class="mt-1 text-xs text-slate-400">B '+d[2]+' g · '+(d[2]>80?'vyšší':'nižší')+' príjem bielkovín</div></div>';
+          }).join(''));
+        </script>
+      </div>
+      <nav class="absolute bottom-0 inset-x-0 border-t border-slate-200 bg-white/95">
+        <div class="flex">
+          <div class="flex flex-1 flex-col items-center gap-0.5 py-2 text-xs text-slate-400"><span class="text-xl">🍽️</span>Dnes</div>
+          <div class="flex flex-1 flex-col items-center gap-0.5 py-2 text-xs text-brand-600 font-semibold"><span class="text-xl">📊</span>História</div>
+          <div class="flex flex-1 flex-col items-center gap-0.5 py-2 text-xs text-slate-400"><span class="text-xl">🥗</span>Potraviny</div>
+          <div class="flex flex-1 flex-col items-center gap-0.5 py-2 text-xs text-slate-400"><span class="text-xl">👤</span>Profil</div>
+        </div>
+      </nav>
+      <p class="absolute top-1 left-1/2 -translate-x-1/2 text-[10px] text-slate-400">④ História s priemerom a grafom</p>
+    </div>
+
+    <!-- 5) PROFIL -->
+    <div class="phone rounded-[2rem] bg-slate-50 p-4 shadow-2xl relative overflow-hidden">
+      <h1 class="mb-4 text-xl font-bold text-slate-800">Profil a ciele</h1>
+      <section class="card mb-4 space-y-3 p-4">
+        <h2 class="font-semibold text-slate-700">Osobné údaje</h2>
+        <div class="grid grid-cols-2 gap-3">
+          <div><label class="label">Pohlavie</label><div class="input">Muž</div></div>
+          <div><label class="label">Vek</label><div class="input">32</div></div>
+          <div><label class="label">Výška (cm)</label><div class="input">181</div></div>
+          <div><label class="label">Váha (kg)</label><div class="input">84</div></div>
+        </div>
+        <div><label class="label">Aktivita</label><div class="input">Stredná (3–5× týždenne)</div></div>
+        <div><label class="label">Cieľ</label><div class="input">Chudnutie</div></div>
+        <div class="rounded-xl bg-brand-50 p-3 text-sm">
+          <p class="text-slate-600">Odhadovaný výdaj (TDEE): <b>2620 kcal</b></p>
+          <p class="mt-1 text-slate-600">Odporúčaný príjem pre tvoj cieľ: <b class="text-brand-700">2220 kcal</b></p>
+          <button class="btn btn-primary mt-2 w-full">Použiť ako môj cieľ</button>
+        </div>
+      </section>
+      <section class="card space-y-3 p-4">
+        <h2 class="font-semibold text-slate-700">Denné ciele</h2>
+        <div class="grid grid-cols-2 gap-3">
+          <div><label class="label">Kalórie</label><div class="input">2200</div></div>
+          <div><label class="label">Bielkoviny</label><div class="input">150</div></div>
+          <div><label class="label">Sacharidy</label><div class="input">240</div></div>
+          <div><label class="label">Tuky</label><div class="input">70</div></div>
+        </div>
+      </section>
+      <p class="absolute top-1 left-1/2 -translate-x-1/2 text-[10px] text-slate-400">⑤ Profil + výpočet TDEE</p>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>

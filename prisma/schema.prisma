@@ -52,13 +52,16 @@ model Entry {
 model Food {
   id        String  @id @default(cuid())
   name      String
+  brand     String?
   category  String?
+  barcode   String?  @unique
   baseGrams Float   @default(100)
   calories  Float
   protein   Float   @default(0)
   carbs     Float   @default(0)
   fat       Float   @default(0)
   fiber     Float?
+  source    String   @default("seed") // seed | openfoodfacts | manual
   createdAt DateTime @default(now())
 
   @@index([name])

@@ -62,6 +62,28 @@ npm run db:seed     # naplní referenčnú databázu potravín
 
 Hotovo – otvor URL z Vercelu, prihlás sa heslom a na iPhone pridaj na plochu.
 
+### 5. (Voliteľné) Import verejnej databázy potravín
+Okrem predvyplnených slovenských jedál si môžeš natiahnuť tisíce produktov
+z [Open Food Facts](https://openfoodfacts.org) – vrátane **čiarových kódov**
+a značiek, prepočítané na 100 g:
+
+```bash
+# najpopulárnejšie produkty predávané na Slovensku (default)
+npm run db:import
+
+# vlastné voľby
+node scripts/import-openfoodfacts.mjs --country=slovakia --pages=30 --limit=3000
+node scripts/import-openfoodfacts.mjs --search=jogurt --country=
+```
+
+Voľby: `--country` (en názov krajiny, prázdne = celý svet), `--pages`,
+`--pageSize` (max 100), `--search`, `--limit`, `--dryRun`. Import beží
+slušným tempom voči verejnému API a duplikáty rozpoznáva podľa čiarového kódu.
+Importované potraviny sa hneď objavia vo vyhľadávaní aj ako referencia pre AI.
+
+> Pozn.: spúšťaj lokálne alebo z prostredia s prístupom na internet
+> (nie z obmedzeného sandboxu).
+
 ---
 
 ## 💻 Lokálny vývoj
