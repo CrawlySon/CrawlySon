@@ -1,0 +1,65 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Profil používateľa a denné ciele (aplikácia je jednopoužívateľská).
+model Profile {
+  id        Int      @id @default(1)
+  name      String   @default("Ja")
+
+  // Osobné údaje pre výpočet odporúčaného príjmu (TDEE)
+  sex       String?  // "male" | "female"
+  age       Int?
+  heightCm  Float?
+  weightKg  Float?
+  activity  String?  // "sedentary" | "light" | "moderate" | "active" | "very_active"
+  goalType  String?  // "lose" | "maintain" | "gain"
+
+  // Denné ciele
+  goalCalories Int   @default(2000)
+  goalProtein  Int   @default(120)
+  goalCarbs    Int   @default(220)
+  goalFat      Int   @default(65)
+
+  updatedAt DateTime @updatedAt @default(now())
+}
+
+// Jeden záznam zjedeného jedla v denníku
+model Entry {
+  id            String   @id @default(cuid())
+  date          String   // YYYY-MM-DD (lokálny dátum)
+  mealType      String   @default("other") // breakfast | lunch | dinner | snack | other
+  name          String
+  quantityGrams Float?
+  calories      Float
+  protein       Float    @default(0)
+  carbs         Float    @default(0)
+  fat           Float    @default(0)
+  fiber         Float?
+  note          String?
+  source        String   @default("manual") // ai | manual | db
+  createdAt     DateTime @default(now())
+
+  @@index([date])
+}
+
+// Referenčná databáza potravín (hodnoty na 100 g, ak nie je uvedené inak)
+model Food {
+  id        String  @id @default(cuid())
+  name      String
+  category  String?
+  baseGrams Float   @default(100)
+  calories  Float
+  protein   Float   @default(0)
+  carbs     Float   @default(0)
+  fat       Float   @default(0)
+  fiber     Float?
+  createdAt DateTime @default(now())
+
+  @@index([name])
+}
