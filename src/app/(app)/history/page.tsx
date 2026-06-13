@@ -82,11 +82,13 @@ export default function HistoryPage() {
 
   // Farba stĺpca podľa cieľa / hodnoty
   function colorFor(v: number): string {
+    const BLUE = "#3b82f6";
+    const RED = "#ef4444";
     if (v <= 0) return "#e2e8f0"; // bez dát
-    if (category) return "#475569";
-    if (metric === "kcal") return v > goal ? "#ef4444" : "#22c55e"; // nad cieľom = červená
-    if (metric === "water") return goalWaterL && v >= goalWaterL ? "#0ea5e9" : "#f59e0b"; // pod cieľom = oranžová
-    return v >= 7 ? "#22c55e" : v >= 4 ? "#f59e0b" : "#ef4444"; // zdravosť
+    if (category) return BLUE;
+    if (metric === "kcal") return v > goal ? RED : BLUE; // nad cieľom = červená
+    if (metric === "water") return goalWaterL && v >= goalWaterL ? BLUE : RED; // pod cieľom = červená
+    return v >= 7 ? BLUE : RED; // zdravosť: dobré = modrá, slabé = červená
   }
 
   return (
