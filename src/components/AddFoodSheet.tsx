@@ -39,7 +39,16 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
   const [scanning, setScanning] = useState(false);
   const [scanMsg, setScanMsg] = useState<string | null>(null);
   const [unknownCode, setUnknownCode] = useState<string | null>(null);
-  const [unknownForm, setUnknownForm] = useState({ name: "", calories: 0, protein: 0, carbs: 0, fat: 0 });
+  const [unknownForm, setUnknownForm] = useState<{
+    name: string;
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+    category: string;
+    healthIndex: number | null;
+  }>({ name: "", calories: 0, protein: 0, carbs: 0, fat: 0, category: "", healthIndex: null });
+  const [estimating, setEstimating] = useState(false);
 
   // Zistenie podpory rozpoznávania reči až na klientovi (bez SSR nesúladu)
   useEffect(() => {
@@ -197,11 +206,32 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
         setScanMsg(`Nájdené (${r.source === "openfoodfacts" ? "Open Food Facts" : "databáza"}): ${r.food.name} — zvoľ gramáž a pridaj.`);
       } else {
         setUnknownCode(code);
-        setUnknownForm({ name: "", calories: 0, protein: 0, carbs: 0, fat: 0 });
-        setScanMsg(`Kód ${code} sa nenašiel. Zadaj hodnoty (na 100 g) a uloží sa preň.`);
+        setUnknownForm({ name: "", calories: 0, protein: 0, carbs: 0, fat: 0, category: "", healthIndex: null });
+        setScanMsg(`Kód ${code} nie je v databázach. Napíš názov a nechaj AI dohľadať údaje, alebo zadaj ručne.`);
       }
     } catch (e: any) {
       setScanMsg(e.message || "Chyba pri hľadaní kódu.");
+    }
+  }
+
+  // Agentické dohľadanie cez Gemini (web search)
+  async function aiLookupUnknown() {
+    if (!unknownForm.name.trim()) return;
+    setEstimating(true);
+    setScanMsg("AI hľadá údaje na webe…");
+    try {
+      const r = await api.aiBarcodeLookup(unknownForm.name.trim(), unknownCode);
+      if (r.found && r.food) {
+        setUnknownCode(null);
+        setResults([r.food]);
+        setScanMsg(`Dohľadané cez AI: ${r.food.name} (${r.food.calories} kcal/100 g) — zvoľ gramáž a pridaj.`);
+      } else {
+        setScanMsg("AI to spoľahlivo nenašlo. Zadaj hodnoty ručne (na 100 g).");
+      }
+    } catch (e: any) {
+      setScanMsg(e.message || "Chyba pri dohľadávaní.");
+    } finally {
+      setEstimating(false);
     }
   }
 
@@ -215,6 +245,8 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
       protein: unknownForm.protein,
       carbs: unknownForm.carbs,
       fat: unknownForm.fat,
+      category: unknownForm.category || null,
+      healthIndex: unknownForm.healthIndex,
     });
     setUnknownCode(null);
     setResults([food]);
@@ -337,23 +369,31 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
 
             {scanMsg && <p className="mb-2 rounded-xl bg-sky-50 p-2 text-xs text-sky-700">{scanMsg}</p>}
 
-            {/* Neznámy kód → manuálne zadanie (na 100 g) */}
+            {/* Neznámy kód → AI dohľadanie na webe alebo manuálne zadanie (na 100 g) */}
             {unknownCode && (
               <div className="mb-2 space-y-2 rounded-xl border border-amber-100 bg-amber-50 p-2">
                 <input
                   value={unknownForm.name}
                   onChange={(e) => setUnknownForm({ ...unknownForm, name: e.target.value })}
-                  placeholder="Názov produktu"
+                  placeholder="Názov produktu (napr. Voxberg proteínová tyčinka)"
                   className="input"
                 />
+                <button
+                  onClick={aiLookupUnknown}
+                  disabled={!unknownForm.name.trim() || estimating}
+                  className="btn-primary w-full py-2 text-sm"
+                >
+                  {estimating ? "AI hľadá na webe…" : "✨ Nájsť údaje cez AI (web)"}
+                </button>
+                <p className="text-center text-[11px] text-amber-700">alebo zadaj ručne (na 100 g):</p>
                 <div className="grid grid-cols-4 gap-1.5">
                   <SmallNum label="kcal" v={unknownForm.calories} on={(v) => setUnknownForm({ ...unknownForm, calories: v })} />
                   <SmallNum label="B g" v={unknownForm.protein} on={(v) => setUnknownForm({ ...unknownForm, protein: v })} />
                   <SmallNum label="S g" v={unknownForm.carbs} on={(v) => setUnknownForm({ ...unknownForm, carbs: v })} />
                   <SmallNum label="T g" v={unknownForm.fat} on={(v) => setUnknownForm({ ...unknownForm, fat: v })} />
                 </div>
-                <button onClick={saveUnknown} disabled={!unknownForm.name.trim()} className="btn-primary w-full py-2 text-sm">
-                  Uložiť ku kódu {unknownCode}
+                <button onClick={saveUnknown} disabled={!unknownForm.name.trim()} className="btn-ghost w-full py-2 text-sm">
+                  Uložiť ručne ku kódu {unknownCode}
                 </button>
               </div>
             )}

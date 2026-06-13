@@ -177,3 +177,86 @@ export async function parseFood(text: string, reference: ReferenceFood[]): Promi
 
   return { items, mealType, waterMl, usage };
 }
+
+// ── Agentické dohľadanie produktu na webe (Google Search grounding) ──
+export type WebFood = {
+  name: string;
+  calories: number; // na 100 g
+  protein: number;
+  carbs: number;
+  fat: number;
+  fiber: number | null;
+  category: string | null;
+  healthIndex: number | null;
+  found: boolean;
+  source?: string; // odkiaľ (doména), ak dostupné
+};
+
+export type WebLookupResult = {
+  food: WebFood | null;
+  usage: { model: string; promptTokens: number; outputTokens: number; totalTokens: number };
+};
+
+export async function lookupProductByWeb(query: string): Promise<WebLookupResult> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error("Chýba GEMINI_API_KEY v prostredí.");
+  const ai = new GoogleGenAI({ apiKey });
+  const model = process.env.GEMINI_MODEL || "gemini-3.5-flash";
+
+  const prompt = `Vyhľadaj na webe reálne nutričné hodnoty konkrétneho produktu: "${query}".
+Pozri stránky výrobcu/e-shopov. Potrebujem hodnoty NA 100 g (alebo 100 ml).
+Ak produkt nevieš spoľahlivo nájsť, vráť "found": false.
+Odpovedz IBA platným JSON objektom (bez markdownu) v tvare:
+{"found": true/false, "name": "presný názov produktu", "calories": kcal_na_100g,
+ "protein": g, "carbs": g, "fat": g, "fiber": g_alebo_null,
+ "category": "kategória (napr. Sladké, Nápoje, Mäso)", "healthIndex": 0-10}`;
+
+  const response = await ai.models.generateContent({
+    model,
+    contents: prompt,
+    config: {
+      tools: [{ googleSearch: {} }],
+      temperature: 0.2,
+    },
+  });
+
+  const um: any = (response as any).usageMetadata || {};
+  const usage = {
+    model,
+    promptTokens: Number(um.promptTokenCount ?? 0),
+    outputTokens: Number(um.candidatesTokenCount ?? 0),
+    totalTokens: Number(um.totalTokenCount ?? 0),
+  };
+
+  const raw = (response.text || "").trim();
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) return { food: null, usage };
+
+  let parsed: any;
+  try {
+    parsed = JSON.parse(match[0]);
+  } catch {
+    return { food: null, usage };
+  }
+
+  if (!parsed || parsed.found === false || parsed.calories == null) {
+    return { food: null, usage };
+  }
+
+  const num = (v: any) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+  const food: WebFood = {
+    name: String(parsed.name || query).trim(),
+    calories: Math.max(0, Math.round(num(parsed.calories))),
+    protein: Math.max(0, Math.round(num(parsed.protein) * 10) / 10),
+    carbs: Math.max(0, Math.round(num(parsed.carbs) * 10) / 10),
+    fat: Math.max(0, Math.round(num(parsed.fat) * 10) / 10),
+    fiber: parsed.fiber != null && Number.isFinite(Number(parsed.fiber)) ? Number(parsed.fiber) : null,
+    category: parsed.category ? String(parsed.category) : null,
+    healthIndex:
+      parsed.healthIndex != null && Number.isFinite(Number(parsed.healthIndex))
+        ? Math.min(10, Math.max(0, Math.round(Number(parsed.healthIndex))))
+        : null,
+    found: true,
+  };
+  return { food, usage };
+}

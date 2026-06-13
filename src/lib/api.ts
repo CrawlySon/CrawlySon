@@ -43,6 +43,11 @@ export const api = {
   seed: () => req<{ added: number; total: number }>(`/api/seed`, { method: "POST" }),
   lookupBarcode: (code: string) =>
     req<{ found: boolean; source?: string; food?: any; code?: string }>(`/api/barcode?code=${encodeURIComponent(code)}`),
+  aiBarcodeLookup: (name: string, code?: string | null) =>
+    req<{ found: boolean; food?: any }>(`/api/barcode/ai`, {
+      method: "POST",
+      body: JSON.stringify({ name, code }),
+    }),
 
   getWater: (date: string) =>
     req<{ logs: { id: string; ml: number; createdAt: string }[]; total: number; goal: number }>(
