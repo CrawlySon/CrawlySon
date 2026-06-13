@@ -108,6 +108,7 @@ export type ParseResult = {
   items: ParsedItem[];
   mealType: DetectedMeal;
   waterMl: number;
+  usage: { model: string; promptTokens: number; outputTokens: number; totalTokens: number };
 };
 
 export async function parseFood(text: string, reference: ReferenceFood[]): Promise<ParseResult> {
@@ -132,6 +133,14 @@ export async function parseFood(text: string, reference: ReferenceFood[]): Promi
 
   const raw = response.text;
   if (!raw) throw new Error("Prázdna odpoveď z Gemini.");
+
+  const um: any = (response as any).usageMetadata || {};
+  const usage = {
+    model,
+    promptTokens: Number(um.promptTokenCount ?? 0),
+    outputTokens: Number(um.candidatesTokenCount ?? 0),
+    totalTokens: Number(um.totalTokenCount ?? 0),
+  };
 
   let parsed: { items?: any[]; mealType?: string; waterMl?: number };
   try {
@@ -166,5 +175,5 @@ export async function parseFood(text: string, reference: ReferenceFood[]): Promi
     assumption: it.assumption ? String(it.assumption) : undefined,
   }));
 
-  return { items, mealType, waterMl };
+  return { items, mealType, waterMl, usage };
 }

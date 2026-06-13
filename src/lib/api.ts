@@ -80,5 +80,14 @@ export const api = {
       body: JSON.stringify({ username, password, code }),
     }),
   me: () => req<{ user: { id: string; username: string; role: string } | null }>(`/api/auth/me`),
+  usage: () =>
+    req<{
+      calls: number;
+      totalTokens: number;
+      promptTokens: number;
+      outputTokens: number;
+      days: { date: string; tokens: number; calls: number }[];
+      recent: { createdAt: string; model: string; totalTokens: number }[];
+    }>(`/api/usage`),
   logout: () => req<{ ok: true }>(`/api/auth/logout`, { method: "POST" }),
 };

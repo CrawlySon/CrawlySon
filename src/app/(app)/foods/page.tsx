@@ -17,6 +17,7 @@ type Food = {
   carbs: number;
   fat: number;
   fiber: number | null;
+  useCount?: number;
 };
 
 type Scope = "all" | "mine" | "global";
@@ -343,6 +344,7 @@ function FoodRow({ food, onChanged }: { food: Food; onChanged: () => void }) {
           <p className="truncate font-medium text-slate-800">
             {food.name}
             {!owned && <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-400">globálne</span>}
+            {food.useCount ? <span className="ml-2 rounded bg-brand-50 px-1.5 py-0.5 text-[10px] text-brand-600">{food.useCount}×</span> : null}
           </p>
           <p className="text-xs text-slate-400">
             na {food.baseGrams} g · B {food.protein} · S {food.carbs} · T {food.fat}

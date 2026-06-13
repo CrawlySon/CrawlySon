@@ -16,12 +16,29 @@ export async function GET(req: Request) {
   const visibility =
     scope === "mine" ? { userId } : scope === "global" ? { userId: null } : { OR: [{ userId: null }, { userId }] };
 
-  const foods = await prisma.food.findMany({
-    where: q ? { AND: [visibility, { name: { contains: q, mode: "insensitive" } }] } : visibility,
-    orderBy: { name: "asc" },
-    take: 200,
+  const [foods, usage] = await Promise.all([
+    prisma.food.findMany({
+      where: q ? { AND: [visibility, { name: { contains: q, mode: "insensitive" } }] } : visibility,
+      orderBy: { name: "asc" },
+      take: 200,
+    }),
+    // Koľkokrát používateľ daný názov použil vo svojich záznamoch
+    prisma.entry.groupBy({ by: ["name"], where: { userId }, _count: { _all: true } }),
+  ]);
+
+  const useMap = new Map<string, number>();
+  for (const u of usage) useMap.set(u.name.toLowerCase(), u._count._all);
+
+  // Zoradenie: najpoužívanejšie (u mňa) hore, potom abecedne
+  foods.sort((a, b) => {
+    const ua = useMap.get(a.name.toLowerCase()) || 0;
+    const ub = useMap.get(b.name.toLowerCase()) || 0;
+    if (ub !== ua) return ub - ua;
+    return a.name.localeCompare(b.name, "sk");
   });
-  return NextResponse.json({ foods });
+
+  const withUse = foods.map((f) => ({ ...f, useCount: useMap.get(f.name.toLowerCase()) || 0 }));
+  return NextResponse.json({ foods: withUse });
 }
 
 // POST /api/foods -> pridá vlastnú (súkromnú) potravinu

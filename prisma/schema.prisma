@@ -32,6 +32,24 @@ model User {
   entries    Entry[]
   foods      Food[]
   waterLogs  WaterLog[]
+  aiUsage    AiUsage[]
+}
+
+// Log spotreby AI (tokeny) na volanie
+model AiUsage {
+  id           String   @id @default(cuid())
+  userId       String?
+  user         User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind         String   @default("parse") // parse | ...
+  model        String
+  promptTokens Int      @default(0)
+  outputTokens Int      @default(0)
+  totalTokens  Int      @default(0)
+  date         String   // YYYY-MM-DD
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
+  @@index([userId, date])
 }
 
 // Záznam vypitej tekutiny (pitný režim) – nezávislý od jedál

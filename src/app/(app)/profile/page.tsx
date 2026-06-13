@@ -6,13 +6,24 @@ import { api } from "@/lib/api";
 import { recommendedCalories, suggestedMacros, tdee } from "@/lib/nutrition";
 import type { Profile } from "@/lib/types";
 
+type Usage = {
+  calls: number;
+  totalTokens: number;
+  promptTokens: number;
+  outputTokens: number;
+  days: { date: string; tokens: number; calls: number }[];
+  recent: { createdAt: string; model: string; totalTokens: number }[];
+};
+
 export default function ProfilePage() {
   const router = useRouter();
   const [p, setP] = useState<Profile | null>(null);
+  const [usage, setUsage] = useState<Usage | null>(null);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     api.getProfile().then((r) => setP(r.profile));
+    api.usage().then((u) => setUsage(u)).catch(() => {});
   }, []);
 
   if (!p) return <div className="px-4 pt-10 text-center text-slate-400">Načítavam…</div>;
@@ -146,6 +157,41 @@ export default function ProfilePage() {
       <button onClick={save} className="btn-primary w-full">
         {saved ? "✓ Uložené" : "Uložiť zmeny"}
       </button>
+
+      {/* Spotreba AI (tokeny) */}
+      {usage && (
+        <section className="card mt-4 space-y-3 p-4">
+          <h2 className="font-semibold text-slate-700">🔢 Spotreba AI</h2>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-xl bg-slate-50 p-3">
+              <p className="text-xs text-slate-500">Spolu tokenov</p>
+              <p className="text-xl font-bold text-slate-800">{usage.totalTokens.toLocaleString("sk-SK")}</p>
+            </div>
+            <div className="rounded-xl bg-slate-50 p-3">
+              <p className="text-xs text-slate-500">AI volaní</p>
+              <p className="text-xl font-bold text-slate-800">{usage.calls}</p>
+            </div>
+          </div>
+          <p className="text-xs text-slate-400">
+            Vstup {usage.promptTokens.toLocaleString("sk-SK")} · výstup {usage.outputTokens.toLocaleString("sk-SK")} tokenov
+            {usage.calls > 0 ? ` · ⌀ ${Math.round(usage.totalTokens / usage.calls)} / volanie` : ""}
+          </p>
+          {usage.days.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-slate-500">Po dňoch</p>
+              {usage.days.slice(0, 7).map((d) => (
+                <div key={d.date} className="flex justify-between text-xs text-slate-500">
+                  <span>{new Date(d.date + "T00:00:00").toLocaleDateString("sk-SK", { day: "numeric", month: "numeric" })}</span>
+                  <span>
+                    <b className="text-slate-700">{d.tokens.toLocaleString("sk-SK")}</b> tok. · {d.calls}×
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+          <p className="text-[11px] text-slate-400">Prepis reči je zadarmo (zariadenie); tokeny míňa len spracovanie textu cez Gemini.</p>
+        </section>
+      )}
 
       <button onClick={logout} className="btn-ghost mt-3 w-full text-red-500">
         Odhlásiť sa

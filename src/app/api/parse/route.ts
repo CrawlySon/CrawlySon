@@ -65,9 +65,26 @@ export async function POST(req: Request) {
     }
 
     const reference = await pickReference(userId, text.trim());
-    const { items, mealType, waterMl } = await parseFood(text.trim(), reference);
+    const { items, mealType, waterMl, usage } = await parseFood(text.trim(), reference);
 
-    return NextResponse.json({ items, mealType, waterMl });
+    // Zaloguj spotrebu tokenov (best-effort, nech nezhodí odpoveď)
+    try {
+      await prisma.aiUsage.create({
+        data: {
+          userId,
+          kind: "parse",
+          model: usage.model,
+          promptTokens: usage.promptTokens,
+          outputTokens: usage.outputTokens,
+          totalTokens: usage.totalTokens,
+          date: new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10),
+        },
+      });
+    } catch (e) {
+      console.error("aiUsage log error:", e);
+    }
+
+    return NextResponse.json({ items, mealType, waterMl, usage });
   } catch (err: any) {
     console.error("parse error:", err);
     return NextResponse.json(
