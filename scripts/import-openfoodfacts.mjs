@@ -142,11 +142,13 @@ async function main() {
         continue;
       }
       try {
-        await prisma.food.upsert({
-          where: { barcode: food.barcode },
-          update: food,
-          create: food,
-        });
+        // Zdieľané (globálne) potraviny: dedup podľa kódu medzi userId == null
+        const existing = await prisma.food.findFirst({ where: { barcode: food.barcode, userId: null } });
+        if (existing) {
+          await prisma.food.update({ where: { id: existing.id }, data: food });
+        } else {
+          await prisma.food.create({ data: food });
+        }
         saved++;
       } catch {
         skipped++;

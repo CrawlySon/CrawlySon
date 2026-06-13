@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { round } from "@/lib/nutrition";
 import { MEAL_LABELS, MEAL_ORDER, type MealType, type ParsedItem } from "@/lib/types";
+import BarcodeScanner from "@/components/BarcodeScanner";
 
 type Props = {
   date: string;
@@ -33,6 +34,12 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
   // Ručné pridanie
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<any[]>([]);
+
+  // Skenovanie čiarových kódov
+  const [scanning, setScanning] = useState(false);
+  const [scanMsg, setScanMsg] = useState<string | null>(null);
+  const [unknownCode, setUnknownCode] = useState<string | null>(null);
+  const [unknownForm, setUnknownForm] = useState({ name: "", calories: 0, protein: 0, carbs: 0, fat: 0 });
 
   // Zistenie podpory rozpoznávania reči až na klientovi (bez SSR nesúladu)
   useEffect(() => {
@@ -178,6 +185,42 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
     setResults([]);
   }
 
+  async function onScanned(code: string) {
+    setScanning(false);
+    setScanMsg(null);
+    setUnknownCode(null);
+    setTab("manual");
+    try {
+      const r = await api.lookupBarcode(code);
+      if (r.found && r.food) {
+        setResults([r.food]);
+        setScanMsg(`Nájdené (${r.source === "openfoodfacts" ? "Open Food Facts" : "databáza"}): ${r.food.name} — zvoľ gramáž a pridaj.`);
+      } else {
+        setUnknownCode(code);
+        setUnknownForm({ name: "", calories: 0, protein: 0, carbs: 0, fat: 0 });
+        setScanMsg(`Kód ${code} sa nenašiel. Zadaj hodnoty (na 100 g) a uloží sa preň.`);
+      }
+    } catch (e: any) {
+      setScanMsg(e.message || "Chyba pri hľadaní kódu.");
+    }
+  }
+
+  async function saveUnknown() {
+    if (!unknownCode || !unknownForm.name.trim()) return;
+    const { food } = await api.addFood({
+      name: unknownForm.name.trim(),
+      barcode: unknownCode,
+      baseGrams: 100,
+      calories: unknownForm.calories,
+      protein: unknownForm.protein,
+      carbs: unknownForm.carbs,
+      fat: unknownForm.fat,
+    });
+    setUnknownCode(null);
+    setResults([food]);
+    setScanMsg(`Uložené: ${food.name} — zvoľ gramáž a pridaj.`);
+  }
+
   async function handleSave() {
     if (!items.length && water <= 0) return;
     setLoading(true);
@@ -280,12 +323,41 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
 
         {tab === "manual" && (
           <div className="card p-3">
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Hľadaj potravinu…"
-              className="input"
-            />
+            <div className="mb-2 flex gap-2">
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Hľadaj potravinu…"
+                className="input flex-1"
+              />
+              <button onClick={() => setScanning(true)} className="btn-ghost shrink-0" title="Skenovať čiarový kód">
+                📷
+              </button>
+            </div>
+
+            {scanMsg && <p className="mb-2 rounded-xl bg-sky-50 p-2 text-xs text-sky-700">{scanMsg}</p>}
+
+            {/* Neznámy kód → manuálne zadanie (na 100 g) */}
+            {unknownCode && (
+              <div className="mb-2 space-y-2 rounded-xl border border-amber-100 bg-amber-50 p-2">
+                <input
+                  value={unknownForm.name}
+                  onChange={(e) => setUnknownForm({ ...unknownForm, name: e.target.value })}
+                  placeholder="Názov produktu"
+                  className="input"
+                />
+                <div className="grid grid-cols-4 gap-1.5">
+                  <SmallNum label="kcal" v={unknownForm.calories} on={(v) => setUnknownForm({ ...unknownForm, calories: v })} />
+                  <SmallNum label="B g" v={unknownForm.protein} on={(v) => setUnknownForm({ ...unknownForm, protein: v })} />
+                  <SmallNum label="S g" v={unknownForm.carbs} on={(v) => setUnknownForm({ ...unknownForm, carbs: v })} />
+                  <SmallNum label="T g" v={unknownForm.fat} on={(v) => setUnknownForm({ ...unknownForm, fat: v })} />
+                </div>
+                <button onClick={saveUnknown} disabled={!unknownForm.name.trim()} className="btn-primary w-full py-2 text-sm">
+                  Uložiť ku kódu {unknownCode}
+                </button>
+              </div>
+            )}
+
             <div className="mt-2 max-h-56 space-y-1 overflow-y-auto">
               {results.map((f) => (
                 <ManualRow key={f.id} food={f} onAdd={addManual} />
@@ -355,7 +427,24 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
           </button>
         </div>
       </div>
+
+      {scanning && <BarcodeScanner onResult={onScanned} onClose={() => setScanning(false)} />}
     </div>
+  );
+}
+
+function SmallNum({ label, v, on }: { label: string; v: number; on: (v: number) => void }) {
+  return (
+    <label className="text-[11px] text-slate-500">
+      {label}
+      <input
+        type="number"
+        inputMode="decimal"
+        value={v}
+        onChange={(e) => on(Number(e.target.value))}
+        className="mt-0.5 w-full rounded-lg border border-slate-200 px-1.5 py-1 text-sm"
+      />
+    </label>
   );
 }
 

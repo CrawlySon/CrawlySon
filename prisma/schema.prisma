@@ -102,7 +102,7 @@ model Food {
   brand       String?
   category    String?
   subcategory String?
-  barcode     String?  @unique
+  barcode     String?
   baseGrams   Float   @default(100)
   calories    Float
   protein     Float   @default(0)
@@ -115,4 +115,5 @@ model Food {
 
   @@index([name])
   @@index([userId])
+  @@index([barcode])
 }

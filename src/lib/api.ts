@@ -41,6 +41,8 @@ export const api = {
     req<{ food: any }>(`/api/foods/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   deleteFood: (id: string) => req<{ ok: true }>(`/api/foods/${id}`, { method: "DELETE" }),
   seed: () => req<{ added: number; total: number }>(`/api/seed`, { method: "POST" }),
+  lookupBarcode: (code: string) =>
+    req<{ found: boolean; source?: string; food?: any; code?: string }>(`/api/barcode?code=${encodeURIComponent(code)}`),
 
   getWater: (date: string) =>
     req<{ logs: { id: string; ml: number; createdAt: string }[]; total: number; goal: number }>(

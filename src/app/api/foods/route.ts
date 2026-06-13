@@ -35,6 +35,7 @@ export async function POST(req: Request) {
     data: {
       userId,
       name: String(b.name),
+      barcode: b.barcode ? String(b.barcode) : null,
       category: b.category ? String(b.category) : null,
       subcategory: b.subcategory ? String(b.subcategory) : null,
       baseGrams: b.baseGrams ? Number(b.baseGrams) : 100,
