@@ -36,6 +36,7 @@ export default function HistoryPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [range, setRange] = useState(14);
   const [category, setCategory] = useState<string>("");
+  const [metric, setMetric] = useState<"kcal" | "health" | "water">("kcal");
 
   useEffect(() => {
     api.history(range, category || undefined).then((d) => {
@@ -56,6 +57,28 @@ export default function HistoryPage() {
   const avgWater = days.length ? days.reduce((s, d) => s + (d.waterMl || 0), 0) / days.length : 0;
 
   const catMax = Math.max(...days.map((d) => d.catCalories), 1);
+
+  // Spojitá časová os (vrátane prázdnych dní) pre graf
+  const byDate = new Map(days.map((d) => [d.date, d]));
+  const series = Array.from({ length: range }, (_, k) => {
+    const i = range - 1 - k; // od najstaršieho po dnešok
+    const dt = new Date();
+    dt.setDate(dt.getDate() - i);
+    const tz = dt.getTimezoneOffset() * 60000;
+    const iso = new Date(dt.getTime() - tz).toISOString().slice(0, 10);
+    const d = byDate.get(iso);
+    let value = 0;
+    if (category) value = d?.catCalories ?? 0;
+    else if (metric === "kcal") value = d?.calories ?? 0;
+    else if (metric === "health") value = d?.healthScore ?? 0;
+    else value = Math.round(((d?.waterMl ?? 0) / 1000) * 10) / 10;
+    return { date: dt, value };
+  });
+
+  const chartGoal = category ? null : metric === "kcal" ? goal : metric === "water" ? goal && profile ? profile.goalWaterMl / 1000 : null : null;
+  const chartColor = category ? "#334155" : metric === "kcal" ? "#16a34a" : metric === "water" ? "#0ea5e9" : "#8b5cf6";
+  const chartMax = Math.max(...series.map((s) => s.value), chartGoal || 0, metric === "health" && !category ? 10 : 0, 1);
+  const chartUnit = category || metric === "kcal" ? " kcal" : metric === "water" ? " l" : "";
 
   return (
     <div className="px-4 pt-4">
@@ -93,6 +116,39 @@ export default function HistoryPage() {
           ))}
         </div>
       )}
+
+      {/* Metrika grafu */}
+      {!category && (
+        <div className="mb-2 flex gap-2">
+          {([
+            ["kcal", "Kalórie"],
+            ["health", "Zdravosť"],
+            ["water", "Voda"],
+          ] as [typeof metric, string][]).map(([m, label]) => (
+            <button
+              key={m}
+              onClick={() => setMetric(m)}
+              className={`rounded-full px-3 py-1 text-xs ${metric === m ? "bg-slate-800 text-white" : "bg-white text-slate-500 border border-slate-200"}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Časový graf (timeline) */}
+      <div className="card mb-4 p-3">
+        <p className="mb-1 text-xs font-medium text-slate-500">
+          {category
+            ? `Kategória „${category}" — kcal v čase`
+            : metric === "kcal"
+              ? "Kalórie v čase"
+              : metric === "health"
+                ? "Zdravosť v čase (0–10)"
+                : "Pitný režim v čase (l)"}
+        </p>
+        <TimelineChart series={series} max={chartMax} goal={chartGoal} color={chartColor} unit={chartUnit} />
+      </div>
 
       {/* Súhrny */}
       <div className="mb-4 grid grid-cols-3 gap-3">
@@ -168,5 +224,78 @@ export default function HistoryPage() {
         </p>
       )}
     </div>
+  );
+}
+
+function TimelineChart({
+  series,
+  max,
+  goal,
+  color,
+  unit,
+}: {
+  series: { date: Date; value: number }[];
+  max: number;
+  goal: number | null;
+  color: string;
+  unit: string;
+}) {
+  const W = 320;
+  const H = 150;
+  const padL = 6;
+  const padR = 6;
+  const padT = 10;
+  const padB = 22;
+  const innerW = W - padL - padR;
+  const innerH = H - padT - padB;
+  const baseline = padT + innerH;
+  const n = series.length;
+
+  const x = (i: number) => (n > 1 ? padL + (i * innerW) / (n - 1) : padL + innerW / 2);
+  const y = (v: number) => padT + innerH * (1 - Math.min(1, v / max));
+
+  const pts = series.map((s, i) => `${x(i)},${y(s.value)}`);
+  const linePath = `M ${pts.join(" L ")}`;
+  const areaPath = `M ${x(0)},${baseline} L ${pts.join(" L ")} L ${x(n - 1)},${baseline} Z`;
+
+  const fmt = (d: Date) => `${d.getDate()}.${d.getMonth() + 1}.`;
+  const labelIdx = [0, Math.floor((n - 1) / 2), n - 1].filter((v, i, a) => a.indexOf(v) === i);
+  const showDots = n <= 16;
+  const gid = `g-${color.replace("#", "")}`;
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" preserveAspectRatio="none">
+      <defs>
+        <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.25" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+
+      {/* cieľová čiara */}
+      {goal != null && goal > 0 && (
+        <>
+          <line x1={padL} y1={y(goal)} x2={W - padR} y2={y(goal)} stroke="#cbd5e1" strokeWidth="1" strokeDasharray="4 3" />
+          <text x={W - padR} y={y(goal) - 3} textAnchor="end" fontSize="9" fill="#94a3b8">
+            cieľ {Math.round(goal)}
+            {unit}
+          </text>
+        </>
+      )}
+
+      {/* plocha + čiara */}
+      <path d={areaPath} fill={`url(#${gid})`} />
+      <path d={linePath} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+
+      {/* body */}
+      {showDots && series.map((s, i) => <circle key={i} cx={x(i)} cy={y(s.value)} r="2.5" fill={color} />)}
+
+      {/* x popisky */}
+      {labelIdx.map((i) => (
+        <text key={i} x={x(i)} y={H - 6} textAnchor={i === 0 ? "start" : i === n - 1 ? "end" : "middle"} fontSize="9" fill="#94a3b8">
+          {fmt(series[i].date)}
+        </text>
+      ))}
+    </svg>
   );
 }
