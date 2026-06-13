@@ -23,6 +23,24 @@ body {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
+/* Skenovacia čiara čiarového kódu */
+@keyframes scanline {
+  0% { transform: translateY(0); }
+  50% { transform: translateY(150px); }
+  100% { transform: translateY(0); }
+}
+.scanline {
+  animation: scanline 1.8s ease-in-out infinite;
+}
+@keyframes popcheck {
+  0% { transform: scale(0.4); opacity: 0; }
+  60% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.popcheck {
+  animation: popcheck 0.35s ease-out both;
+}
+
 @layer components {
   .card {
     @apply rounded-2xl bg-white shadow-sm border border-slate-100;

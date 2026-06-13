@@ -15,6 +15,8 @@ export default function BarcodeScanner({
   const doneRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState("Spúšťam kameru…");
+  const [scanning, setScanning] = useState(false);
+  const [scanned, setScanned] = useState<string | null>(null);
   const [manual, setManual] = useState("");
 
   useEffect(() => {
@@ -59,13 +61,23 @@ export default function BarcodeScanner({
           (decodedText: string) => {
             if (doneRef.current) return;
             doneRef.current = true;
-            setStatus("Mám to ✓");
-            stop().then(() => onResult(decodedText.trim()));
+            const code = decodedText.trim();
+            setScanned(code); // úspešná obrazovka
+            setScanning(false);
+            // krátka spätná väzba + vibrácia, potom pokračuj
+            try {
+              (navigator as any).vibrate?.(60);
+            } catch {
+              /* ignore */
+            }
+            stop();
+            setTimeout(() => onResult(code), 850);
           },
           () => {
             /* per-frame "not found" – ignoruj */
           }
         );
+        if (!cancelled) setScanning(true);
       } catch (e: any) {
         setError("Nepodarilo sa spustiť kameru. Povoľ prístup ku kamere alebo zadaj kód ručne nižšie.");
       }
@@ -98,7 +110,10 @@ export default function BarcodeScanner({
   function submitManual() {
     if (manual.length < 6 || doneRef.current) return;
     doneRef.current = true;
-    stop().then(() => onResult(manual));
+    setScanned(manual);
+    setScanning(false);
+    stop();
+    setTimeout(() => onResult(manual), 600);
   }
 
   return (
@@ -115,11 +130,30 @@ export default function BarcodeScanner({
 
       <div className="relative overflow-hidden rounded-2xl bg-black">
         <div id={ELEMENT_ID} className="w-full" />
+
+        {/* skenovacia čiara počas hľadania */}
+        {scanning && !scanned && (
+          <div className="pointer-events-none absolute inset-0 flex items-start justify-center">
+            <div className="scanline mt-6 h-0.5 w-4/5 rounded bg-brand-400 shadow-[0_0_12px_2px_rgba(34,197,94,0.7)]" />
+          </div>
+        )}
+
+        {/* úspešná obrazovka */}
+        {scanned && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-brand-600/95 text-white">
+            <div className="popcheck flex h-16 w-16 items-center justify-center rounded-full bg-white/20 text-4xl">✓</div>
+            <p className="mt-3 font-semibold">Kód načítaný</p>
+            <p className="text-sm text-white/80">{scanned}</p>
+            <p className="mt-1 text-xs text-white/60">hľadám produkt…</p>
+          </div>
+        )}
       </div>
 
       <p className="mt-3 text-center text-sm text-white/70">
-        {error ? "" : status}
-        {!error && <span className="mt-1 block text-xs text-white/40">Drž telefón rovno, kód celý v ráme, ~10–20 cm.</span>}
+        {error ? "" : scanned ? "" : status}
+        {!error && !scanned && (
+          <span className="mt-1 block text-xs text-white/40">Drž telefón rovno, kód celý v ráme, ~10–20 cm.</span>
+        )}
       </p>
       {error && <p className="mt-2 rounded-xl bg-red-500/20 p-3 text-sm text-red-100">{error}</p>}
 
