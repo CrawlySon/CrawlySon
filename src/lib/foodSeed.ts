@@ -75,6 +75,93 @@ export const FOODS: FoodSeed[] = [
   { name: "Coca-Cola", category: "Nápoje", calories: 42, protein: 0, carbs: 10.6, fat: 0 },
   { name: "Pomarančový džús", category: "Nápoje", calories: 45, protein: 0.7, carbs: 10, fat: 0.2 },
   { name: "Káva čierna (bez cukru)", category: "Nápoje", calories: 2, protein: 0.1, carbs: 0, fat: 0 },
+
+  // --- Rozšírenie na ~100 základných potravín ---
+  // Mäso a údeniny
+  { name: "Kuracie stehno (pečené)", category: "Mäso", calories: 209, protein: 26, carbs: 0, fat: 11 },
+  { name: "Morčacie prsia", category: "Mäso", calories: 135, protein: 30, carbs: 0, fat: 1 },
+  { name: "Bravčový bôčik", category: "Mäso", calories: 518, protein: 9, carbs: 0, fat: 53 },
+  { name: "Slanina údená", category: "Mäso", calories: 541, protein: 12, carbs: 0, fat: 53 },
+  { name: "Párky", category: "Mäso", calories: 270, protein: 12, carbs: 2, fat: 24 },
+  { name: "Saláma (gazdovská)", category: "Mäso", calories: 380, protein: 15, carbs: 1, fat: 35 },
+
+  // Ryby a morské plody
+  { name: "Makrela údená", category: "Ryby", calories: 305, protein: 19, carbs: 0, fat: 25 },
+  { name: "Treska (filé, varené)", category: "Ryby", calories: 82, protein: 18, carbs: 0, fat: 0.7 },
+  { name: "Krevety varené", category: "Ryby", calories: 99, protein: 24, carbs: 0, fat: 0.3 },
+
+  // Mliečne a vajcia
+  { name: "Kefír", category: "Mliečne", calories: 52, protein: 3.3, carbs: 4, fat: 2.5 },
+  { name: "Grécky jogurt", category: "Mliečne", calories: 97, protein: 9, carbs: 4, fat: 5 },
+  { name: "Cottage cheese", category: "Mliečne", calories: 98, protein: 11, carbs: 3.4, fat: 4.3 },
+  { name: "Mozzarella", category: "Mliečne", calories: 280, protein: 22, carbs: 2, fat: 21 },
+  { name: "Parmezán", category: "Mliečne", calories: 392, protein: 36, carbs: 3, fat: 26 },
+  { name: "Smotana na varenie 12%", category: "Mliečne", calories: 127, protein: 3, carbs: 4, fat: 12 },
+  { name: "Vaječný bielok", category: "Vajcia", calories: 52, protein: 11, carbs: 0.7, fat: 0.2 },
+
+  // Pečivo a obilniny
+  { name: "Chlieb celozrnný", category: "Pečivo", calories: 247, protein: 9, carbs: 41, fat: 3.4, fiber: 7 },
+  { name: "Toastový chlieb", category: "Pečivo", calories: 265, protein: 8, carbs: 49, fat: 3.2, fiber: 2.5 },
+  { name: "Croissant", category: "Pečivo", calories: 406, protein: 8, carbs: 45, fat: 21, fiber: 2.6 },
+  { name: "Müsli", category: "Obilniny", calories: 367, protein: 10, carbs: 66, fat: 6, fiber: 8 },
+  { name: "Kuskus varený", category: "Príloha", calories: 112, protein: 3.8, carbs: 23, fat: 0.2, fiber: 1.4 },
+  { name: "Quinoa varená", category: "Príloha", calories: 120, protein: 4.4, carbs: 21, fat: 1.9, fiber: 2.8 },
+  { name: "Bulgur varený", category: "Príloha", calories: 83, protein: 3, carbs: 19, fat: 0.2, fiber: 4.5 },
+  { name: "Ryža basmati varená", category: "Príloha", calories: 121, protein: 3, carbs: 25, fat: 0.4, fiber: 0.6 },
+  { name: "Gnocchi", category: "Príloha", calories: 160, protein: 4, carbs: 33, fat: 1 },
+
+  // Ovocie
+  { name: "Pomaranč", category: "Ovocie", calories: 47, protein: 0.9, carbs: 12, fat: 0.1, fiber: 2.4 },
+  { name: "Hrozno", category: "Ovocie", calories: 69, protein: 0.7, carbs: 18, fat: 0.2, fiber: 0.9 },
+  { name: "Jahody", category: "Ovocie", calories: 32, protein: 0.7, carbs: 7.7, fat: 0.3, fiber: 2 },
+  { name: "Čučoriedky", category: "Ovocie", calories: 57, protein: 0.7, carbs: 14, fat: 0.3, fiber: 2.4 },
+  { name: "Hruška", category: "Ovocie", calories: 57, protein: 0.4, carbs: 15, fat: 0.1, fiber: 3.1 },
+  { name: "Mandarínka", category: "Ovocie", calories: 53, protein: 0.8, carbs: 13, fat: 0.3, fiber: 1.8 },
+  { name: "Avokádo", category: "Ovocie", calories: 160, protein: 2, carbs: 9, fat: 15, fiber: 7 },
+  { name: "Vodný melón", category: "Ovocie", calories: 30, protein: 0.6, carbs: 8, fat: 0.2, fiber: 0.4 },
+
+  // Zelenina
+  { name: "Brokolica varená", category: "Zelenina", calories: 35, protein: 2.4, carbs: 7, fat: 0.4, fiber: 3.3 },
+  { name: "Špenát", category: "Zelenina", calories: 23, protein: 2.9, carbs: 3.6, fat: 0.4, fiber: 2.2 },
+  { name: "Paprika červená", category: "Zelenina", calories: 31, protein: 1, carbs: 6, fat: 0.3, fiber: 2.1 },
+  { name: "Cibuľa", category: "Zelenina", calories: 40, protein: 1.1, carbs: 9, fat: 0.1, fiber: 1.7 },
+  { name: "Cuketa", category: "Zelenina", calories: 17, protein: 1.2, carbs: 3.1, fat: 0.3, fiber: 1 },
+  { name: "Kukurica sladká", category: "Zelenina", calories: 86, protein: 3.3, carbs: 19, fat: 1.2, fiber: 2.7 },
+  { name: "Kyslá kapusta", category: "Zelenina", calories: 19, protein: 0.9, carbs: 4.3, fat: 0.1, fiber: 2.9 },
+  { name: "Huby (šampiňóny)", category: "Zelenina", calories: 22, protein: 3.1, carbs: 3.3, fat: 0.3, fiber: 1 },
+
+  // Strukoviny a orechy/semená
+  { name: "Cícer varený", category: "Strukoviny", calories: 164, protein: 8.9, carbs: 27, fat: 2.6, fiber: 7.6 },
+  { name: "Hrach varený", category: "Strukoviny", calories: 84, protein: 5.4, carbs: 14, fat: 0.4, fiber: 5.5 },
+  { name: "Vlašské orechy", category: "Orechy", calories: 654, protein: 15, carbs: 14, fat: 65, fiber: 6.7 },
+  { name: "Kešu", category: "Orechy", calories: 553, protein: 18, carbs: 30, fat: 44, fiber: 3.3 },
+  { name: "Slnečnicové semienka", category: "Orechy", calories: 584, protein: 21, carbs: 20, fat: 51, fiber: 8.6 },
+  { name: "Arašidové maslo", category: "Orechy", calories: 588, protein: 25, carbs: 20, fat: 50, fiber: 6 },
+
+  // Tuky a sladké
+  { name: "Slnečnicový olej", category: "Tuky", calories: 884, protein: 0, carbs: 0, fat: 100 },
+  { name: "Nutella", category: "Sladké", calories: 539, protein: 6, carbs: 57, fat: 31 },
+  { name: "Sušienky (maslové)", category: "Sladké", calories: 480, protein: 6, carbs: 64, fat: 22 },
+  { name: "Zmrzlina vanilková", category: "Sladké", calories: 207, protein: 3.5, carbs: 24, fat: 11 },
+  { name: "Croissant čokoládový", category: "Sladké", calories: 467, protein: 8, carbs: 46, fat: 27 },
+  { name: "Proteínová tyčinka", category: "Sladké", calories: 350, protein: 32, carbs: 35, fat: 9 },
+
+  // Hotové jedlá / fast food
+  { name: "Špagety bolognese", category: "Hotové jedlo", calories: 150, protein: 7, carbs: 18, fat: 5 },
+  { name: "Kuracie kari s ryžou", category: "Hotové jedlo", calories: 140, protein: 8, carbs: 16, fat: 5 },
+  { name: "Hamburger (fast food)", category: "Fast food", calories: 250, protein: 13, carbs: 30, fat: 9 },
+  { name: "Cheeseburger (fast food)", category: "Fast food", calories: 280, protein: 15, carbs: 30, fat: 12 },
+  { name: "Kebab v pite", category: "Fast food", calories: 215, protein: 12, carbs: 18, fat: 11 },
+  { name: "Hot dog", category: "Fast food", calories: 290, protein: 10, carbs: 24, fat: 17 },
+  { name: "Sushi (losos maki)", category: "Hotové jedlo", calories: 145, protein: 5, carbs: 28, fat: 1.5 },
+  { name: "Zemiakový šalát", category: "Hotové jedlo", calories: 190, protein: 2.5, carbs: 14, fat: 14 },
+
+  // Nápoje
+  { name: "Mlieko plnotučné", category: "Nápoje", calories: 64, protein: 3.3, carbs: 4.8, fat: 3.6 },
+  { name: "Energetický nápoj", category: "Nápoje", calories: 45, protein: 0, carbs: 11, fat: 0 },
+  { name: "Víno červené", category: "Nápoje", calories: 85, protein: 0.1, carbs: 2.6, fat: 0 },
+  { name: "Čaj (bez cukru)", category: "Nápoje", calories: 1, protein: 0, carbs: 0.2, fat: 0 },
+  { name: "Proteínový kokteil (voda)", category: "Nápoje", calories: 45, protein: 9, carbs: 1, fat: 0.5 },
 ];
 
 // Orientačný index zdravosti podľa kategórie (0..10) pre seed potraviny.
@@ -92,6 +179,7 @@ const HEALTH_BY_CATEGORY: Record<string, number> = {
   Pečivo: 4,
   Tuky: 4,
   "Hotové jedlo": 4,
+  "Fast food": 2,
   Nápoje: 4,
   Sladké: 2,
 };

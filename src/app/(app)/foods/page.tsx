@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { round } from "@/lib/nutrition";
 
 type Food = {
   id: string;
+  userId: string | null;
   name: string;
   category: string | null;
   subcategory: string | null;
@@ -17,18 +19,21 @@ type Food = {
   fiber: number | null;
 };
 
+type Scope = "all" | "mine" | "global";
 const EMPTY = { name: "", category: "", baseGrams: 100, calories: 0, protein: 0, carbs: 0, fat: 0 };
 
 export default function FoodsPage() {
   const [q, setQ] = useState("");
+  const [scope, setScope] = useState<Scope>("all");
   const [foods, setFoods] = useState<Food[]>([]);
   const [adding, setAdding] = useState(false);
+  const [building, setBuilding] = useState(false);
   const [form, setForm] = useState<any>(EMPTY);
   const [seeding, setSeeding] = useState(false);
 
-  function load() {
-    api.searchFoods(q).then((r) => setFoods(r.foods));
-  }
+  const load = useCallback(() => {
+    api.searchFoods(q, scope).then((r) => setFoods(r.foods));
+  }, [q, scope]);
 
   async function seed() {
     setSeeding(true);
@@ -43,23 +48,45 @@ export default function FoodsPage() {
   useEffect(() => {
     const t = setTimeout(load, 250);
     return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q]);
+  }, [load]);
 
   async function add() {
     if (!form.name) return;
     await api.addFood(form);
     setForm(EMPTY);
     setAdding(false);
+    setScope("mine");
     load();
   }
 
   return (
     <div className="px-4 pt-4">
-      <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-xl font-bold text-slate-800">Databáza potravín</h1>
-        <button onClick={() => setAdding((a) => !a)} className="text-sm font-medium text-brand-600">
-          {adding ? "zrušiť" : "+ vlastná"}
+      <h1 className="mb-3 text-xl font-bold text-slate-800">Databáza potravín</h1>
+
+      {/* Prepínač rozsahu */}
+      <div className="mb-3 flex rounded-xl bg-slate-200 p-1 text-sm">
+        {([
+          ["all", "Všetko"],
+          ["mine", "Moje"],
+          ["global", "Globálne"],
+        ] as [Scope, string][]).map(([s, label]) => (
+          <button
+            key={s}
+            onClick={() => setScope(s)}
+            className={`flex-1 rounded-lg py-1.5 font-medium ${scope === s ? "bg-white shadow" : "text-slate-500"}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Akcie: vlastná potravina + skladanie jedla */}
+      <div className="mb-3 flex gap-2">
+        <button onClick={() => { setAdding((a) => !a); setBuilding(false); }} className="btn-ghost flex-1 text-sm">
+          {adding ? "zrušiť" : "+ vlastná potravina"}
+        </button>
+        <button onClick={() => { setBuilding((b) => !b); setAdding(false); }} className="btn-ghost flex-1 text-sm">
+          {building ? "zrušiť" : "🍲 jedlo zo surovín"}
         </button>
       </div>
 
@@ -84,11 +111,26 @@ export default function FoodsPage() {
         </div>
       )}
 
-      {!q && foods.length === 0 && (
-        <div className="card mb-3 p-4 text-center">
-          <p className="text-sm text-slate-600">Databáza potravín je zatiaľ prázdna.</p>
-          <button onClick={seed} disabled={seeding} className="btn-primary mt-3 w-full">
-            {seeding ? "Napĺňam…" : "Naplniť základnými potravinami"}
+      {building && (
+        <RecipeBuilder
+          onSaved={() => {
+            setBuilding(false);
+            setScope("mine");
+            load();
+          }}
+        />
+      )}
+
+      {/* Seed / doplnenie globálnej databázy */}
+      {((scope !== "mine" && foods.length === 0 && !q) || scope === "global") && (
+        <div className="card mb-3 p-3 text-center">
+          {foods.length === 0 ? (
+            <p className="mb-2 text-sm text-slate-600">Globálna databáza je zatiaľ prázdna.</p>
+          ) : (
+            <p className="mb-2 text-xs text-slate-400">Chýbajú ti základné potraviny? Doplň globálnu databázu.</p>
+          )}
+          <button onClick={seed} disabled={seeding} className="btn-primary w-full">
+            {seeding ? "Napĺňam…" : "Naplniť / doplniť globálnu databázu"}
           </button>
         </div>
       )}
@@ -105,7 +147,155 @@ export default function FoodsPage() {
   );
 }
 
+function RecipeBuilder({ onSaved }: { onSaved: () => void }) {
+  const [name, setName] = useState("");
+  const [category, setCategory] = useState("Hotové jedlo");
+  const [q, setQ] = useState("");
+  const [results, setResults] = useState<Food[]>([]);
+  const [ingredients, setIngredients] = useState<{ food: Food; grams: number }[]>([]);
+  const [finalWeight, setFinalWeight] = useState<string>("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!q.trim()) {
+      setResults([]);
+      return;
+    }
+    const t = setTimeout(() => {
+      api.searchFoods(q, "all").then((r) => setResults(r.foods));
+    }, 250);
+    return () => clearTimeout(t);
+  }, [q]);
+
+  function addIngredient(food: Food) {
+    setIngredients((prev) => [...prev, { food, grams: food.baseGrams || 100 }]);
+    setQ("");
+    setResults([]);
+  }
+  function setGrams(idx: number, grams: number) {
+    setIngredients((prev) => prev.map((it, i) => (i === idx ? { ...it, grams } : it)));
+  }
+  function removeIngredient(idx: number) {
+    setIngredients((prev) => prev.filter((_, i) => i !== idx));
+  }
+
+  // Súčty zo surovín
+  const totals = ingredients.reduce(
+    (a, { food, grams }) => {
+      const f = grams / (food.baseGrams || 100);
+      a.calories += food.calories * f;
+      a.protein += food.protein * f;
+      a.carbs += food.carbs * f;
+      a.fat += food.fat * f;
+      a.grams += grams;
+      a.hSum += (food.healthIndex ?? 5) * grams;
+      return a;
+    },
+    { calories: 0, protein: 0, carbs: 0, fat: 0, grams: 0, hSum: 0 }
+  );
+
+  const weight = Number(finalWeight) > 0 ? Number(finalWeight) : totals.grams;
+  const avgHealth = totals.grams > 0 ? Math.round(totals.hSum / totals.grams) : null;
+
+  async function save() {
+    if (!name.trim() || ingredients.length === 0 || weight <= 0) return;
+    setBusy(true);
+    try {
+      // Ulož ako potravinu: hodnoty zodpovedajú „weight" g hotového jedla.
+      await api.addFood({
+        name: name.trim(),
+        category,
+        baseGrams: Math.round(weight),
+        calories: round(totals.calories),
+        protein: round(totals.protein, 1),
+        carbs: round(totals.carbs, 1),
+        fat: round(totals.fat, 1),
+        healthIndex: avgHealth,
+      });
+      onSaved();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card mb-4 space-y-3 p-3">
+      <p className="text-sm font-semibold text-slate-600">🍲 Vlastné jedlo zo surovín</p>
+      <input className="input" placeholder="Názov jedla (napr. Sviečková po domácky)" value={name} onChange={(e) => setName(e.target.value)} />
+
+      {/* Pridávanie surovín */}
+      <div>
+        <input className="input" placeholder="Pridaj surovinu (hľadaj v databáze)…" value={q} onChange={(e) => setQ(e.target.value)} />
+        {results.length > 0 && (
+          <div className="mt-1 max-h-40 space-y-1 overflow-y-auto">
+            {results.map((f) => (
+              <button
+                key={f.id}
+                onClick={() => addIngredient(f)}
+                className="flex w-full items-center justify-between rounded-lg border border-slate-100 bg-white px-2 py-1.5 text-left text-sm"
+              >
+                <span className="truncate">{f.name}</span>
+                <span className="ml-2 shrink-0 text-xs text-slate-400">{f.calories} kcal/{f.baseGrams} g</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Zoznam surovín */}
+      {ingredients.length > 0 && (
+        <ul className="space-y-1">
+          {ingredients.map((it, idx) => (
+            <li key={idx} className="flex items-center gap-2 rounded-lg bg-slate-50 px-2 py-1.5 text-sm">
+              <span className="min-w-0 flex-1 truncate">{it.food.name}</span>
+              <input
+                type="number"
+                inputMode="numeric"
+                value={it.grams}
+                onChange={(e) => setGrams(idx, Number(e.target.value))}
+                className="w-16 rounded-lg border border-slate-200 px-2 py-1 text-right"
+              />
+              <span className="text-xs text-slate-400">g</span>
+              <button onClick={() => removeIngredient(idx)} className="text-slate-300 hover:text-red-400">✕</button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {ingredients.length > 0 && (
+        <>
+          <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
+            Spolu zo surovín: <b>{round(totals.calories)} kcal</b> · B {round(totals.protein)} · S {round(totals.carbs)} · T {round(totals.fat)} · {round(totals.grams)} g
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <FieldText label="Kategória" v={category} on={setCategory} />
+            <label className="text-xs">
+              <span className="text-slate-400">Hotová hmotnosť (g)</span>
+              <input
+                type="number"
+                inputMode="numeric"
+                className="input mt-0.5 py-1.5"
+                placeholder={`${round(totals.grams)}`}
+                value={finalWeight}
+                onChange={(e) => setFinalWeight(e.target.value)}
+              />
+            </label>
+          </div>
+          <p className="text-xs text-slate-400">
+            Uloží sa ako jedlo s priemerom <b>{weight > 0 ? round((totals.calories / weight) * 100) : 0} kcal/100 g</b>. Potom
+            stačí zadať gramáž porcie (napr. 400 g) a hodnoty sa prepočítajú.
+          </p>
+          <button onClick={save} disabled={busy || !name.trim()} className="btn-primary w-full">
+            {busy ? "Ukladám…" : "Uložiť jedlo do mojej databázy"}
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
 function FoodRow({ food, onChanged }: { food: Food; onChanged: () => void }) {
+  const owned = food.userId != null; // globálne (userId null) sú len na čítanie
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<any>(food);
   const [busy, setBusy] = useState(false);
@@ -145,9 +335,15 @@ function FoodRow({ food, onChanged }: { food: Food; onChanged: () => void }) {
 
   return (
     <div className="px-4 py-2.5">
-      <button onClick={() => setOpen((o) => !o)} className="flex w-full items-center justify-between text-left">
+      <button
+        onClick={() => owned && setOpen((o) => !o)}
+        className="flex w-full items-center justify-between text-left"
+      >
         <div className="min-w-0">
-          <p className="truncate font-medium text-slate-800">{food.name}</p>
+          <p className="truncate font-medium text-slate-800">
+            {food.name}
+            {!owned && <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-400">globálne</span>}
+          </p>
           <p className="text-xs text-slate-400">
             na {food.baseGrams} g · B {food.protein} · S {food.carbs} · T {food.fat}
             {food.category ? ` · ${food.category}` : ""}
@@ -157,7 +353,7 @@ function FoodRow({ food, onChanged }: { food: Food; onChanged: () => void }) {
         <span className="ml-2 shrink-0 text-sm font-semibold text-slate-600">{food.calories} kcal</span>
       </button>
 
-      {open && (
+      {open && owned && (
         <div className="mt-3 space-y-2">
           <input className="input" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
           <div className="grid grid-cols-2 gap-2">
@@ -188,12 +384,7 @@ function FieldNum({ label, v, on }: { label: string; v: number; on: (v: number) 
   return (
     <label className="text-xs">
       <span className="text-slate-400">{label}</span>
-      <input
-        type="number"
-        className="input mt-0.5 py-1.5"
-        value={v}
-        onChange={(e) => on(Number(e.target.value))}
-      />
+      <input type="number" className="input mt-0.5 py-1.5" value={v} onChange={(e) => on(Number(e.target.value))} />
     </label>
   );
 }

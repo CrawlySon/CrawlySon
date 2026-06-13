@@ -11,12 +11,15 @@ export async function GET(req: Request) {
 
   const { searchParams } = new URL(req.url);
   const q = (searchParams.get("q") || "").trim();
+  const scope = searchParams.get("scope") || "all"; // mine | global | all
 
-  const visibility = { OR: [{ userId: null }, { userId }] };
+  const visibility =
+    scope === "mine" ? { userId } : scope === "global" ? { userId: null } : { OR: [{ userId: null }, { userId }] };
+
   const foods = await prisma.food.findMany({
     where: q ? { AND: [visibility, { name: { contains: q, mode: "insensitive" } }] } : visibility,
     orderBy: { name: "asc" },
-    take: 50,
+    take: 200,
   });
   return NextResponse.json({ foods });
 }

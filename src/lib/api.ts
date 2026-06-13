@@ -34,7 +34,8 @@ export const api = {
   updateProfile: (data: Partial<Profile>) =>
     req<{ profile: Profile }>(`/api/profile`, { method: "PATCH", body: JSON.stringify(data) }),
 
-  searchFoods: (q: string) => req<{ foods: any[] }>(`/api/foods?q=${encodeURIComponent(q)}`),
+  searchFoods: (q: string, scope: "mine" | "global" | "all" = "all") =>
+    req<{ foods: any[] }>(`/api/foods?q=${encodeURIComponent(q)}&scope=${scope}`),
   addFood: (data: any) => req<{ food: any }>(`/api/foods`, { method: "POST", body: JSON.stringify(data) }),
   updateFood: (id: string, data: any) =>
     req<{ food: any }>(`/api/foods/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
