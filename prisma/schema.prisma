@@ -27,9 +27,23 @@ model User {
   goalProtein  Int     @default(120)
   goalCarbs    Int     @default(220)
   goalFat      Int     @default(65)
+  goalWaterMl  Int     @default(2500)
 
-  entries Entry[]
-  foods   Food[]
+  entries    Entry[]
+  foods      Food[]
+  waterLogs  WaterLog[]
+}
+
+// Záznam vypitej tekutiny (pitný režim) – nezávislý od jedál
+model WaterLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date      String   // YYYY-MM-DD
+  ml        Int
+  createdAt DateTime @default(now())
+
+  @@index([userId, date])
 }
 
 // (Zastaraný – pôvodný jednopoužívateľský profil; ponechaný kvôli kompatibilite DB)

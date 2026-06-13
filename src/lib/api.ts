@@ -25,7 +25,7 @@ export const api = {
   deleteEntry: (id: string) => req<{ ok: true }>(`/api/entries/${id}`, { method: "DELETE" }),
 
   parse: (text: string) =>
-    req<{ items: ParsedItem[]; mealType: MealType }>(`/api/parse`, {
+    req<{ items: ParsedItem[]; mealType: MealType; waterMl: number }>(`/api/parse`, {
       method: "POST",
       body: JSON.stringify({ text }),
     }),
@@ -41,6 +41,14 @@ export const api = {
   deleteFood: (id: string) => req<{ ok: true }>(`/api/foods/${id}`, { method: "DELETE" }),
   seed: () => req<{ added: number; total: number }>(`/api/seed`, { method: "POST" }),
 
+  getWater: (date: string) =>
+    req<{ logs: { id: string; ml: number; createdAt: string }[]; total: number; goal: number }>(
+      `/api/water?date=${date}`
+    ),
+  addWater: (date: string, ml: number) =>
+    req<{ log: any }>(`/api/water`, { method: "POST", body: JSON.stringify({ date, ml }) }),
+  deleteWater: (id: string) => req<{ ok: true }>(`/api/water/${id}`, { method: "DELETE" }),
+
   history: (days: number, category?: string) =>
     req<{
       days: {
@@ -53,6 +61,7 @@ export const api = {
         healthScore: number | null;
         catCalories: number;
         catCount: number;
+        waterMl: number;
       }[];
       categories: { name: string; calories: number; count: number }[];
     }>(`/api/history?days=${days}${category ? `&category=${encodeURIComponent(category)}` : ""}`),

@@ -6,6 +6,7 @@ import { round, sumTotals, todayISO } from "@/lib/nutrition";
 import { MEAL_LABELS, MEAL_ORDER, type Entry, type MealType, type Profile } from "@/lib/types";
 import MacroSummary from "@/components/MacroSummary";
 import AddFoodSheet from "@/components/AddFoodSheet";
+import WaterCard from "@/components/WaterCard";
 
 function shiftDate(date: string, days: number): string {
   const d = new Date(date + "T00:00:00");
@@ -29,6 +30,7 @@ export default function TodayPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [sheet, setSheet] = useState<MealType | null>(null);
   const [loading, setLoading] = useState(true);
+  const [reload, setReload] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -39,6 +41,11 @@ export default function TodayPage() {
   }, [date]);
 
   useEffect(() => {
+    load();
+  }, [load]);
+
+  const refreshAll = useCallback(() => {
+    setReload((r) => r + 1);
     load();
   }, [load]);
 
@@ -74,6 +81,8 @@ export default function TodayPage() {
       </header>
 
       {profile && <MacroSummary totals={totals} profile={profile} />}
+
+      <WaterCard date={date} reloadSignal={reload} />
 
       {/* Jedlá podľa typu */}
       <div className="mt-4 space-y-3">
@@ -134,7 +143,7 @@ export default function TodayPage() {
       </button>
 
       {sheet && (
-        <AddFoodSheet date={date} defaultMeal={sheet} onClose={() => setSheet(null)} onSaved={load} />
+        <AddFoodSheet date={date} defaultMeal={sheet} onClose={() => setSheet(null)} onSaved={refreshAll} />
       )}
     </div>
   );

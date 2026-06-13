@@ -17,6 +17,7 @@ const PROFILE_SELECT = {
   goalProtein: true,
   goalCarbs: true,
   goalFat: true,
+  goalWaterMl: true,
 };
 
 export async function GET() {
@@ -42,7 +43,7 @@ export async function PATCH(req: Request) {
   for (const k of ["heightCm", "weightKg"]) {
     if (b[k] !== undefined) data[k] = b[k] === null || b[k] === "" ? null : Number(b[k]);
   }
-  for (const k of ["goalCalories", "goalProtein", "goalCarbs", "goalFat"]) {
+  for (const k of ["goalCalories", "goalProtein", "goalCarbs", "goalFat", "goalWaterMl"]) {
     if (b[k] !== undefined) data[k] = Math.max(0, parseInt(b[k], 10) || 0);
   }
 

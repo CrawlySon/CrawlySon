@@ -66,4 +66,5 @@ export type Profile = {
   goalProtein: number;
   goalCarbs: number;
   goalFat: number;
+  goalWaterMl: number;
 };

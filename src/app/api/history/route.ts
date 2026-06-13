@@ -37,10 +37,16 @@ export async function GET(req: Request) {
   since.setDate(since.getDate() - (days - 1));
   const sinceISO = since.toISOString().slice(0, 10);
 
-  const entries = await prisma.entry.findMany({
-    where: { userId, date: { gte: sinceISO } },
-    select: { date: true, calories: true, protein: true, carbs: true, fat: true, quantityGrams: true, healthIndex: true, category: true },
-  });
+  const [entries, waterLogs] = await Promise.all([
+    prisma.entry.findMany({
+      where: { userId, date: { gte: sinceISO } },
+      select: { date: true, calories: true, protein: true, carbs: true, fat: true, quantityGrams: true, healthIndex: true, category: true },
+    }),
+    prisma.waterLog.findMany({ where: { userId, date: { gte: sinceISO } }, select: { date: true, ml: true } }),
+  ]);
+
+  const waterByDate = new Map<string, number>();
+  for (const w of waterLogs) waterByDate.set(w.date, (waterByDate.get(w.date) || 0) + w.ml);
 
   const byDate = new Map<string, DayAgg>();
   const catTotals = new Map<string, { calories: number; count: number }>();
@@ -72,6 +78,13 @@ export async function GET(req: Request) {
     catTotals.set(cat, ct);
   }
 
+  // Doplň dni, ktoré majú len vodu (žiadne jedlo)
+  for (const date of waterByDate.keys()) {
+    if (!byDate.has(date)) {
+      byDate.set(date, { date, calories: 0, protein: 0, carbs: 0, fat: 0, count: 0, hSum: 0, hWeight: 0, catCalories: 0, catCount: 0 });
+    }
+  }
+
   const daysOut = Array.from(byDate.values())
     .map((d) => ({
       date: d.date,
@@ -79,6 +92,7 @@ export async function GET(req: Request) {
       protein: d.protein,
       carbs: d.carbs,
       fat: d.fat,
+      waterMl: waterByDate.get(d.date) || 0,
       count: d.count,
       healthScore: d.hWeight > 0 ? Math.round((d.hSum / d.hWeight) * 10) / 10 : null,
       catCalories: d.catCalories,

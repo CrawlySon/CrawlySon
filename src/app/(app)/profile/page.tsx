@@ -139,6 +139,7 @@ export default function ProfilePage() {
           <Num label="Bielkoviny (g)" value={p.goalProtein} onChange={(v) => set("goalProtein", v)} />
           <Num label="Sacharidy (g)" value={p.goalCarbs} onChange={(v) => set("goalCarbs", v)} />
           <Num label="Tuky (g)" value={p.goalFat} onChange={(v) => set("goalFat", v)} />
+          <Num label="Voda (ml)" value={p.goalWaterMl} onChange={(v) => set("goalWaterMl", v)} />
         </div>
       </section>
 

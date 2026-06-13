@@ -28,6 +28,8 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
   const recRef = useRef<SpeechRecognition | null>(null);
   const stopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const [water, setWater] = useState(0); // voda detegovaná AI (ml)
+
   // Ručné pridanie
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<any[]>([]);
@@ -133,9 +135,10 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
     setLoading(true);
     setError(null);
     try {
-      const { items, mealType } = await api.parse(text);
-      if (!items.length) setError("AI nerozpoznala žiadne jedlo. Skús to upresniť.");
+      const { items, mealType, waterMl } = await api.parse(text);
+      if (!items.length && !waterMl) setError("AI nerozpoznala žiadne jedlo ani vodu. Skús to upresniť.");
       setItems(items);
+      setWater(waterMl || 0);
       // Ak AI z textu rozpoznala typ jedla a používateľ ho ručne nezmenil,
       // nastav ho automaticky (napr. „na raňajky banán" → Raňajky).
       if (mealType && mealType !== "other" && !mealTouched) setMeal(mealType);
@@ -176,10 +179,15 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
   }
 
   async function handleSave() {
-    if (!items.length) return;
+    if (!items.length && water <= 0) return;
     setLoading(true);
     try {
-      await api.addEntries({ date, mealType: meal, source: tab === "ai" ? "ai" : "manual", items });
+      if (items.length) {
+        await api.addEntries({ date, mealType: meal, source: tab === "ai" ? "ai" : "manual", items });
+      }
+      if (water > 0) {
+        await api.addWater(date, water);
+      }
       onSaved();
       onClose();
     } catch (e: any) {
@@ -309,13 +317,41 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
           </div>
         )}
 
+        {/* Detegovaná voda */}
+        {water > 0 && (
+          <div className="mt-3 flex items-center justify-between rounded-2xl border border-sky-100 bg-sky-50 p-3">
+            <span className="flex items-center gap-2 text-sm font-medium text-sky-700">💧 Pitný režim</span>
+            <span className="flex items-center gap-2">
+              <input
+                type="number"
+                inputMode="numeric"
+                value={water}
+                onChange={(e) => setWater(Math.max(0, Number(e.target.value)))}
+                className="w-20 rounded-lg border border-sky-200 px-2 py-1 text-right text-sm"
+              />
+              <span className="text-sm text-sky-700">ml</span>
+              <button onClick={() => setWater(0)} className="text-sky-400 hover:text-red-400">
+                ✕
+              </button>
+            </span>
+          </div>
+        )}
+
         {/* Akcie */}
         <div className="sticky bottom-0 mt-4 flex gap-2 bg-slate-50 pt-2">
           <button onClick={onClose} className="btn-ghost flex-1">
             Zrušiť
           </button>
-          <button onClick={handleSave} disabled={!items.length || loading} className="btn-primary flex-1">
-            {loading ? "Ukladám…" : `Pridať (${items.length})`}
+          <button
+            onClick={handleSave}
+            disabled={(!items.length && water <= 0) || loading}
+            className="btn-primary flex-1"
+          >
+            {loading
+              ? "Ukladám…"
+              : water > 0 && !items.length
+                ? `Pridať 💧 ${water} ml`
+                : `Pridať (${items.length})`}
           </button>
         </div>
       </div>

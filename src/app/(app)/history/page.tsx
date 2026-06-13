@@ -15,6 +15,7 @@ type Day = {
   healthScore: number | null;
   catCalories: number;
   catCount: number;
+  waterMl: number;
 };
 type Category = { name: string; calories: number; count: number };
 
@@ -52,6 +53,7 @@ export default function HistoryPage() {
   const avgHealth = healthDays.length
     ? healthDays.reduce((s, d) => s + (d.healthScore || 0), 0) / healthDays.length
     : null;
+  const avgWater = days.length ? days.reduce((s, d) => s + (d.waterMl || 0), 0) / days.length : 0;
 
   const catMax = Math.max(...days.map((d) => d.catCalories), 1);
 
@@ -93,20 +95,23 @@ export default function HistoryPage() {
       )}
 
       {/* Súhrny */}
-      <div className="mb-4 grid grid-cols-2 gap-3">
-        <div className="card p-4">
-          <p className="text-sm text-slate-500">Priemer / deň</p>
-          <p className="text-2xl font-bold text-slate-800">
-            {round(avg)} <span className="text-sm font-normal text-slate-400">kcal</span>
-          </p>
-          <p className="text-xs text-slate-400">cieľ {goal} kcal</p>
+      <div className="mb-4 grid grid-cols-3 gap-3">
+        <div className="card p-3">
+          <p className="text-xs text-slate-500">Priemer kcal</p>
+          <p className="text-xl font-bold text-slate-800">{round(avg)}</p>
+          <p className="text-[11px] text-slate-400">cieľ {goal}</p>
         </div>
-        <div className="card p-4">
-          <p className="text-sm text-slate-500">Zdravosť stravy</p>
-          <p className={`text-2xl font-bold ${avgHealth != null ? healthText(avgHealth) : "text-slate-300"}`}>
-            {avgHealth != null ? `${round(avgHealth, 1)}/10` : "—"}
+        <div className="card p-3">
+          <p className="text-xs text-slate-500">Zdravosť</p>
+          <p className={`text-xl font-bold ${avgHealth != null ? healthText(avgHealth) : "text-slate-300"}`}>
+            {avgHealth != null ? `${round(avgHealth, 1)}` : "—"}
           </p>
-          <p className="text-xs text-slate-400">vážený priemer</p>
+          <p className="text-[11px] text-slate-400">z 10</p>
+        </div>
+        <div className="card p-3">
+          <p className="text-xs text-slate-500">💧 Voda</p>
+          <p className="text-xl font-bold text-sky-600">{(avgWater / 1000).toFixed(1)} l</p>
+          <p className="text-[11px] text-slate-400">priemer/deň</p>
         </div>
       </div>
 
@@ -149,7 +154,7 @@ export default function HistoryPage() {
                 <p className="mt-1 text-xs text-slate-400">
                   {showCat
                     ? `${d.catCount}× v kategórii „${category}"`
-                    : `B ${round(d.protein)} g · S ${round(d.carbs)} g · T ${round(d.fat)} g · ${d.count} položiek`}
+                    : `B ${round(d.protein)} g · S ${round(d.carbs)} g · T ${round(d.fat)} g${d.waterMl ? ` · 💧 ${(d.waterMl / 1000).toFixed(1)} l` : ""}`}
                 </p>
               </div>
             );

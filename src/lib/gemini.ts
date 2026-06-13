@@ -51,7 +51,12 @@ PRAVIDLÁ:
   • 3–4: vyprážané jedlá, biele pečivo, údeniny, sladené nápoje.
   • 0–2: fast food (hamburger, hranolky z fast foodu), sladkosti, alkohol,
     vyprážané sladké. Napr. hamburger z McDonald's ≈ 1–2.
-  Index je vlastnosť jedla (nezávisí od zjedeného množstva).`;
+  Index je vlastnosť jedla (nezávisí od zjedeného množstva).
+
+- ČISTÁ VODA (aj perlivá/neperlivá neochutená) sa NEukladá ako jedlo. Jej množstvo
+  spočítaj v mililitroch do poľa "waterMl" (napr. „pol litra vody" = 500) a NEdávaj
+  ju do "items". Sladené/kalorické nápoje (kola, džús, pivo, káva s mliekom) patria
+  normálne do "items". Ak voda nie je spomenutá, "waterMl" = 0.`;
 
 const responseSchema = {
   type: Type.OBJECT,
@@ -60,6 +65,7 @@ const responseSchema = {
       type: Type.STRING,
       description: 'Typ jedla z textu: "breakfast" | "lunch" | "dinner" | "snack" | "other"',
     },
+    waterMl: { type: Type.NUMBER, description: "Vypitá čistá voda v ml (0 ak žiadna)" },
     items: {
       type: Type.ARRAY,
       items: {
@@ -101,6 +107,7 @@ export type DetectedMeal = (typeof MEAL_TYPES)[number];
 export type ParseResult = {
   items: ParsedItem[];
   mealType: DetectedMeal;
+  waterMl: number;
 };
 
 export async function parseFood(text: string, reference: ReferenceFood[]): Promise<ParseResult> {
@@ -126,7 +133,7 @@ export async function parseFood(text: string, reference: ReferenceFood[]): Promi
   const raw = response.text;
   if (!raw) throw new Error("Prázdna odpoveď z Gemini.");
 
-  let parsed: { items?: any[]; mealType?: string };
+  let parsed: { items?: any[]; mealType?: string; waterMl?: number };
   try {
     parsed = JSON.parse(raw);
   } catch {
@@ -137,6 +144,8 @@ export async function parseFood(text: string, reference: ReferenceFood[]): Promi
   const mealType: DetectedMeal = (MEAL_TYPES as readonly string[]).includes(rawMeal)
     ? (rawMeal as DetectedMeal)
     : "other";
+
+  const waterMl = parsed.waterMl && Number(parsed.waterMl) > 0 ? Math.round(Number(parsed.waterMl)) : 0;
 
   const arr = Array.isArray(parsed.items) ? parsed.items : [];
   const items = arr.map((it): ParsedItem => ({
@@ -157,5 +166,5 @@ export async function parseFood(text: string, reference: ReferenceFood[]): Promi
     assumption: it.assumption ? String(it.assumption) : undefined,
   }));
 
-  return { items, mealType };
+  return { items, mealType, waterMl };
 }
