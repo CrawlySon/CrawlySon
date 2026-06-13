@@ -15,17 +15,6 @@ type Props = {
 // Web Speech API typ (nie je v TS lib)
 type SpeechRecognition = any;
 
-function getRecognition(): SpeechRecognition | null {
-  if (typeof window === "undefined") return null;
-  const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-  if (!SR) return null;
-  const r = new SR();
-  r.lang = "sk-SK";
-  r.interimResults = true;
-  r.continuous = false;
-  return r;
-}
-
 export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Props) {
   const [meal, setMeal] = useState<MealType>(defaultMeal);
   const [mealTouched, setMealTouched] = useState(false);
@@ -35,12 +24,28 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<ParsedItem[]>([]);
   const [listening, setListening] = useState(false);
+  const [speechSupported, setSpeechSupported] = useState(false);
   const recRef = useRef<SpeechRecognition | null>(null);
-  const speechSupported = typeof window !== "undefined" && getRecognition() !== null;
+  const stopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Ručné pridanie
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<any[]>([]);
+
+  // Zistenie podpory rozpoznávania reči až na klientovi (bez SSR nesúladu)
+  useEffect(() => {
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    setSpeechSupported(!!SR);
+    // Po odmountovaní vždy zastav prípadné nahrávanie
+    return () => {
+      if (stopTimerRef.current) clearTimeout(stopTimerRef.current);
+      try {
+        recRef.current?.stop();
+      } catch {
+        /* ignore */
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (tab !== "manual") return;
@@ -55,15 +60,33 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
     return () => clearTimeout(t);
   }, [query, tab]);
 
-  function toggleMic() {
-    if (listening) {
+  function stopListening() {
+    if (stopTimerRef.current) {
+      clearTimeout(stopTimerRef.current);
+      stopTimerRef.current = null;
+    }
+    try {
       recRef.current?.stop();
-      setListening(false);
+    } catch {
+      /* ignore */
+    }
+    setListening(false);
+  }
+
+  function startListening() {
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) return;
+    let r: SpeechRecognition;
+    try {
+      r = new SR();
+    } catch {
       return;
     }
-    const r = getRecognition();
-    if (!r) return;
+    r.lang = "sk-SK";
+    r.interimResults = true;
+    r.continuous = false;
     recRef.current = r;
+
     let finalText = text ? text + " " : "";
     r.onresult = (e: any) => {
       let interim = "";
@@ -74,14 +97,39 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
       }
       setText((finalText + interim).trim());
     };
-    r.onerror = () => setListening(false);
-    r.onend = () => setListening(false);
+    r.onerror = (e: any) => {
+      const code = e?.error;
+      if (code === "not-allowed" || code === "service-not-allowed") {
+        setError("Prístup k mikrofónu je zamietnutý. Povoľ ho v nastaveniach, alebo diktuj cez mikrofón na klávesnici.");
+      } else if (code === "no-speech") {
+        setError("Nič som nepočul. Skús to znova, alebo napíš jedlo ručne.");
+      } else if (code && code !== "aborted") {
+        setError("Diktovanie sa nepodarilo. Skús mikrofón na klávesnici alebo napíš jedlo ručne.");
+      }
+      stopListening();
+    };
+    r.onend = () => stopListening();
+
+    setError(null);
     setListening(true);
-    r.start();
+    try {
+      r.start();
+    } catch {
+      stopListening();
+      return;
+    }
+    // Poistka proti zaseknutiu na iOS – po 15 s nahrávanie vždy ukonči
+    stopTimerRef.current = setTimeout(() => stopListening(), 15000);
+  }
+
+  function toggleMic() {
+    if (listening) stopListening();
+    else startListening();
   }
 
   async function handleParse() {
     if (!text.trim()) return;
+    stopListening(); // ukonči prípadné nahrávanie pred spracovaním
     setLoading(true);
     setError(null);
     try {
@@ -211,11 +259,11 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
                 {loading ? "Spracúvam…" : "Spracovať AI"}
               </button>
             </div>
-            {!speechSupported && (
-              <p className="mt-2 text-xs text-slate-400">
-                Diktovanie nie je v tomto prehliadači dostupné — použi klávesnicu (na iPhone Safari funguje aj systémový mikrofón na klávesnici).
-              </p>
-            )}
+            <p className="mt-2 text-xs text-slate-400">
+              {speechSupported
+                ? "Tip: ak diktovanie cez tlačidlo nezačne (časté na iPhone), ťukni do poľa a použi mikrofón priamo na klávesnici."
+                : "Diktovanie cez prehliadač tu nie je dostupné. Ťukni do poľa a použi mikrofón na klávesnici (na iPhone vedľa medzerníka)."}
+            </p>
           </div>
         )}
 
