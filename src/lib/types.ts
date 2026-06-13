@@ -53,6 +53,28 @@ export type Totals = {
   fiber: number;
 };
 
+export type FavoriteItem = {
+  name: string;
+  quantityGrams: number | null;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  fiber: number | null;
+  category: string | null;
+  subcategory: string | null;
+  healthIndex: number | null;
+};
+
+export type Favorite = {
+  id: string;
+  name: string;
+  mealType: MealType;
+  items: FavoriteItem[];
+  useCount: number;
+  createdAt: string;
+};
+
 export type Profile = {
   id: string;
   name: string;

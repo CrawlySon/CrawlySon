@@ -11,7 +11,7 @@ async function req<T>(url: string, options?: RequestInit): Promise<T> {
   return res.json();
 }
 
-import type { Entry, ParsedItem, Profile, MealType } from "./types";
+import type { Entry, ParsedItem, Profile, MealType, Favorite, FavoriteItem } from "./types";
 
 export const api = {
   getEntries: (date: string) => req<{ entries: Entry[] }>(`/api/entries?date=${date}`),
@@ -28,6 +28,16 @@ export const api = {
     req<{ items: ParsedItem[]; mealType: MealType; waterMl: number }>(`/api/parse`, {
       method: "POST",
       body: JSON.stringify({ text }),
+    }),
+
+  getFavorites: () => req<{ favorites: Favorite[] }>(`/api/favorites`),
+  addFavorite: (payload: { name: string; mealType: MealType; items: FavoriteItem[] }) =>
+    req<{ favorite: Favorite }>(`/api/favorites`, { method: "POST", body: JSON.stringify(payload) }),
+  deleteFavorite: (id: string) => req<{ ok: true }>(`/api/favorites/${id}`, { method: "DELETE" }),
+  logFavorite: (id: string, date: string, mealType?: MealType) =>
+    req<{ entries: Entry[] }>(`/api/favorites/${id}/log`, {
+      method: "POST",
+      body: JSON.stringify({ date, mealType }),
     }),
 
   getProfile: () => req<{ profile: Profile }>(`/api/profile`),

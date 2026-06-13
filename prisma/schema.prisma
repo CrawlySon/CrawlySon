@@ -33,6 +33,21 @@ model User {
   foods      Food[]
   waterLogs  WaterLog[]
   aiUsage    AiUsage[]
+  favorites  Favorite[]
+}
+
+// Obľúbené / rýchle pridanie – jedna položka alebo zostava viacerých (napr. presso + mlieko + med)
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  mealType  String   @default("other") // predvolené jedlo pri pridaní
+  items     Json     // [{ name, quantityGrams, calories, protein, carbs, fat, fiber, category, subcategory, healthIndex }]
+  useCount  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 // Log spotreby AI (tokeny) na volanie

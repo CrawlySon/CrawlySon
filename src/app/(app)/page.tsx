@@ -15,10 +15,26 @@ import {
 } from "@dnd-kit/core";
 import { api } from "@/lib/api";
 import { round, sumTotals, todayISO } from "@/lib/nutrition";
-import { MEAL_LABELS, MEAL_ORDER, type Entry, type MealType, type Profile } from "@/lib/types";
+import { MEAL_LABELS, MEAL_ORDER, type Entry, type FavoriteItem, type MealType, type Profile } from "@/lib/types";
 import MacroSummary from "@/components/MacroSummary";
 import AddFoodSheet from "@/components/AddFoodSheet";
 import WaterCard from "@/components/WaterCard";
+import QuickFavorites from "@/components/QuickFavorites";
+
+function entryToFavItem(e: Entry): FavoriteItem {
+  return {
+    name: e.name,
+    quantityGrams: e.quantityGrams,
+    calories: e.calories,
+    protein: e.protein,
+    carbs: e.carbs,
+    fat: e.fat,
+    fiber: e.fiber,
+    category: e.category,
+    subcategory: e.subcategory,
+    healthIndex: e.healthIndex,
+  };
+}
 
 function shiftDate(date: string, days: number): string {
   // Čisto lokálny výpočet (bez UTC posunu cez toISOString)
@@ -47,6 +63,7 @@ export default function TodayPage() {
   const [sheet, setSheet] = useState<MealType | null>(null);
   const [loading, setLoading] = useState(true);
   const [reload, setReload] = useState(0);
+  const [favReload, setFavReload] = useState(0);
   const [activeId, setActiveId] = useState<string | null>(null);
 
   const sensors = useSensors(
@@ -74,6 +91,31 @@ export default function TodayPage() {
   async function handleDelete(id: string) {
     setEntries((prev) => prev.filter((e) => e.id !== id));
     await api.deleteEntry(id).catch(load);
+  }
+
+  async function saveFavorite(name: string, mealType: MealType, items: FavoriteItem[]) {
+    const trimmed = name.trim();
+    if (!trimmed || items.length === 0) return;
+    try {
+      await api.addFavorite({ name: trimmed, mealType, items });
+      setFavReload((r) => r + 1);
+    } catch (e: any) {
+      alert(e?.message || "Nepodarilo sa uložiť obľúbené.");
+    }
+  }
+
+  function saveEntryAsFavorite(entry: Entry) {
+    const name = window.prompt("Názov obľúbeného:", entry.name);
+    if (name == null) return;
+    saveFavorite(name, entry.mealType, [entryToFavItem(entry)]);
+  }
+
+  function saveMealAsFavorite(meal: MealType, list: Entry[]) {
+    if (list.length === 0) return;
+    const suggested = list.length === 1 ? list[0].name : MEAL_LABELS[meal];
+    const name = window.prompt(`Uložiť ${list.length} ${list.length === 1 ? "položku" : "položky/iek"} ako obľúbené. Názov:`, suggested);
+    if (name == null) return;
+    saveFavorite(name, meal, list.map(entryToFavItem));
   }
 
   async function moveEntry(id: string, target: MealType) {
@@ -150,6 +192,8 @@ export default function TodayPage() {
 
       <WaterCard date={date} reloadSignal={reload} />
 
+      <QuickFavorites date={date} reloadSignal={favReload} onLogged={refreshAll} />
+
       {/* Jedlá podľa typu (drag & drop medzi jedlami – podrž a presuň) */}
       <DndContext
         sensors={sensors}
@@ -170,9 +214,16 @@ export default function TodayPage() {
                 empty={list.length === 0}
                 dragging={!!activeId}
                 onAdd={() => setSheet(meal)}
+                onSaveFavorite={list.length > 0 ? () => saveMealAsFavorite(meal, list) : undefined}
               >
                 {list.map((e) => (
-                  <EntryRow key={e.id} entry={e} dimmed={activeId === e.id} onDelete={() => handleDelete(e.id)} />
+                  <EntryRow
+                    key={e.id}
+                    entry={e}
+                    dimmed={activeId === e.id}
+                    onDelete={() => handleDelete(e.id)}
+                    onFavorite={() => saveEntryAsFavorite(e)}
+                  />
                 ))}
               </MealSection>
             );
@@ -224,6 +275,7 @@ function MealSection({
   empty,
   dragging,
   onAdd,
+  onSaveFavorite,
   children,
 }: {
   meal: MealType;
@@ -231,6 +283,7 @@ function MealSection({
   empty: boolean;
   dragging: boolean;
   onAdd: () => void;
+  onSaveFavorite?: () => void;
   children: React.ReactNode;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: `meal:${meal}` });
@@ -244,9 +297,20 @@ function MealSection({
           <h2 className="text-[15px] font-semibold text-slate-700">{MEAL_LABELS[meal]}</h2>
           {mealCals > 0 && <span className="text-xs text-slate-400">{round(mealCals)} kcal</span>}
         </div>
-        <button onClick={onAdd} className="text-sm font-medium text-brand-600">
-          + pridať
-        </button>
+        <div className="flex items-center gap-3">
+          {onSaveFavorite && (
+            <button
+              onClick={onSaveFavorite}
+              className="text-sm text-amber-500"
+              title="Uložiť celé jedlo ako obľúbené"
+            >
+              ★
+            </button>
+          )}
+          <button onClick={onAdd} className="text-sm font-medium text-brand-600">
+            + pridať
+          </button>
+        </div>
       </div>
       {!empty && <ul className="divide-y divide-slate-50">{children}</ul>}
       {empty && dragging && (
@@ -264,7 +328,17 @@ function entryHealthColor(h: number): string {
   return "text-red-500";
 }
 
-function EntryRow({ entry, dimmed, onDelete }: { entry: Entry; dimmed: boolean; onDelete: () => void }) {
+function EntryRow({
+  entry,
+  dimmed,
+  onDelete,
+  onFavorite,
+}: {
+  entry: Entry;
+  dimmed: boolean;
+  onDelete: () => void;
+  onFavorite: () => void;
+}) {
   const { attributes, listeners, setNodeRef } = useDraggable({ id: entry.id });
   return (
     <li className={`flex items-center gap-1.5 px-3 py-1.5 ${dimmed ? "opacity-30" : ""}`}>
@@ -293,6 +367,9 @@ function EntryRow({ entry, dimmed, onDelete }: { entry: Entry; dimmed: boolean; 
         </p>
       </div>
       <span className="text-sm font-semibold text-slate-600">{round(entry.calories)}</span>
+      <button onClick={onFavorite} className="px-0.5 text-slate-300 hover:text-amber-500" title="Uložiť ako obľúbené">
+        ★
+      </button>
       <button onClick={onDelete} className="px-0.5 text-slate-300 hover:text-red-400">
         ✕
       </button>
