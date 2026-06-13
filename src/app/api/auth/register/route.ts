@@ -28,7 +28,8 @@ export async function POST(req: Request) {
 
   const userCount = await prisma.user.count();
   const isFirst = userCount === 0;
-  const expectedCode = process.env.REGISTRATION_CODE;
+  // Akceptuje REGISTRATION_CODE; ak nie je nastavený, použije sa starší APP_PASSWORD.
+  const expectedCode = process.env.REGISTRATION_CODE || process.env.APP_PASSWORD;
 
   // Prvý účet (bootstrap admin): povolený, ak REGISTRATION_CODE nie je nastavený,
   // inak musí kód sedieť. Ďalšie účty vždy vyžadujú správny registračný kód.
