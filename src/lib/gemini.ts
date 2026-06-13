@@ -203,8 +203,10 @@ export async function lookupProductByWeb(query: string): Promise<WebLookupResult
   const ai = new GoogleGenAI({ apiKey });
   const model = process.env.GEMINI_MODEL || "gemini-3.5-flash";
 
-  const prompt = `Vyhľadaj na webe reálne nutričné hodnoty konkrétneho produktu: "${query}".
-Pozri stránky výrobcu/e-shopov. Potrebujem hodnoty NA 100 g (alebo 100 ml).
+  const prompt = `Pomôž identifikovať a nájsť nutričné hodnoty produktu: "${query}".
+Ak je v zadaní čiarový kód (EAN/GTIN), najprv podľa neho na webe zisti, o aký produkt ide
+(názov a značku), potom nájdi jeho nutričné hodnoty. Pozri stránky výrobcu/e-shopov.
+Potrebujem hodnoty NA 100 g (alebo 100 ml).
 Ak produkt nevieš spoľahlivo nájsť, vráť "found": false.
 Odpovedz IBA platným JSON objektom (bez markdownu) v tvare:
 {"found": true/false, "name": "presný názov produktu", "calories": kcal_na_100g,

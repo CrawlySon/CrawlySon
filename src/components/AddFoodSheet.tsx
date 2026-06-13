@@ -216,9 +216,9 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
 
   // Agentické dohľadanie cez Gemini (web search)
   async function aiLookupUnknown() {
-    if (!unknownForm.name.trim()) return;
+    if (!unknownCode && !unknownForm.name.trim()) return;
     setEstimating(true);
-    setScanMsg("AI hľadá údaje na webe…");
+    setScanMsg("AI dohľadáva produkt na webe…");
     try {
       const r = await api.aiBarcodeLookup(unknownForm.name.trim(), unknownCode);
       if (r.found && r.food) {
@@ -369,32 +369,37 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
 
             {scanMsg && <p className="mb-2 rounded-xl bg-sky-50 p-2 text-xs text-sky-700">{scanMsg}</p>}
 
-            {/* Neznámy kód → AI dohľadanie na webe alebo manuálne zadanie (na 100 g) */}
+            {/* Neznámy kód → agentické dohľadanie podľa kódu alebo manuálne zadanie */}
             {unknownCode && (
               <div className="mb-2 space-y-2 rounded-xl border border-amber-100 bg-amber-50 p-2">
+                <p className="text-sm text-amber-800">
+                  Produkt s kódom <b>{unknownCode}</b> nie je v databáze.
+                </p>
+                <button
+                  onClick={aiLookupUnknown}
+                  disabled={estimating}
+                  className="btn-primary w-full py-2 text-sm"
+                >
+                  {estimating ? "Dohľadávam na webe…" : "🔎 Dohľadať produkt cez AI"}
+                </button>
                 <input
                   value={unknownForm.name}
                   onChange={(e) => setUnknownForm({ ...unknownForm, name: e.target.value })}
-                  placeholder="Názov produktu (napr. Voxberg proteínová tyčinka)"
-                  className="input"
+                  placeholder="(voliteľné) upresni názov produktu"
+                  className="input py-2 text-sm"
                 />
-                <button
-                  onClick={aiLookupUnknown}
-                  disabled={!unknownForm.name.trim() || estimating}
-                  className="btn-primary w-full py-2 text-sm"
-                >
-                  {estimating ? "AI hľadá na webe…" : "✨ Nájsť údaje cez AI (web)"}
-                </button>
-                <p className="text-center text-[11px] text-amber-700">alebo zadaj ručne (na 100 g):</p>
-                <div className="grid grid-cols-4 gap-1.5">
-                  <SmallNum label="kcal" v={unknownForm.calories} on={(v) => setUnknownForm({ ...unknownForm, calories: v })} />
-                  <SmallNum label="B g" v={unknownForm.protein} on={(v) => setUnknownForm({ ...unknownForm, protein: v })} />
-                  <SmallNum label="S g" v={unknownForm.carbs} on={(v) => setUnknownForm({ ...unknownForm, carbs: v })} />
-                  <SmallNum label="T g" v={unknownForm.fat} on={(v) => setUnknownForm({ ...unknownForm, fat: v })} />
-                </div>
-                <button onClick={saveUnknown} disabled={!unknownForm.name.trim()} className="btn-ghost w-full py-2 text-sm">
-                  Uložiť ručne ku kódu {unknownCode}
-                </button>
+                <details className="text-xs text-amber-700">
+                  <summary className="cursor-pointer">alebo zadať ručne (na 100 g)</summary>
+                  <div className="mt-2 grid grid-cols-4 gap-1.5">
+                    <SmallNum label="kcal" v={unknownForm.calories} on={(v) => setUnknownForm({ ...unknownForm, calories: v })} />
+                    <SmallNum label="B g" v={unknownForm.protein} on={(v) => setUnknownForm({ ...unknownForm, protein: v })} />
+                    <SmallNum label="S g" v={unknownForm.carbs} on={(v) => setUnknownForm({ ...unknownForm, carbs: v })} />
+                    <SmallNum label="T g" v={unknownForm.fat} on={(v) => setUnknownForm({ ...unknownForm, fat: v })} />
+                  </div>
+                  <button onClick={saveUnknown} disabled={!unknownForm.name.trim()} className="btn-ghost mt-2 w-full py-2 text-sm">
+                    Uložiť ručne ku kódu {unknownCode}
+                  </button>
+                </details>
               </div>
             )}
 

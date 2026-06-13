@@ -18,10 +18,13 @@ export async function POST(req: Request) {
   const b = await req.json().catch(() => ({}));
   const name = String(b.name || "").trim();
   const code = b.code ? String(b.code).trim() : null;
-  if (!name) return NextResponse.json({ error: "Zadaj názov produktu." }, { status: 400 });
+  if (!name && !code) return NextResponse.json({ error: "Zadaj kód alebo názov produktu." }, { status: 400 });
+
+  // Postav dopyt: primárne podľa EAN kódu, názov je voliteľné upresnenie
+  const query = name && code ? `${name}, čiarový kód EAN ${code}` : code ? `produkt s čiarovým kódom (EAN/GTIN) ${code}` : name;
 
   try {
-    const { food, usage } = await lookupProductByWeb(code ? `${name} (EAN ${code})` : name);
+    const { food, usage } = await lookupProductByWeb(query);
 
     // zaloguj spotrebu tokenov
     try {
