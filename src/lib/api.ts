@@ -36,6 +36,9 @@ export const api = {
 
   searchFoods: (q: string) => req<{ foods: any[] }>(`/api/foods?q=${encodeURIComponent(q)}`),
   addFood: (data: any) => req<{ food: any }>(`/api/foods`, { method: "POST", body: JSON.stringify(data) }),
+  updateFood: (id: string, data: any) =>
+    req<{ food: any }>(`/api/foods/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  deleteFood: (id: string) => req<{ ok: true }>(`/api/foods/${id}`, { method: "DELETE" }),
   seed: () => req<{ added: number; total: number }>(`/api/seed`, { method: "POST" }),
 
   history: (days: number) =>

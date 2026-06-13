@@ -23,8 +23,11 @@ PRAVIDLÁ:
 - Ak gramáž neuvedie, odhadni typickú porciu a do poľa "assumption" napíš aký
   predpoklad si urobil (napr. "predpokladaná porcia ~150 g").
 - Vráť hodnoty ako CELKOVÉ množstvo pre reálne zjedenú porciu (nie na 100 g).
-- Ak je v referenčnej databáze podobná potravina, vychádzaj z jej hodnôt na
-  100 g a prepočítaj podľa gramáže. Inak odhadni podľa bežných nutričných tabuliek.
+- PRIORITA: ak sa potravina nachádza v referenčnej databáze (aj približný názov),
+  VŽDY použi jej hodnoty a len ich prepočítaj podľa gramáže/porcie. Zachovaj
+  rovnaký názov ako v databáze. Vlastný odhad rob len ak v databáze nič podobné nie je.
+- Ak je v referenčnej databáze podobná potravina, vychádzaj z jej hodnôt na uvedenú
+  gramáž a prepočítaj. Inak odhadni podľa bežných nutričných tabuliek.
 - "confidence" je tvoja istota odhadu od 0 do 1.
 - Buď realistický, nepreháňaj presnosť. Názvy polož v slovenčine.
 - Z textu rozpoznaj aj typ jedla a vráť ho v poli "mealType":

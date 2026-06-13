@@ -95,19 +95,82 @@ export default function FoodsPage() {
 
       <div className="card divide-y divide-slate-50">
         {foods.map((f) => (
-          <div key={f.id} className="px-4 py-2.5">
-            <div className="flex justify-between">
-              <p className="font-medium text-slate-800">{f.name}</p>
-              <p className="text-sm font-semibold text-slate-600">{f.calories} kcal</p>
-            </div>
-            <p className="text-xs text-slate-400">
-              na {f.baseGrams} g · B {f.protein} · S {f.carbs} · T {f.fat}
-              {f.category ? ` · ${f.category}` : ""}
-            </p>
-          </div>
+          <FoodRow key={f.id} food={f} onChanged={load} />
         ))}
-        {foods.length === 0 && <p className="px-4 py-6 text-center text-sm text-slate-400">Nič nenájdené.</p>}
+        {q && foods.length === 0 && <p className="px-4 py-6 text-center text-sm text-slate-400">Nič nenájdené.</p>}
       </div>
+    </div>
+  );
+}
+
+function FoodRow({ food, onChanged }: { food: Food; onChanged: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState<any>(food);
+  const [busy, setBusy] = useState(false);
+
+  async function save() {
+    setBusy(true);
+    try {
+      await api.updateFood(food.id, {
+        name: draft.name,
+        baseGrams: draft.baseGrams,
+        calories: draft.calories,
+        protein: draft.protein,
+        carbs: draft.carbs,
+        fat: draft.fat,
+        fiber: draft.fiber,
+      });
+      setOpen(false);
+      onChanged();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove() {
+    if (!confirm(`Zmazať „${food.name}" z databázy?`)) return;
+    setBusy(true);
+    try {
+      await api.deleteFood(food.id);
+      onChanged();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="px-4 py-2.5">
+      <button onClick={() => setOpen((o) => !o)} className="flex w-full items-center justify-between text-left">
+        <div className="min-w-0">
+          <p className="truncate font-medium text-slate-800">{food.name}</p>
+          <p className="text-xs text-slate-400">
+            na {food.baseGrams} g · B {food.protein} · S {food.carbs} · T {food.fat}
+            {food.category ? ` · ${food.category}` : ""}
+          </p>
+        </div>
+        <span className="ml-2 shrink-0 text-sm font-semibold text-slate-600">{food.calories} kcal</span>
+      </button>
+
+      {open && (
+        <div className="mt-3 space-y-2">
+          <input className="input" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+          <div className="grid grid-cols-2 gap-2">
+            <FieldNum label="Na koľko g" v={draft.baseGrams} on={(v) => setDraft({ ...draft, baseGrams: v })} />
+            <FieldNum label="kcal" v={draft.calories} on={(v) => setDraft({ ...draft, calories: v })} />
+            <FieldNum label="Bielkoviny g" v={draft.protein} on={(v) => setDraft({ ...draft, protein: v })} />
+            <FieldNum label="Sacharidy g" v={draft.carbs} on={(v) => setDraft({ ...draft, carbs: v })} />
+            <FieldNum label="Tuky g" v={draft.fat} on={(v) => setDraft({ ...draft, fat: v })} />
+          </div>
+          <div className="flex gap-2">
+            <button onClick={remove} disabled={busy} className="btn-ghost text-red-500">
+              Zmazať
+            </button>
+            <button onClick={save} disabled={busy} className="btn-primary flex-1">
+              {busy ? "Ukladám…" : "Uložiť zmeny"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

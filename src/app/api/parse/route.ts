@@ -7,24 +7,35 @@ export const maxDuration = 30;
 
 // Vyberie z DB potraviny, ktoré sa aspoň trochu zhodujú s textom (slová >= 3 znaky),
 // aby sme AI poskytli relevantnú referenciu bez posielania celej databázy.
+const SELECT = { name: true, baseGrams: true, calories: true, protein: true, carbs: true, fat: true, fiber: true };
+
 async function pickReference(text: string): Promise<ReferenceFood[]> {
-  const words = text
-    .toLowerCase()
-    .replace(/[^\p{L}\s]/gu, " ")
-    .split(/\s+/)
-    .filter((w) => w.length >= 3);
+  const words = Array.from(
+    new Set(
+      text
+        .toLowerCase()
+        .replace(/[^\p{L}\s]/gu, " ")
+        .split(/\s+/)
+        .filter((w) => w.length >= 3)
+    )
+  );
 
-  const all = await prisma.food.findMany({
-    select: { name: true, baseGrams: true, calories: true, protein: true, carbs: true, fat: true, fiber: true },
-  });
+  // Najprv hľadaj v databáze potravín podľa slov z textu (škáluje aj pri tisícoch položiek).
+  let matched: any[] = [];
+  if (words.length) {
+    matched = await prisma.food.findMany({
+      where: { OR: words.map((w) => ({ name: { contains: w, mode: "insensitive" as const } })) },
+      select: SELECT,
+      take: 40,
+    });
+  }
 
-  const matched = all.filter((f) => {
-    const n = f.name.toLowerCase();
-    return words.some((w) => n.includes(w) || w.includes(n.split(" ")[0]));
-  });
+  // Ak nič nematchne, pošli pár naposledy pridaných (kalibrácia pre model).
+  if (!matched.length) {
+    matched = await prisma.food.findMany({ select: SELECT, take: 15, orderBy: { createdAt: "desc" } });
+  }
 
-  // Ak nič nematchne, pošli aspoň pár častých, nech má model "kalibráciu".
-  return (matched.length ? matched : all.slice(0, 15)) as ReferenceFood[];
+  return matched as ReferenceFood[];
 }
 
 export async function POST(req: Request) {
