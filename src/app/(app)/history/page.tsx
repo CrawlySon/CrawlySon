@@ -59,7 +59,7 @@ export default function HistoryPage() {
 
   return (
     <div className="px-4 pt-4">
-      <h1 className="mb-4 text-xl font-bold text-slate-800">História</h1>
+      <h1 className="mb-4 text-xl font-bold text-slate-800">Analytika</h1>
 
       <div className="mb-3 flex gap-2">
         {[7, 14, 30].map((r) => (
@@ -75,7 +75,7 @@ export default function HistoryPage() {
 
       {/* Filter podľa kategórie */}
       {categories.length > 0 && (
-        <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
+        <div className="mb-4 flex flex-wrap gap-2">
           <button
             onClick={() => setCategory("")}
             className={`whitespace-nowrap rounded-full px-3 py-1.5 text-sm ${category === "" ? "bg-slate-800 text-white" : "bg-white text-slate-600 border border-slate-200"}`}

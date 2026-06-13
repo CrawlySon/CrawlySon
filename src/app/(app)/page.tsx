@@ -1,6 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import {
+  DndContext,
+  DragOverlay,
+  MouseSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  useDraggable,
+  useDroppable,
+  type DragStartEvent,
+  type DragEndEvent,
+} from "@dnd-kit/core";
 import { api } from "@/lib/api";
 import { round, sumTotals, todayISO } from "@/lib/nutrition";
 import { MEAL_LABELS, MEAL_ORDER, type Entry, type MealType, type Profile } from "@/lib/types";
@@ -31,6 +43,12 @@ export default function TodayPage() {
   const [sheet, setSheet] = useState<MealType | null>(null);
   const [loading, setLoading] = useState(true);
   const [reload, setReload] = useState(0);
+  const [activeId, setActiveId] = useState<string | null>(null);
+
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } })
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -52,6 +70,25 @@ export default function TodayPage() {
   async function handleDelete(id: string) {
     setEntries((prev) => prev.filter((e) => e.id !== id));
     await api.deleteEntry(id).catch(load);
+  }
+
+  async function moveEntry(id: string, target: MealType) {
+    setEntries((prev) => prev.map((e) => (e.id === id ? { ...e, mealType: target } : e)));
+    try {
+      await api.updateEntry(id, { mealType: target });
+    } catch {
+      load();
+    }
+  }
+
+  function onDragEnd(ev: DragEndEvent) {
+    setActiveId(null);
+    const id = String(ev.active.id);
+    const overId = ev.over?.id ? String(ev.over.id) : null;
+    if (!overId || !overId.startsWith("meal:")) return;
+    const target = overId.slice("meal:".length) as MealType;
+    const entry = entries.find((e) => e.id === id);
+    if (entry && entry.mealType !== target) moveEntry(id, target);
   }
 
   const totals = sumTotals(entries);
@@ -84,49 +121,52 @@ export default function TodayPage() {
 
       <WaterCard date={date} reloadSignal={reload} />
 
-      {/* Jedlá podľa typu */}
-      <div className="mt-4 space-y-3">
-        {MEAL_ORDER.map((meal) => {
-          const list = entries.filter((e) => e.mealType === meal);
-          const mealCals = sumTotals(list).calories;
-          if (list.length === 0 && meal === "other") return null;
-          return (
-            <section key={meal} className="card overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-2.5">
-                <div className="flex items-baseline gap-2">
-                  <h2 className="font-semibold text-slate-700">{MEAL_LABELS[meal]}</h2>
-                  {mealCals > 0 && <span className="text-xs text-slate-400">{round(mealCals)} kcal</span>}
-                </div>
-                <button onClick={() => setSheet(meal)} className="text-sm font-medium text-brand-600">
-                  + pridať
-                </button>
-              </div>
-              {list.length > 0 && (
-                <ul className="divide-y divide-slate-50">
-                  {list.map((e) => (
-                    <li key={e.id} className="flex items-center gap-3 px-4 py-2.5">
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-slate-800">
-                          {e.name}
-                          {e.source === "ai" && <span className="ml-1 text-[10px] text-brand-500">✨</span>}
-                        </p>
-                        <p className="text-xs text-slate-400">
-                          {e.quantityGrams ? `${round(e.quantityGrams)} g · ` : ""}
-                          B {round(e.protein)} · S {round(e.carbs)} · T {round(e.fat)}
-                        </p>
-                      </div>
-                      <span className="text-sm font-semibold text-slate-600">{round(e.calories)}</span>
-                      <button onClick={() => handleDelete(e.id)} className="text-slate-300 hover:text-red-400">
-                        ✕
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-          );
-        })}
-      </div>
+      {/* Jedlá podľa typu (drag & drop medzi jedlami – podrž a presuň) */}
+      <DndContext
+        sensors={sensors}
+        onDragStart={(ev: DragStartEvent) => setActiveId(String(ev.active.id))}
+        onDragEnd={onDragEnd}
+        onDragCancel={() => setActiveId(null)}
+      >
+        <div className="mt-4 space-y-3">
+          {MEAL_ORDER.map((meal) => {
+            const list = entries.filter((e) => e.mealType === meal);
+            const mealCals = sumTotals(list).calories;
+            if (list.length === 0 && meal === "other" && !activeId) return null;
+            return (
+              <MealSection
+                key={meal}
+                meal={meal}
+                mealCals={mealCals}
+                empty={list.length === 0}
+                dragging={!!activeId}
+                onAdd={() => setSheet(meal)}
+              >
+                {list.map((e) => (
+                  <EntryRow key={e.id} entry={e} dimmed={activeId === e.id} onDelete={() => handleDelete(e.id)} />
+                ))}
+              </MealSection>
+            );
+          })}
+        </div>
+
+        <DragOverlay>
+          {activeId
+            ? (() => {
+                const e = entries.find((x) => x.id === activeId);
+                if (!e) return null;
+                return (
+                  <div className="flex items-center gap-3 rounded-xl bg-white px-4 py-2.5 shadow-lg ring-2 ring-brand-300">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-slate-800">{e.name}</p>
+                      <p className="text-xs text-slate-400">{round(e.calories)} kcal</p>
+                    </div>
+                  </div>
+                );
+              })()
+            : null}
+        </DragOverlay>
+      </DndContext>
 
       {!loading && entries.length === 0 && (
         <p className="mt-6 text-center text-sm text-slate-400">
@@ -146,5 +186,78 @@ export default function TodayPage() {
         <AddFoodSheet date={date} defaultMeal={sheet} onClose={() => setSheet(null)} onSaved={refreshAll} />
       )}
     </div>
+  );
+}
+
+function MealSection({
+  meal,
+  mealCals,
+  empty,
+  dragging,
+  onAdd,
+  children,
+}: {
+  meal: MealType;
+  mealCals: number;
+  empty: boolean;
+  dragging: boolean;
+  onAdd: () => void;
+  children: React.ReactNode;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: `meal:${meal}` });
+  return (
+    <section
+      ref={setNodeRef}
+      className={`card overflow-hidden transition ${isOver ? "ring-2 ring-brand-400" : ""}`}
+    >
+      <div className="flex items-center justify-between px-4 py-2.5">
+        <div className="flex items-baseline gap-2">
+          <h2 className="font-semibold text-slate-700">{MEAL_LABELS[meal]}</h2>
+          {mealCals > 0 && <span className="text-xs text-slate-400">{round(mealCals)} kcal</span>}
+        </div>
+        <button onClick={onAdd} className="text-sm font-medium text-brand-600">
+          + pridať
+        </button>
+      </div>
+      {!empty && <ul className="divide-y divide-slate-50">{children}</ul>}
+      {empty && dragging && (
+        <div className="mx-3 mb-3 rounded-xl border-2 border-dashed border-brand-200 py-4 text-center text-xs text-brand-400">
+          presuň sem
+        </div>
+      )}
+    </section>
+  );
+}
+
+function EntryRow({ entry, dimmed, onDelete }: { entry: Entry; dimmed: boolean; onDelete: () => void }) {
+  const { attributes, listeners, setNodeRef } = useDraggable({ id: entry.id });
+  return (
+    <li className={`flex items-center gap-2 px-4 py-2.5 ${dimmed ? "opacity-30" : ""}`}>
+      {/* Úchyt na presun – podrž a ťahaj */}
+      <button
+        ref={setNodeRef}
+        {...listeners}
+        {...attributes}
+        className="cursor-grab touch-none select-none px-1 text-slate-300 active:cursor-grabbing"
+        title="Podrž a presuň do iného jedla"
+        aria-label="Presunúť"
+      >
+        ⠿
+      </button>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium text-slate-800">
+          {entry.name}
+          {entry.source === "ai" && <span className="ml-1 text-[10px] text-brand-500">✨</span>}
+        </p>
+        <p className="text-xs text-slate-400">
+          {entry.quantityGrams ? `${round(entry.quantityGrams)} g · ` : ""}
+          B {round(entry.protein)} · S {round(entry.carbs)} · T {round(entry.fat)}
+        </p>
+      </div>
+      <span className="text-sm font-semibold text-slate-600">{round(entry.calories)}</span>
+      <button onClick={onDelete} className="text-slate-300 hover:text-red-400">
+        ✕
+      </button>
+    </li>
   );
 }
