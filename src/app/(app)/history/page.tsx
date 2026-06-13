@@ -294,7 +294,7 @@ function TimelineChart({
         <>
           <line x1={padL} y1={y(goal)} x2={W - padR} y2={y(goal)} stroke="#94a3b8" strokeWidth="1" strokeDasharray="4 3" />
           <text x={W - padR} y={y(goal) - 3} textAnchor="end" fontSize="9" fill="#94a3b8">
-            cieľ {Math.round(goal)}
+            cieľ {unit.trim() === "l" ? (Math.round(goal * 10) / 10).toString() : Math.round(goal)}
             {unit}
           </text>
         </>
