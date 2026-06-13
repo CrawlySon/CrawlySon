@@ -67,7 +67,7 @@ export async function parseFood(text: string, reference: ReferenceFood[]): Promi
   if (!apiKey) throw new Error("Chýba GEMINI_API_KEY v prostredí.");
 
   const ai = new GoogleGenAI({ apiKey });
-  const model = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+  const model = process.env.GEMINI_MODEL || "gemini-3.5-flash";
 
   const prompt = `Používateľ povedal/napísal čo zjedol:\n"""${text}"""${buildReferenceBlock(reference)}`;
 

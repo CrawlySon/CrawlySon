@@ -22,9 +22,20 @@ export default function FoodsPage() {
   const [foods, setFoods] = useState<Food[]>([]);
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState<any>(EMPTY);
+  const [seeding, setSeeding] = useState(false);
 
   function load() {
     api.searchFoods(q).then((r) => setFoods(r.foods));
+  }
+
+  async function seed() {
+    setSeeding(true);
+    try {
+      await api.seed();
+      load();
+    } finally {
+      setSeeding(false);
+    }
   }
 
   useEffect(() => {
@@ -67,6 +78,15 @@ export default function FoodsPage() {
           </div>
           <button onClick={add} className="btn-primary w-full">
             Uložiť potravinu
+          </button>
+        </div>
+      )}
+
+      {!q && foods.length === 0 && (
+        <div className="card mb-3 p-4 text-center">
+          <p className="text-sm text-slate-600">Databáza potravín je zatiaľ prázdna.</p>
+          <button onClick={seed} disabled={seeding} className="btn-primary mt-3 w-full">
+            {seeding ? "Napĺňam…" : "Naplniť základnými potravinami"}
           </button>
         </div>
       )}

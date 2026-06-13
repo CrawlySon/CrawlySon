@@ -32,6 +32,7 @@ export const api = {
 
   searchFoods: (q: string) => req<{ foods: any[] }>(`/api/foods?q=${encodeURIComponent(q)}`),
   addFood: (data: any) => req<{ food: any }>(`/api/foods`, { method: "POST", body: JSON.stringify(data) }),
+  seed: () => req<{ added: number; total: number }>(`/api/seed`, { method: "POST" }),
 
   history: (days: number) =>
     req<{ days: { date: string; calories: number; protein: number; carbs: number; fat: number; count: number }[] }>(

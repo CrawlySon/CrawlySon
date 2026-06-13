@@ -45,7 +45,7 @@ Na [Google AI Studio](https://aistudio.google.com/apikey) vytvor API kľúč
    |---|---|
    | `DATABASE_URL` | connection string z Neon/Supabase |
    | `GEMINI_API_KEY` | tvoj kľúč z AI Studio |
-   | `GEMINI_MODEL` | `gemini-2.0-flash` (voliteľné) |
+   | `GEMINI_MODEL` | `gemini-3.5-flash` (voliteľné) |
    | `APP_PASSWORD` | heslo, ktorým sa budeš prihlasovať |
    | `SESSION_SECRET` | náhodný dlhý reťazec (`openssl rand -base64 32`) |
 
