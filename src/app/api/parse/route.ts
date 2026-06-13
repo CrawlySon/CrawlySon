@@ -35,9 +35,9 @@ export async function POST(req: Request) {
     }
 
     const reference = await pickReference(text);
-    const items = await parseFood(text.trim(), reference);
+    const { items, mealType } = await parseFood(text.trim(), reference);
 
-    return NextResponse.json({ items });
+    return NextResponse.json({ items, mealType });
   } catch (err: any) {
     console.error("parse error:", err);
     return NextResponse.json(

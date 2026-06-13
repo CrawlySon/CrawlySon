@@ -28,6 +28,7 @@ function getRecognition(): SpeechRecognition | null {
 
 export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Props) {
   const [meal, setMeal] = useState<MealType>(defaultMeal);
+  const [mealTouched, setMealTouched] = useState(false);
   const [tab, setTab] = useState<"ai" | "manual">("ai");
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
@@ -84,9 +85,12 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
     setLoading(true);
     setError(null);
     try {
-      const { items } = await api.parse(text);
+      const { items, mealType } = await api.parse(text);
       if (!items.length) setError("AI nerozpoznala žiadne jedlo. Skús to upresniť.");
       setItems(items);
+      // Ak AI z textu rozpoznala typ jedla a používateľ ho ručne nezmenil,
+      // nastav ho automaticky (napr. „na raňajky banán" → Raňajky).
+      if (mealType && mealType !== "other" && !mealTouched) setMeal(mealType);
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -157,7 +161,10 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
           {MEAL_ORDER.map((m) => (
             <button
               key={m}
-              onClick={() => setMeal(m)}
+              onClick={() => {
+                setMeal(m);
+                setMealTouched(true);
+              }}
               className={`whitespace-nowrap rounded-full px-3 py-1.5 text-sm ${
                 meal === m ? "bg-brand-600 text-white" : "bg-white text-slate-600 border border-slate-200"
               }`}

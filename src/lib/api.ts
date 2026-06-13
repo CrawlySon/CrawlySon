@@ -24,7 +24,11 @@ export const api = {
 
   deleteEntry: (id: string) => req<{ ok: true }>(`/api/entries/${id}`, { method: "DELETE" }),
 
-  parse: (text: string) => req<{ items: ParsedItem[] }>(`/api/parse`, { method: "POST", body: JSON.stringify({ text }) }),
+  parse: (text: string) =>
+    req<{ items: ParsedItem[]; mealType: MealType }>(`/api/parse`, {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    }),
 
   getProfile: () => req<{ profile: Profile }>(`/api/profile`),
   updateProfile: (data: Partial<Profile>) =>

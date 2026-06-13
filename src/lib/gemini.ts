@@ -26,11 +26,18 @@ PRAVIDLÁ:
 - Ak je v referenčnej databáze podobná potravina, vychádzaj z jej hodnôt na
   100 g a prepočítaj podľa gramáže. Inak odhadni podľa bežných nutričných tabuliek.
 - "confidence" je tvoja istota odhadu od 0 do 1.
-- Buď realistický, nepreháňaj presnosť. Názvy polož v slovenčine.`;
+- Buď realistický, nepreháňaj presnosť. Názvy polož v slovenčine.
+- Z textu rozpoznaj aj typ jedla a vráť ho v poli "mealType":
+  raňajky = "breakfast", obed = "lunch", večera = "dinner",
+  desiata/olovrant = "snack". Ak používateľ typ jedla NEuvedie, vráť "other".`;
 
 const responseSchema = {
   type: Type.OBJECT,
   properties: {
+    mealType: {
+      type: Type.STRING,
+      description: 'Typ jedla z textu: "breakfast" | "lunch" | "dinner" | "snack" | "other"',
+    },
     items: {
       type: Type.ARRAY,
       items: {
@@ -62,7 +69,15 @@ function buildReferenceBlock(foods: ReferenceFood[]): string {
   return `\n\nREFERENČNÁ DATABÁZA POTRAVÍN (orientačné hodnoty):\n${lines.join("\n")}`;
 }
 
-export async function parseFood(text: string, reference: ReferenceFood[]): Promise<ParsedItem[]> {
+const MEAL_TYPES = ["breakfast", "lunch", "dinner", "snack", "other"] as const;
+export type DetectedMeal = (typeof MEAL_TYPES)[number];
+
+export type ParseResult = {
+  items: ParsedItem[];
+  mealType: DetectedMeal;
+};
+
+export async function parseFood(text: string, reference: ReferenceFood[]): Promise<ParseResult> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("Chýba GEMINI_API_KEY v prostredí.");
 
@@ -85,15 +100,20 @@ export async function parseFood(text: string, reference: ReferenceFood[]): Promi
   const raw = response.text;
   if (!raw) throw new Error("Prázdna odpoveď z Gemini.");
 
-  let parsed: { items?: any[] };
+  let parsed: { items?: any[]; mealType?: string };
   try {
     parsed = JSON.parse(raw);
   } catch {
     throw new Error("Nepodarilo sa spracovať odpoveď AI (neplatný JSON).");
   }
 
-  const items = Array.isArray(parsed.items) ? parsed.items : [];
-  return items.map((it): ParsedItem => ({
+  const rawMeal = String(parsed.mealType ?? "other");
+  const mealType: DetectedMeal = (MEAL_TYPES as readonly string[]).includes(rawMeal)
+    ? (rawMeal as DetectedMeal)
+    : "other";
+
+  const arr = Array.isArray(parsed.items) ? parsed.items : [];
+  const items = arr.map((it): ParsedItem => ({
     name: String(it.name ?? "Neznáme jedlo"),
     quantityGrams: it.quantityGrams && it.quantityGrams > 0 ? Number(it.quantityGrams) : null,
     calories: Math.max(0, Number(it.calories ?? 0)),
@@ -104,4 +124,6 @@ export async function parseFood(text: string, reference: ReferenceFood[]): Promi
     confidence: Math.min(1, Math.max(0, Number(it.confidence ?? 0.5))),
     assumption: it.assumption ? String(it.assumption) : undefined,
   }));
+
+  return { items, mealType };
 }
