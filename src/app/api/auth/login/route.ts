@@ -1,29 +1,37 @@
 import { NextResponse } from "next/server";
-import { SESSION_COOKIE, createSessionToken } from "@/lib/auth";
+import { prisma } from "@/lib/db";
+import { SESSION_COOKIE, SESSION_MAX_AGE_SECONDS, createSessionToken } from "@/lib/auth";
+import { verifyPassword } from "@/lib/password";
+
+export const runtime = "nodejs";
 
 export async function POST(req: Request) {
-  const { password } = await req.json().catch(() => ({ password: "" }));
-  const expected = process.env.APP_PASSWORD;
+  const { username, password } = await req.json().catch(() => ({}));
 
-  if (!expected) {
+  if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET.length < 16) {
     return NextResponse.json(
-      { error: "Aplikácia nemá nastavené APP_PASSWORD." },
+      { error: "Server nemá nastavený SESSION_SECRET (min. 16 znakov)." },
       { status: 500 }
     );
   }
-
-  if (password !== expected) {
-    return NextResponse.json({ error: "Nesprávne heslo." }, { status: 401 });
+  if (!username || !password) {
+    return NextResponse.json({ error: "Zadaj meno a heslo." }, { status: 400 });
   }
 
-  const token = await createSessionToken();
-  const res = NextResponse.json({ ok: true });
+  const user = await prisma.user.findUnique({ where: { username: String(username).trim().toLowerCase() } });
+  // Rovnaká hláška pri zlom mene aj hesle (neprezrádzame existenciu účtu).
+  if (!user || !verifyPassword(String(password), user.passwordHash)) {
+    return NextResponse.json({ error: "Nesprávne meno alebo heslo." }, { status: 401 });
+  }
+
+  const token = await createSessionToken(user.id);
+  const res = NextResponse.json({ ok: true, username: user.username });
   res.cookies.set(SESSION_COOKIE, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
-    maxAge: 60 * 60 * 24 * 365, // 1 rok
+    maxAge: SESSION_MAX_AGE_SECONDS,
   });
   return res;
 }

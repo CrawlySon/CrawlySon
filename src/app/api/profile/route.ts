@@ -1,21 +1,35 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { getUserId } from "@/lib/server-auth";
 
 export const runtime = "nodejs";
 
-async function getOrCreate() {
-  let profile = await prisma.profile.findUnique({ where: { id: 1 } });
-  if (!profile) profile = await prisma.profile.create({ data: { id: 1 } });
-  return profile;
-}
+const PROFILE_SELECT = {
+  id: true,
+  name: true,
+  sex: true,
+  age: true,
+  heightCm: true,
+  weightKg: true,
+  activity: true,
+  goalType: true,
+  goalCalories: true,
+  goalProtein: true,
+  goalCarbs: true,
+  goalFat: true,
+};
 
 export async function GET() {
-  const profile = await getOrCreate();
+  const userId = await getUserId();
+  if (!userId) return NextResponse.json({ error: "Neprihlásený" }, { status: 401 });
+  const profile = await prisma.user.findUnique({ where: { id: userId }, select: PROFILE_SELECT });
   return NextResponse.json({ profile });
 }
 
 export async function PATCH(req: Request) {
-  await getOrCreate();
+  const userId = await getUserId();
+  if (!userId) return NextResponse.json({ error: "Neprihlásený" }, { status: 401 });
+
   const b = await req.json();
   const data: Record<string, any> = {};
 
@@ -24,9 +38,7 @@ export async function PATCH(req: Request) {
   if (b.activity !== undefined) data.activity = b.activity || null;
   if (b.goalType !== undefined) data.goalType = b.goalType || null;
 
-  for (const k of ["age"]) {
-    if (b[k] !== undefined) data[k] = b[k] === null || b[k] === "" ? null : parseInt(b[k], 10);
-  }
+  if (b.age !== undefined) data.age = b.age === null || b.age === "" ? null : parseInt(b.age, 10);
   for (const k of ["heightCm", "weightKg"]) {
     if (b[k] !== undefined) data[k] = b[k] === null || b[k] === "" ? null : Number(b[k]);
   }
@@ -34,6 +46,6 @@ export async function PATCH(req: Request) {
     if (b[k] !== undefined) data[k] = Math.max(0, parseInt(b[k], 10) || 0);
   }
 
-  const profile = await prisma.profile.update({ where: { id: 1 }, data });
+  const profile = await prisma.user.update({ where: { id: userId }, data, select: PROFILE_SELECT });
   return NextResponse.json({ profile });
 }

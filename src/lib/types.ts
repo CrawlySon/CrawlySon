@@ -54,7 +54,7 @@ export type Totals = {
 };
 
 export type Profile = {
-  id: number;
+  id: string;
   name: string;
   sex: string | null;
   age: number | null;

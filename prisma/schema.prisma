@@ -7,7 +7,32 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Profil používateľa a denné ciele (aplikácia je jednopoužívateľská).
+// Používateľský účet + osobný profil a denné ciele (multi-user).
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique // ukladaný malými písmenami
+  passwordHash String
+  role         String   @default("user") // admin | user
+  createdAt    DateTime @default(now())
+
+  // Profil a denné ciele
+  name         String  @default("Ja")
+  sex          String?
+  age          Int?
+  heightCm     Float?
+  weightKg     Float?
+  activity     String?
+  goalType     String?
+  goalCalories Int     @default(2000)
+  goalProtein  Int     @default(120)
+  goalCarbs    Int     @default(220)
+  goalFat      Int     @default(65)
+
+  entries Entry[]
+  foods   Food[]
+}
+
+// (Zastaraný – pôvodný jednopoužívateľský profil; ponechaný kvôli kompatibilite DB)
 model Profile {
   id        Int      @id @default(1)
   name      String   @default("Ja")
@@ -32,6 +57,8 @@ model Profile {
 // Jeden záznam zjedeného jedla v denníku
 model Entry {
   id            String   @id @default(cuid())
+  userId        String?
+  user          User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
   date          String   // YYYY-MM-DD (lokálny dátum)
   mealType      String   @default("other") // breakfast | lunch | dinner | snack | other
   name          String
@@ -48,13 +75,15 @@ model Entry {
   source        String   @default("manual") // ai | manual | db
   createdAt     DateTime @default(now())
 
-  @@index([date])
+  @@index([userId, date])
   @@index([category])
 }
 
 // Referenčná databáza potravín (hodnoty na 100 g, ak nie je uvedené inak)
 model Food {
-  id        String  @id @default(cuid())
+  id          String  @id @default(cuid())
+  userId      String? // null = zdieľaná všeobecná potravina; inak súkromná pre používateľa
+  user        User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
   name        String
   brand       String?
   category    String?
@@ -71,4 +100,5 @@ model Food {
   createdAt   DateTime @default(now())
 
   @@index([name])
+  @@index([userId])
 }

@@ -57,5 +57,16 @@ export const api = {
       categories: { name: string; calories: number; count: number }[];
     }>(`/api/history?days=${days}${category ? `&category=${encodeURIComponent(category)}` : ""}`),
 
+  login: (username: string, password: string) =>
+    req<{ ok: true; username: string }>(`/api/auth/login`, {
+      method: "POST",
+      body: JSON.stringify({ username, password }),
+    }),
+  register: (username: string, password: string, code: string) =>
+    req<{ ok: true; username: string }>(`/api/auth/register`, {
+      method: "POST",
+      body: JSON.stringify({ username, password, code }),
+    }),
+  me: () => req<{ user: { id: string; username: string; role: string } | null }>(`/api/auth/me`),
   logout: () => req<{ ok: true }>(`/api/auth/logout`, { method: "POST" }),
 };

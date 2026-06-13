@@ -5,10 +5,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 
-export default function LoginPage() {
+export default function RegisterPage() {
   const router = useRouter();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -17,7 +18,7 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
     try {
-      await api.login(username, password);
+      await api.register(username, password, code);
       router.push("/");
       router.refresh();
     } catch (e: any) {
@@ -34,12 +35,12 @@ export default function LoginPage() {
           <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-600 text-3xl">
             🥗
           </div>
-          <h1 className="text-2xl font-bold text-slate-800">NutriAI</h1>
-          <p className="text-sm text-slate-500">Tvoj osobný nutričný denník</p>
+          <h1 className="text-2xl font-bold text-slate-800">Vytvoriť účet</h1>
+          <p className="text-sm text-slate-500">NutriAI</p>
         </div>
         <form onSubmit={submit} className="space-y-3">
           <div>
-            <label className="label">Meno</label>
+            <label className="label">Meno (prihlasovacie)</label>
             <input
               className="input"
               value={username}
@@ -47,7 +48,7 @@ export default function LoginPage() {
               autoFocus
               autoCapitalize="none"
               autoComplete="username"
-              placeholder="napr. jaro"
+              placeholder="3–30 znakov, malé písmená/čísla"
             />
           </div>
           <div>
@@ -57,19 +58,29 @@ export default function LoginPage() {
               className="input"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-              placeholder="••••••••"
+              autoComplete="new-password"
+              placeholder="aspoň 8 znakov"
             />
+          </div>
+          <div>
+            <label className="label">Registračný kód</label>
+            <input
+              className="input"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              placeholder="kód od správcu"
+            />
+            <p className="mt-1 text-xs text-slate-400">Prvý účet pri prázdnej databáze kód nepotrebuje.</p>
           </div>
           {error && <p className="rounded-xl bg-red-50 p-2.5 text-sm text-red-600">{error}</p>}
           <button type="submit" disabled={loading} className="btn-primary w-full">
-            {loading ? "Prihlasujem…" : "Prihlásiť sa"}
+            {loading ? "Vytváram…" : "Zaregistrovať sa"}
           </button>
         </form>
         <p className="mt-4 text-center text-sm text-slate-500">
-          Nemáš účet?{" "}
-          <Link href="/register" className="font-medium text-brand-600">
-            Zaregistruj sa
+          Už máš účet?{" "}
+          <Link href="/login" className="font-medium text-brand-600">
+            Prihlás sa
           </Link>
         </p>
       </div>

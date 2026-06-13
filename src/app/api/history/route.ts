@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { getUserId } from "@/lib/server-auth";
 
 export const runtime = "nodejs";
 
@@ -25,6 +26,9 @@ function weightOf(grams: number | null, calories: number): number {
 
 // GET /api/history?days=14&category=Mäso
 export async function GET(req: Request) {
+  const userId = await getUserId();
+  if (!userId) return NextResponse.json({ error: "Neprihlásený" }, { status: 401 });
+
   const { searchParams } = new URL(req.url);
   const days = Math.min(120, Math.max(1, parseInt(searchParams.get("days") || "14", 10)));
   const category = (searchParams.get("category") || "").trim();
@@ -34,7 +38,7 @@ export async function GET(req: Request) {
   const sinceISO = since.toISOString().slice(0, 10);
 
   const entries = await prisma.entry.findMany({
-    where: { date: { gte: sinceISO } },
+    where: { userId, date: { gte: sinceISO } },
     select: { date: true, calories: true, protein: true, carbs: true, fat: true, quantityGrams: true, healthIndex: true, category: true },
   });
 

@@ -1,9 +1,15 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { SESSION_COOKIE, isValidSessionToken } from "@/lib/auth";
+import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 
-// Verejné cesty (prihlásenie + statika)
-const PUBLIC_PATHS = ["/login", "/api/auth/login", "/manifest.webmanifest"];
+// Verejné cesty (prihlásenie, registrácia, statika)
+const PUBLIC_PATHS = [
+  "/login",
+  "/register",
+  "/api/auth/login",
+  "/api/auth/register",
+  "/manifest.webmanifest",
+];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -18,9 +24,9 @@ export async function middleware(req: NextRequest) {
   }
 
   const token = req.cookies.get(SESSION_COOKIE)?.value;
-  const valid = await isValidSessionToken(token);
+  const userId = await verifySessionToken(token);
 
-  if (!valid) {
+  if (!userId) {
     if (pathname.startsWith("/api/")) {
       return NextResponse.json({ error: "Neprihlásený" }, { status: 401 });
     }

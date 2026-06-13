@@ -1,34 +1,42 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { todayISO } from "@/lib/nutrition";
+import { getUserId } from "@/lib/server-auth";
 
 export const runtime = "nodejs";
 
-// GET /api/entries?date=YYYY-MM-DD  -> záznamy dňa
+// GET /api/entries?date=YYYY-MM-DD  -> záznamy dňa prihláseného používateľa
 export async function GET(req: Request) {
+  const userId = await getUserId();
+  if (!userId) return NextResponse.json({ error: "Neprihlásený" }, { status: 401 });
+
   const { searchParams } = new URL(req.url);
   const date = searchParams.get("date") || todayISO();
   const entries = await prisma.entry.findMany({
-    where: { date },
+    where: { userId, date },
     orderBy: { createdAt: "asc" },
   });
   return NextResponse.json({ entries });
 }
 
-// Zapamätá si jedlo do databázy potravín, ak tam ešte nie je (podľa názvu).
-// Existujúce potraviny neprepisuje – zachová prípadné ručné úpravy používateľa.
-async function rememberFoods(items: any[]) {
+// Zapamätá si jedlo do SÚKROMNEJ databázy potravín používateľa, ak tam (ani v zdieľanej)
+// ešte nie je podľa názvu. Existujúce potraviny neprepisuje.
+async function rememberFoods(userId: string, items: any[]) {
   for (const it of items) {
     const name = String(it.name || "").trim();
     if (!name) continue;
     try {
       const existing = await prisma.food.findFirst({
-        where: { name: { equals: name, mode: "insensitive" } },
+        where: {
+          name: { equals: name, mode: "insensitive" },
+          OR: [{ userId: null }, { userId }],
+        },
       });
       if (existing) continue;
       const grams = it.quantityGrams != null && Number(it.quantityGrams) > 0 ? Number(it.quantityGrams) : null;
       await prisma.food.create({
         data: {
+          userId, // súkromná potravina používateľa
           name,
           baseGrams: grams ?? 100,
           calories: Math.max(0, Number(it.calories || 0)),
@@ -51,6 +59,9 @@ async function rememberFoods(items: any[]) {
 // POST /api/entries  -> pridá jednu alebo viac položiek
 // body: { date?, mealType, items: ParsedItem[] }  alebo jedna položka
 export async function POST(req: Request) {
+  const userId = await getUserId();
+  if (!userId) return NextResponse.json({ error: "Neprihlásený" }, { status: 401 });
+
   const body = await req.json();
   const date: string = body.date || todayISO();
   const mealType: string = body.mealType || "other";
@@ -62,6 +73,7 @@ export async function POST(req: Request) {
     items.map((it: any) =>
       prisma.entry.create({
         data: {
+          userId,
           date,
           mealType,
           name: String(it.name || "Jedlo"),
@@ -81,8 +93,8 @@ export async function POST(req: Request) {
     )
   );
 
-  // Po uložení jedla si potraviny zapamätáme do databázy (nové názvy).
-  await rememberFoods(items);
+  // Po uložení jedla si potraviny zapamätáme do súkromnej databázy (nové názvy).
+  await rememberFoods(userId, items);
 
   return NextResponse.json({ entries: created });
 }

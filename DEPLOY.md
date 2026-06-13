@@ -65,7 +65,7 @@ Celkový čas: ~10 minút. Poradie: **① Gemini kľúč → ② databáza Neon 
      |------|-------|
      | `DATABASE_URL` | connection string z Neonu (krok ②) |
      | `GEMINI_API_KEY` | kľúč z AI Studio (krok ①) |
-     | `APP_PASSWORD` | heslo, ktorým sa budeš prihlasovať do appky (vymysli si) |
+     | `REGISTRATION_CODE` | tajný kód na vytváranie účtov (dáš ho kamarátovi) |
      | `SESSION_SECRET` | ľubovoľný dlhý náhodný text (napr. 30+ znakov) |
      | `GEMINI_MODEL` | `gemini-3.5-flash` |
 
@@ -80,7 +80,10 @@ Celkový čas: ~10 minút. Poradie: **① Gemini kľúč → ② databáza Neon 
 
 ## ④ Prvé spustenie + naplnenie databázy
 
-1. Otvor URL appky → zobrazí sa prihlásenie. Zadaj **`APP_PASSWORD`** z kroku ③.
+1. Otvor URL appky → klikni **„Zaregistruj sa"**. Zvoľ si **meno + heslo**.
+   Prvý účet (prázdna databáza) je **admin** a prevezme tvoje doterajšie dáta;
+   ak je `REGISTRATION_CODE` nastavený, zadaj ho. Ďalší ľudia (kamarát) sa
+   registrujú s tým istým kódom.
 2. Choď do spodného menu na **„Potraviny"** 🥗 a klikni
    **„Naplniť základnými potravinami"** – pridá sa 47 slovenských potravín.
    (Toto stačí spraviť raz.)

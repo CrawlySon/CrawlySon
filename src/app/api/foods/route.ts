@@ -1,26 +1,36 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { getUserId } from "@/lib/server-auth";
 
 export const runtime = "nodejs";
 
-// GET /api/foods?q=...  -> vyhľadávanie v referenčnej databáze
+// GET /api/foods?q=...  -> vyhľadávanie v zdieľanej + vlastnej databáze
 export async function GET(req: Request) {
+  const userId = await getUserId();
+  if (!userId) return NextResponse.json({ error: "Neprihlásený" }, { status: 401 });
+
   const { searchParams } = new URL(req.url);
   const q = (searchParams.get("q") || "").trim();
+
+  const visibility = { OR: [{ userId: null }, { userId }] };
   const foods = await prisma.food.findMany({
-    where: q ? { name: { contains: q, mode: "insensitive" } } : undefined,
+    where: q ? { AND: [visibility, { name: { contains: q, mode: "insensitive" } }] } : visibility,
     orderBy: { name: "asc" },
     take: 50,
   });
   return NextResponse.json({ foods });
 }
 
-// POST /api/foods -> pridá vlastnú potravinu do databázy
+// POST /api/foods -> pridá vlastnú (súkromnú) potravinu
 export async function POST(req: Request) {
+  const userId = await getUserId();
+  if (!userId) return NextResponse.json({ error: "Neprihlásený" }, { status: 401 });
+
   const b = await req.json();
   if (!b.name) return NextResponse.json({ error: "Chýba názov." }, { status: 400 });
   const food = await prisma.food.create({
     data: {
+      userId,
       name: String(b.name),
       category: b.category ? String(b.category) : null,
       subcategory: b.subcategory ? String(b.subcategory) : null,
@@ -31,6 +41,7 @@ export async function POST(req: Request) {
       fat: Math.max(0, Number(b.fat || 0)),
       fiber: b.fiber != null ? Number(b.fiber) : null,
       healthIndex: b.healthIndex != null && b.healthIndex !== "" ? Number(b.healthIndex) : null,
+      source: "manual",
     },
   });
   return NextResponse.json({ food });
