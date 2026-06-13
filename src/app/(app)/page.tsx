@@ -21,9 +21,13 @@ import AddFoodSheet from "@/components/AddFoodSheet";
 import WaterCard from "@/components/WaterCard";
 
 function shiftDate(date: string, days: number): string {
-  const d = new Date(date + "T00:00:00");
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  // Čisto lokálny výpočet (bez UTC posunu cez toISOString)
+  const [y, m, d] = date.split("-").map(Number);
+  const dt = new Date(y, m - 1, d + days);
+  const yy = dt.getFullYear();
+  const mm = String(dt.getMonth() + 1).padStart(2, "0");
+  const dd = String(dt.getDate()).padStart(2, "0");
+  return `${yy}-${mm}-${dd}`;
 }
 
 function formatDate(date: string): string {
@@ -101,9 +105,21 @@ export default function TodayPage() {
           ‹
         </button>
         <div className="text-center">
-          <h1 className="text-lg font-bold capitalize text-slate-800">{formatDate(date)}</h1>
+          {/* Ťuknutím na dátum sa otvorí kalendár (natívny date picker) */}
+          <label className="relative inline-flex cursor-pointer items-center gap-1">
+            <h1 className="text-lg font-bold capitalize text-slate-800">{formatDate(date)}</h1>
+            <span className="text-slate-400">📅</span>
+            <input
+              type="date"
+              value={date}
+              max={todayISO()}
+              onChange={(e) => e.target.value && setDate(e.target.value)}
+              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+              aria-label="Vyber dátum"
+            />
+          </label>
           {date !== todayISO() && (
-            <button onClick={() => setDate(todayISO())} className="text-xs text-brand-600">
+            <button onClick={() => setDate(todayISO())} className="block w-full text-xs text-brand-600">
               späť na dnes
             </button>
           )}
