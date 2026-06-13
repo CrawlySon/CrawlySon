@@ -245,6 +245,12 @@ function MealSection({
   );
 }
 
+function entryHealthColor(h: number): string {
+  if (h >= 7) return "text-brand-600";
+  if (h >= 4) return "text-amber-600";
+  return "text-red-500";
+}
+
 function EntryRow({ entry, dimmed, onDelete }: { entry: Entry; dimmed: boolean; onDelete: () => void }) {
   const { attributes, listeners, setNodeRef } = useDraggable({ id: entry.id });
   return (
@@ -268,6 +274,9 @@ function EntryRow({ entry, dimmed, onDelete }: { entry: Entry; dimmed: boolean; 
         <p className="text-xs text-slate-400">
           {entry.quantityGrams ? `${round(entry.quantityGrams)} g · ` : ""}
           B {round(entry.protein)} · S {round(entry.carbs)} · T {round(entry.fat)}
+          {entry.healthIndex != null && (
+            <span className={`ml-1 font-medium ${entryHealthColor(entry.healthIndex)}`}>· ♥ {entry.healthIndex}</span>
+          )}
         </p>
       </div>
       <span className="text-sm font-semibold text-slate-600">{round(entry.calories)}</span>

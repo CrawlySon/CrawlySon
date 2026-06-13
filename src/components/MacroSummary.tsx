@@ -64,11 +64,11 @@ export default function MacroSummary({ totals, profile }: { totals: Totals; prof
       <div className="mt-4 rounded-xl bg-slate-50 p-3 text-center text-sm">
         {calLeft >= 0 ? (
           <span className="text-slate-600">
-            Ostáva ti <b className="text-brand-700">{round(calLeft)} kcal</b> do cieľa
+            Môžeš zjesť ešte <b className="text-brand-700">{round(calLeft)} kcal</b> do limitu
           </span>
         ) : (
           <span className="text-slate-600">
-            Prekročil si cieľ o <b className="text-red-600">{round(-calLeft)} kcal</b>
+            Prekročil si limit o <b className="text-red-600">{round(-calLeft)} kcal</b>
           </span>
         )}
       </div>
