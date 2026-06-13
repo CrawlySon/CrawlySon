@@ -9,6 +9,9 @@ export type ReferenceFood = {
   carbs: number;
   fat: number;
   fiber: number | null;
+  category: string | null;
+  subcategory: string | null;
+  healthIndex: number | null;
 };
 
 const SYSTEM_INSTRUCTION = `Si výživový asistent pre slovenskú aplikáciu na sledovanie stravy.
@@ -32,7 +35,23 @@ PRAVIDLÁ:
 - Buď realistický, nepreháňaj presnosť. Názvy polož v slovenčine.
 - Z textu rozpoznaj aj typ jedla a vráť ho v poli "mealType":
   raňajky = "breakfast", obed = "lunch", večera = "dinner",
-  desiata/olovrant = "snack". Ak používateľ typ jedla NEuvedie, vráť "other".`;
+  desiata/olovrant = "snack". Ak používateľ typ jedla NEuvedie, vráť "other".
+
+- Ku každej položke urči "category" (hlavná kategória) a "subcategory"
+  (podkategória) v slovenčine. Príklady kategórií: Ovocie, Zelenina, Mäso, Ryby,
+  Mliečne, Obilniny, Pečivo, Strukoviny, Orechy, Tuky, Sladké, Nápoje,
+  Hotové jedlo, Fast food. Príklad: bravčový rezeň → category "Mäso",
+  subcategory "Bravčové mäso"; losos → "Ryby" / "Morské ryby".
+
+- Ku každej položke urči "healthIndex" – celé číslo 0 až 10 vyjadrujúce
+  zdravosť jedla. Drž sa týchto orientačných pravidiel:
+  • 9–10: čerstvé ovocie a zelenina, strukoviny, ryby.
+  • 7–8: celozrnné obilniny, orechy, vajcia, biele mäso, biely jogurt.
+  • 5–6: varené prílohy (ryža, zemiaky), syry, chudé mäso.
+  • 3–4: vyprážané jedlá, biele pečivo, údeniny, sladené nápoje.
+  • 0–2: fast food (hamburger, hranolky z fast foodu), sladkosti, alkohol,
+    vyprážané sladké. Napr. hamburger z McDonald's ≈ 1–2.
+  Index je vlastnosť jedla (nezávisí od zjedeného množstva).`;
 
 const responseSchema = {
   type: Type.OBJECT,
@@ -53,10 +72,13 @@ const responseSchema = {
           carbs: { type: Type.NUMBER, description: "Sacharidy (g) za porciu" },
           fat: { type: Type.NUMBER, description: "Tuky (g) za porciu" },
           fiber: { type: Type.NUMBER, description: "Vláknina (g) za porciu, 0 ak neznáma" },
+          category: { type: Type.STRING, description: "Hlavná kategória (napr. Mäso, Ovocie)" },
+          subcategory: { type: Type.STRING, description: "Podkategória (napr. Bravčové mäso)" },
+          healthIndex: { type: Type.NUMBER, description: "Index zdravosti 0..10" },
           confidence: { type: Type.NUMBER, description: "Istota odhadu 0..1" },
           assumption: { type: Type.STRING, description: "Aký predpoklad si urobil" },
         },
-        required: ["name", "calories", "protein", "carbs", "fat", "confidence"],
+        required: ["name", "calories", "protein", "carbs", "fat", "category", "healthIndex", "confidence"],
       },
     },
   },
@@ -65,10 +87,11 @@ const responseSchema = {
 
 function buildReferenceBlock(foods: ReferenceFood[]): string {
   if (!foods.length) return "";
-  const lines = foods.map(
-    (f) =>
-      `- ${f.name} (na ${f.baseGrams} g): ${f.calories} kcal, B ${f.protein}g, S ${f.carbs}g, T ${f.fat}g`
-  );
+  const lines = foods.map((f) => {
+    const cat = f.category ? `, kat. ${f.category}${f.subcategory ? `/${f.subcategory}` : ""}` : "";
+    const hi = f.healthIndex != null ? `, zdravosť ${f.healthIndex}` : "";
+    return `- ${f.name} (na ${f.baseGrams} g): ${f.calories} kcal, B ${f.protein}g, S ${f.carbs}g, T ${f.fat}g${cat}${hi}`;
+  });
   return `\n\nREFERENČNÁ DATABÁZA POTRAVÍN (orientačné hodnoty):\n${lines.join("\n")}`;
 }
 
@@ -124,6 +147,12 @@ export async function parseFood(text: string, reference: ReferenceFood[]): Promi
     carbs: Math.max(0, Number(it.carbs ?? 0)),
     fat: Math.max(0, Number(it.fat ?? 0)),
     fiber: it.fiber && it.fiber > 0 ? Number(it.fiber) : null,
+    category: it.category ? String(it.category) : null,
+    subcategory: it.subcategory ? String(it.subcategory) : null,
+    healthIndex:
+      it.healthIndex != null && !Number.isNaN(Number(it.healthIndex))
+        ? Math.min(10, Math.max(0, Math.round(Number(it.healthIndex))))
+        : null,
     confidence: Math.min(1, Math.max(0, Number(it.confidence ?? 0.5))),
     assumption: it.assumption ? String(it.assumption) : undefined,
   }));

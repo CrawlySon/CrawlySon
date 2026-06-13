@@ -7,7 +7,18 @@ export const maxDuration = 30;
 
 // Vyberie z DB potraviny, ktoré sa aspoň trochu zhodujú s textom (slová >= 3 znaky),
 // aby sme AI poskytli relevantnú referenciu bez posielania celej databázy.
-const SELECT = { name: true, baseGrams: true, calories: true, protein: true, carbs: true, fat: true, fiber: true };
+const SELECT = {
+  name: true,
+  baseGrams: true,
+  calories: true,
+  protein: true,
+  carbs: true,
+  fat: true,
+  fiber: true,
+  category: true,
+  subcategory: true,
+  healthIndex: true,
+};
 
 async function pickReference(text: string): Promise<ReferenceFood[]> {
   const words = Array.from(

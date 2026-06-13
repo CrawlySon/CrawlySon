@@ -23,12 +23,14 @@ export async function POST(req: Request) {
     data: {
       name: String(b.name),
       category: b.category ? String(b.category) : null,
+      subcategory: b.subcategory ? String(b.subcategory) : null,
       baseGrams: b.baseGrams ? Number(b.baseGrams) : 100,
       calories: Math.max(0, Number(b.calories || 0)),
       protein: Math.max(0, Number(b.protein || 0)),
       carbs: Math.max(0, Number(b.carbs || 0)),
       fat: Math.max(0, Number(b.fat || 0)),
       fiber: b.fiber != null ? Number(b.fiber) : null,
+      healthIndex: b.healthIndex != null && b.healthIndex !== "" ? Number(b.healthIndex) : null,
     },
   });
   return NextResponse.json({ food });

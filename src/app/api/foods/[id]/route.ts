@@ -8,8 +8,9 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   const data: Record<string, any> = {};
   if (b.name !== undefined) data.name = String(b.name);
   if (b.category !== undefined) data.category = b.category || null;
+  if (b.subcategory !== undefined) data.subcategory = b.subcategory || null;
   if (b.brand !== undefined) data.brand = b.brand || null;
-  for (const k of ["baseGrams", "calories", "protein", "carbs", "fat", "fiber"]) {
+  for (const k of ["baseGrams", "calories", "protein", "carbs", "fat", "fiber", "healthIndex"]) {
     if (b[k] !== undefined) data[k] = b[k] === null || b[k] === "" ? null : Number(b[k]);
   }
   const food = await prisma.food.update({ where: { id: params.id }, data });

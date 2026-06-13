@@ -77,6 +77,25 @@ export const FOODS: FoodSeed[] = [
   { name: "Káva čierna (bez cukru)", category: "Nápoje", calories: 2, protein: 0.1, carbs: 0, fat: 0 },
 ];
 
+// Orientačný index zdravosti podľa kategórie (0..10) pre seed potraviny.
+const HEALTH_BY_CATEGORY: Record<string, number> = {
+  Ovocie: 9,
+  Zelenina: 9,
+  Strukoviny: 8,
+  Ryby: 8,
+  Vajcia: 7,
+  Orechy: 7,
+  Obilniny: 7,
+  Mliečne: 6,
+  Mäso: 5,
+  Príloha: 5,
+  Pečivo: 4,
+  Tuky: 4,
+  "Hotové jedlo": 4,
+  Nápoje: 4,
+  Sladké: 2,
+};
+
 // Idempotentne naplní profil a referenčné potraviny. Vráti počet pridaných potravín.
 export async function seedDatabase(prisma: PrismaClient): Promise<{ added: number; total: number }> {
   await prisma.profile.upsert({ where: { id: 1 }, update: {}, create: { id: 1 } });
@@ -95,6 +114,7 @@ export async function seedDatabase(prisma: PrismaClient): Promise<{ added: numbe
         carbs: f.carbs,
         fat: f.fat,
         fiber: f.fiber ?? null,
+        healthIndex: HEALTH_BY_CATEGORY[f.category] ?? 5,
         source: "seed",
       },
     });

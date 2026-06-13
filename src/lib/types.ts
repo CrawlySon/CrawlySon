@@ -19,6 +19,9 @@ export type ParsedItem = {
   carbs: number;
   fat: number;
   fiber: number | null;
+  category: string | null;
+  subcategory: string | null;
+  healthIndex: number | null; // 0..10
   confidence: number; // 0..1
   assumption?: string; // čo AI predpokladala
 };
@@ -34,6 +37,9 @@ export type Entry = {
   carbs: number;
   fat: number;
   fiber: number | null;
+  category: string | null;
+  subcategory: string | null;
+  healthIndex: number | null;
   note: string | null;
   source: string;
   createdAt: string;

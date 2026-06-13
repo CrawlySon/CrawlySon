@@ -41,28 +41,34 @@ model Entry {
   carbs         Float    @default(0)
   fat           Float    @default(0)
   fiber         Float?
+  category      String?
+  subcategory   String?
+  healthIndex   Float?   // 0..10 – odhad zdravosti jedla
   note          String?
   source        String   @default("manual") // ai | manual | db
   createdAt     DateTime @default(now())
 
   @@index([date])
+  @@index([category])
 }
 
 // Referenčná databáza potravín (hodnoty na 100 g, ak nie je uvedené inak)
 model Food {
   id        String  @id @default(cuid())
-  name      String
-  brand     String?
-  category  String?
-  barcode   String?  @unique
-  baseGrams Float   @default(100)
-  calories  Float
-  protein   Float   @default(0)
-  carbs     Float   @default(0)
-  fat       Float   @default(0)
-  fiber     Float?
-  source    String   @default("seed") // seed | openfoodfacts | manual
-  createdAt DateTime @default(now())
+  name        String
+  brand       String?
+  category    String?
+  subcategory String?
+  barcode     String?  @unique
+  baseGrams   Float   @default(100)
+  calories    Float
+  protein     Float   @default(0)
+  carbs       Float   @default(0)
+  fat         Float   @default(0)
+  fiber       Float?
+  healthIndex Float?  // 0..10
+  source      String   @default("seed") // seed | openfoodfacts | manual | auto
+  createdAt   DateTime @default(now())
 
   @@index([name])
 }

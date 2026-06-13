@@ -41,10 +41,21 @@ export const api = {
   deleteFood: (id: string) => req<{ ok: true }>(`/api/foods/${id}`, { method: "DELETE" }),
   seed: () => req<{ added: number; total: number }>(`/api/seed`, { method: "POST" }),
 
-  history: (days: number) =>
-    req<{ days: { date: string; calories: number; protein: number; carbs: number; fat: number; count: number }[] }>(
-      `/api/history?days=${days}`
-    ),
+  history: (days: number, category?: string) =>
+    req<{
+      days: {
+        date: string;
+        calories: number;
+        protein: number;
+        carbs: number;
+        fat: number;
+        count: number;
+        healthScore: number | null;
+        catCalories: number;
+        catCount: number;
+      }[];
+      categories: { name: string; calories: number; count: number }[];
+    }>(`/api/history?days=${days}${category ? `&category=${encodeURIComponent(category)}` : ""}`),
 
   logout: () => req<{ ok: true }>(`/api/auth/logout`, { method: "POST" }),
 };

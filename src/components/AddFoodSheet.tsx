@@ -165,6 +165,9 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
         carbs: round(food.carbs * factor, 1),
         fat: round(food.fat * factor, 1),
         fiber: food.fiber != null ? round(food.fiber * factor, 1) : null,
+        category: food.category ?? null,
+        subcategory: food.subcategory ?? null,
+        healthIndex: food.healthIndex ?? null,
         confidence: 1,
       },
     ]);
@@ -368,6 +371,21 @@ function ItemCard({
             {item.quantityGrams ? `${round(item.quantityGrams)} g · ` : ""}
             <b>{round(item.calories)} kcal</b> · B {round(item.protein)} · S {round(item.carbs)} · T {round(item.fat)}
           </p>
+          {(item.category || item.healthIndex != null) && (
+            <p className="mt-0.5 flex items-center gap-1.5 text-xs">
+              {item.category && (
+                <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-500">
+                  {item.category}
+                  {item.subcategory ? ` · ${item.subcategory}` : ""}
+                </span>
+              )}
+              {item.healthIndex != null && (
+                <span className={`rounded px-1.5 py-0.5 font-medium ${healthColor(item.healthIndex)}`} title="Index zdravosti 0–10">
+                  ♥ {item.healthIndex}/10
+                </span>
+              )}
+            </p>
+          )}
           {item.assumption && <p className="mt-0.5 text-xs italic text-amber-600">⚠ {item.assumption}</p>}
         </div>
         <div className="flex flex-col items-end gap-1">
@@ -389,14 +407,44 @@ function ItemCard({
       </div>
 
       {open && (
-        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <NumField label="kcal" value={item.calories} onChange={(v) => onChange({ calories: v })} />
-          <NumField label="Bielk. (g)" value={item.protein} onChange={(v) => onChange({ protein: v })} />
-          <NumField label="Sach. (g)" value={item.carbs} onChange={(v) => onChange({ carbs: v })} />
-          <NumField label="Tuky (g)" value={item.fat} onChange={(v) => onChange({ fat: v })} />
+        <div className="mt-3 space-y-2">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <NumField label="kcal" value={item.calories} onChange={(v) => onChange({ calories: v })} />
+            <NumField label="Bielk. (g)" value={item.protein} onChange={(v) => onChange({ protein: v })} />
+            <NumField label="Sach. (g)" value={item.carbs} onChange={(v) => onChange({ carbs: v })} />
+            <NumField label="Tuky (g)" value={item.fat} onChange={(v) => onChange({ fat: v })} />
+          </div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <TextField label="Kategória" value={item.category ?? ""} onChange={(v) => onChange({ category: v || null })} />
+            <TextField label="Podkategória" value={item.subcategory ?? ""} onChange={(v) => onChange({ subcategory: v || null })} />
+            <NumField
+              label="Zdravosť 0–10"
+              value={item.healthIndex ?? 0}
+              onChange={(v) => onChange({ healthIndex: Math.min(10, Math.max(0, v)) })}
+            />
+          </div>
         </div>
       )}
     </div>
+  );
+}
+
+function healthColor(h: number): string {
+  if (h >= 7) return "bg-brand-100 text-brand-700";
+  if (h >= 4) return "bg-amber-100 text-amber-700";
+  return "bg-red-100 text-red-600";
+}
+
+function TextField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <label className="text-xs">
+      <span className="text-slate-400">{label}</span>
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="mt-0.5 w-full rounded-lg border border-slate-200 px-2 py-1"
+      />
+    </label>
   );
 }
 

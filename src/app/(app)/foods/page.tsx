@@ -7,6 +7,8 @@ type Food = {
   id: string;
   name: string;
   category: string | null;
+  subcategory: string | null;
+  healthIndex: number | null;
   baseGrams: number;
   calories: number;
   protein: number;
@@ -113,12 +115,15 @@ function FoodRow({ food, onChanged }: { food: Food; onChanged: () => void }) {
     try {
       await api.updateFood(food.id, {
         name: draft.name,
+        category: draft.category,
+        subcategory: draft.subcategory,
         baseGrams: draft.baseGrams,
         calories: draft.calories,
         protein: draft.protein,
         carbs: draft.carbs,
         fat: draft.fat,
         fiber: draft.fiber,
+        healthIndex: draft.healthIndex,
       });
       setOpen(false);
       onChanged();
@@ -146,6 +151,7 @@ function FoodRow({ food, onChanged }: { food: Food; onChanged: () => void }) {
           <p className="text-xs text-slate-400">
             na {food.baseGrams} g · B {food.protein} · S {food.carbs} · T {food.fat}
             {food.category ? ` · ${food.category}` : ""}
+            {food.healthIndex != null ? ` · ♥ ${food.healthIndex}/10` : ""}
           </p>
         </div>
         <span className="ml-2 shrink-0 text-sm font-semibold text-slate-600">{food.calories} kcal</span>
@@ -155,11 +161,14 @@ function FoodRow({ food, onChanged }: { food: Food; onChanged: () => void }) {
         <div className="mt-3 space-y-2">
           <input className="input" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
           <div className="grid grid-cols-2 gap-2">
+            <FieldText label="Kategória" v={draft.category ?? ""} on={(v) => setDraft({ ...draft, category: v })} />
+            <FieldText label="Podkategória" v={draft.subcategory ?? ""} on={(v) => setDraft({ ...draft, subcategory: v })} />
             <FieldNum label="Na koľko g" v={draft.baseGrams} on={(v) => setDraft({ ...draft, baseGrams: v })} />
             <FieldNum label="kcal" v={draft.calories} on={(v) => setDraft({ ...draft, calories: v })} />
             <FieldNum label="Bielkoviny g" v={draft.protein} on={(v) => setDraft({ ...draft, protein: v })} />
             <FieldNum label="Sacharidy g" v={draft.carbs} on={(v) => setDraft({ ...draft, carbs: v })} />
             <FieldNum label="Tuky g" v={draft.fat} on={(v) => setDraft({ ...draft, fat: v })} />
+            <FieldNum label="Zdravosť 0–10" v={draft.healthIndex ?? 0} on={(v) => setDraft({ ...draft, healthIndex: Math.min(10, Math.max(0, v)) })} />
           </div>
           <div className="flex gap-2">
             <button onClick={remove} disabled={busy} className="btn-ghost text-red-500">
@@ -185,6 +194,15 @@ function FieldNum({ label, v, on }: { label: string; v: number; on: (v: number) 
         value={v}
         onChange={(e) => on(Number(e.target.value))}
       />
+    </label>
+  );
+}
+
+function FieldText({ label, v, on }: { label: string; v: string; on: (v: string) => void }) {
+  return (
+    <label className="text-xs">
+      <span className="text-slate-400">{label}</span>
+      <input className="input mt-0.5 py-1.5" value={v} onChange={(e) => on(e.target.value)} />
     </label>
   );
 }
