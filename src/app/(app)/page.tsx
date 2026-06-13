@@ -97,6 +97,19 @@ export default function TodayPage() {
 
   const totals = sumTotals(entries);
 
+  // Vážené priemerné skóre zdravosti dňa (váha = hmotnosť, fallback z kalórií)
+  const dayHealth = (() => {
+    let s = 0;
+    let w = 0;
+    for (const e of entries) {
+      if (e.healthIndex == null) continue;
+      const wt = e.quantityGrams && e.quantityGrams > 0 ? e.quantityGrams : e.calories > 0 ? e.calories / 2 : 100;
+      s += e.healthIndex * wt;
+      w += wt;
+    }
+    return w > 0 ? Math.round((s / w) * 10) / 10 : null;
+  })();
+
   return (
     <div className="px-4 pt-4">
       {/* Hlavička s dátumom */}
@@ -133,7 +146,7 @@ export default function TodayPage() {
         </button>
       </header>
 
-      {profile && <MacroSummary totals={totals} profile={profile} />}
+      {profile && <MacroSummary totals={totals} profile={profile} healthScore={dayHealth} />}
 
       <WaterCard date={date} reloadSignal={reload} />
 

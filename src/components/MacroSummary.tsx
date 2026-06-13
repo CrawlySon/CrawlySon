@@ -43,7 +43,21 @@ function MacroBar({ label, value, goal, color }: { label: string; value: number;
   );
 }
 
-export default function MacroSummary({ totals, profile }: { totals: Totals; profile: Profile }) {
+function healthText(h: number): string {
+  if (h >= 7) return "text-brand-700";
+  if (h >= 4) return "text-amber-600";
+  return "text-red-600";
+}
+
+export default function MacroSummary({
+  totals,
+  profile,
+  healthScore,
+}: {
+  totals: Totals;
+  profile: Profile;
+  healthScore?: number | null;
+}) {
   const calLeft = profile.goalCalories - totals.calories;
   return (
     <div className="card p-5">
@@ -61,14 +75,21 @@ export default function MacroSummary({ totals, profile }: { totals: Totals; prof
           <MacroBar label="Tuky" value={totals.fat} goal={profile.goalFat} color="#ef4444" />
         </div>
       </div>
-      <div className="mt-4 rounded-xl bg-slate-50 p-3 text-center text-sm">
-        {calLeft >= 0 ? (
-          <span className="text-slate-600">
-            Môžeš zjesť ešte <b className="text-brand-700">{round(calLeft)} kcal</b> do limitu
-          </span>
-        ) : (
-          <span className="text-slate-600">
-            Prekročil si limit o <b className="text-red-600">{round(-calLeft)} kcal</b>
+      <div className="mt-4 flex items-center justify-between gap-2 rounded-xl bg-slate-50 p-3 text-sm">
+        <span className="text-slate-600">
+          {calLeft >= 0 ? (
+            <>
+              Môžeš zjesť ešte <b className="text-brand-700">{round(calLeft)} kcal</b> do limitu
+            </>
+          ) : (
+            <>
+              Prekročil si limit o <b className="text-red-600">{round(-calLeft)} kcal</b>
+            </>
+          )}
+        </span>
+        {healthScore != null && (
+          <span className="shrink-0 whitespace-nowrap text-slate-500">
+            zdravosť <b className={healthText(healthScore)}>♥ {healthScore}/10</b>
           </span>
         )}
       </div>
