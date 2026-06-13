@@ -157,7 +157,7 @@ export default function TodayPage() {
         onDragEnd={onDragEnd}
         onDragCancel={() => setActiveId(null)}
       >
-        <div className="mt-4 space-y-3">
+        <div className="mt-4 space-y-2">
           {MEAL_ORDER.map((meal) => {
             const list = entries.filter((e) => e.mealType === meal);
             const mealCals = sumTotals(list).calories;
@@ -239,9 +239,9 @@ function MealSection({
       ref={setNodeRef}
       className={`card overflow-hidden transition ${isOver ? "ring-2 ring-brand-400" : ""}`}
     >
-      <div className="flex items-center justify-between px-4 py-2.5">
+      <div className="flex items-center justify-between px-4 py-2">
         <div className="flex items-baseline gap-2">
-          <h2 className="font-semibold text-slate-700">{MEAL_LABELS[meal]}</h2>
+          <h2 className="text-[15px] font-semibold text-slate-700">{MEAL_LABELS[meal]}</h2>
           {mealCals > 0 && <span className="text-xs text-slate-400">{round(mealCals)} kcal</span>}
         </div>
         <button onClick={onAdd} className="text-sm font-medium text-brand-600">
@@ -267,24 +267,24 @@ function entryHealthColor(h: number): string {
 function EntryRow({ entry, dimmed, onDelete }: { entry: Entry; dimmed: boolean; onDelete: () => void }) {
   const { attributes, listeners, setNodeRef } = useDraggable({ id: entry.id });
   return (
-    <li className={`flex items-center gap-2 px-4 py-2.5 ${dimmed ? "opacity-30" : ""}`}>
+    <li className={`flex items-center gap-1.5 px-3 py-1.5 ${dimmed ? "opacity-30" : ""}`}>
       {/* Úchyt na presun – podrž a ťahaj */}
       <button
         ref={setNodeRef}
         {...listeners}
         {...attributes}
-        className="cursor-grab touch-none select-none px-1 text-slate-300 active:cursor-grabbing"
+        className="cursor-grab touch-none select-none px-0.5 text-slate-300 active:cursor-grabbing"
         title="Podrž a presuň do iného jedla"
         aria-label="Presunúť"
       >
         ⠿
       </button>
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1 leading-tight">
         <p className="truncate text-sm font-medium text-slate-800">
           {entry.name}
           {entry.source === "ai" && <span className="ml-1 text-[10px] text-brand-500">✨</span>}
         </p>
-        <p className="text-xs text-slate-400">
+        <p className="text-[11px] leading-tight text-slate-400">
           {entry.quantityGrams ? `${round(entry.quantityGrams)} g · ` : ""}
           B {round(entry.protein)} · S {round(entry.carbs)} · T {round(entry.fat)}
           {entry.healthIndex != null && (
@@ -293,7 +293,7 @@ function EntryRow({ entry, dimmed, onDelete }: { entry: Entry; dimmed: boolean; 
         </p>
       </div>
       <span className="text-sm font-semibold text-slate-600">{round(entry.calories)}</span>
-      <button onClick={onDelete} className="text-slate-300 hover:text-red-400">
+      <button onClick={onDelete} className="px-0.5 text-slate-300 hover:text-red-400">
         ✕
       </button>
     </li>
