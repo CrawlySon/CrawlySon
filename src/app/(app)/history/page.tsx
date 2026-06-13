@@ -75,10 +75,19 @@ export default function HistoryPage() {
     return { date: dt, value };
   });
 
-  const chartGoal = category ? null : metric === "kcal" ? goal : metric === "water" ? goal && profile ? profile.goalWaterMl / 1000 : null : null;
-  const chartColor = category ? "#334155" : metric === "kcal" ? "#16a34a" : metric === "water" ? "#0ea5e9" : "#8b5cf6";
+  const chartGoal = category ? null : metric === "kcal" ? goal : metric === "water" ? (profile ? profile.goalWaterMl / 1000 : null) : null;
   const chartMax = Math.max(...series.map((s) => s.value), chartGoal || 0, metric === "health" && !category ? 10 : 0, 1);
   const chartUnit = category || metric === "kcal" ? " kcal" : metric === "water" ? " l" : "";
+  const goalWaterL = profile ? profile.goalWaterMl / 1000 : null;
+
+  // Farba stĺpca podľa cieľa / hodnoty
+  function colorFor(v: number): string {
+    if (v <= 0) return "#e2e8f0"; // bez dát
+    if (category) return "#475569";
+    if (metric === "kcal") return v > goal ? "#ef4444" : "#22c55e"; // nad cieľom = červená
+    if (metric === "water") return goalWaterL && v >= goalWaterL ? "#0ea5e9" : "#f59e0b"; // pod cieľom = oranžová
+    return v >= 7 ? "#22c55e" : v >= 4 ? "#f59e0b" : "#ef4444"; // zdravosť
+  }
 
   return (
     <div className="px-4 pt-4">
@@ -147,7 +156,7 @@ export default function HistoryPage() {
                 ? "Zdravosť v čase (0–10)"
                 : "Pitný režim v čase (l)"}
         </p>
-        <TimelineChart series={series} max={chartMax} goal={chartGoal} color={chartColor} unit={chartUnit} />
+        <TimelineChart series={series} max={chartMax} goal={chartGoal} colorFor={colorFor} unit={chartUnit} />
       </div>
 
       {/* Súhrny */}
@@ -231,13 +240,13 @@ function TimelineChart({
   series,
   max,
   goal,
-  color,
+  colorFor,
   unit,
 }: {
   series: { date: Date; value: number }[];
   max: number;
   goal: number | null;
-  color: string;
+  colorFor: (v: number) => string;
   unit: string;
 }) {
   const W = 320;
@@ -251,31 +260,37 @@ function TimelineChart({
   const baseline = padT + innerH;
   const n = series.length;
 
-  const x = (i: number) => (n > 1 ? padL + (i * innerW) / (n - 1) : padL + innerW / 2);
+  const slot = innerW / n;
+  const barW = Math.max(2, Math.min(22, slot * 0.7));
+  const cx = (i: number) => padL + slot * (i + 0.5);
   const y = (v: number) => padT + innerH * (1 - Math.min(1, v / max));
-
-  const pts = series.map((s, i) => `${x(i)},${y(s.value)}`);
-  const linePath = `M ${pts.join(" L ")}`;
-  const areaPath = `M ${x(0)},${baseline} L ${pts.join(" L ")} L ${x(n - 1)},${baseline} Z`;
 
   const fmt = (d: Date) => `${d.getDate()}.${d.getMonth() + 1}.`;
   const labelIdx = [0, Math.floor((n - 1) / 2), n - 1].filter((v, i, a) => a.indexOf(v) === i);
-  const showDots = n <= 16;
-  const gid = `g-${color.replace("#", "")}`;
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" preserveAspectRatio="none">
-      <defs>
-        <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.25" />
-          <stop offset="100%" stopColor={color} stopOpacity="0" />
-        </linearGradient>
-      </defs>
+    <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full">
+      {/* stĺpce */}
+      {series.map((s, i) => {
+        const top = y(s.value);
+        const h = Math.max(s.value > 0 ? 1.5 : 0, baseline - top);
+        return (
+          <rect
+            key={i}
+            x={cx(i) - barW / 2}
+            y={baseline - h}
+            width={barW}
+            height={h}
+            rx={Math.min(3, barW / 2)}
+            fill={colorFor(s.value)}
+          />
+        );
+      })}
 
       {/* cieľová čiara */}
       {goal != null && goal > 0 && (
         <>
-          <line x1={padL} y1={y(goal)} x2={W - padR} y2={y(goal)} stroke="#cbd5e1" strokeWidth="1" strokeDasharray="4 3" />
+          <line x1={padL} y1={y(goal)} x2={W - padR} y2={y(goal)} stroke="#94a3b8" strokeWidth="1" strokeDasharray="4 3" />
           <text x={W - padR} y={y(goal) - 3} textAnchor="end" fontSize="9" fill="#94a3b8">
             cieľ {Math.round(goal)}
             {unit}
@@ -283,16 +298,9 @@ function TimelineChart({
         </>
       )}
 
-      {/* plocha + čiara */}
-      <path d={areaPath} fill={`url(#${gid})`} />
-      <path d={linePath} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
-
-      {/* body */}
-      {showDots && series.map((s, i) => <circle key={i} cx={x(i)} cy={y(s.value)} r="2.5" fill={color} />)}
-
       {/* x popisky */}
       {labelIdx.map((i) => (
-        <text key={i} x={x(i)} y={H - 6} textAnchor={i === 0 ? "start" : i === n - 1 ? "end" : "middle"} fontSize="9" fill="#94a3b8">
+        <text key={i} x={cx(i)} y={H - 6} textAnchor={i === 0 ? "start" : i === n - 1 ? "end" : "middle"} fontSize="9" fill="#94a3b8">
           {fmt(series[i].date)}
         </text>
       ))}
