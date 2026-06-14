@@ -253,7 +253,7 @@ function TimelineChart({
 }) {
   const W = 320;
   const H = 150;
-  const padL = 6;
+  const padL = 30;
   const padR = 6;
   const padT = 10;
   const padB = 22;
@@ -262,16 +262,30 @@ function TimelineChart({
   const baseline = padT + innerH;
   const n = series.length;
 
+  // „Pekná" škála Y osi (zaokrúhlený vrchol + rovnomerné dieliky)
+  const { niceMax, ticks } = niceScale(max);
+
   const slot = innerW / n;
   const barW = Math.max(2, Math.min(22, slot * 0.7));
   const cx = (i: number) => padL + slot * (i + 0.5);
-  const y = (v: number) => padT + innerH * (1 - Math.min(1, v / max));
+  const y = (v: number) => padT + innerH * (1 - Math.min(1, v / niceMax));
 
   const fmt = (d: Date) => `${d.getDate()}.${d.getMonth() + 1}.`;
   const labelIdx = [0, Math.floor((n - 1) / 2), n - 1].filter((v, i, a) => a.indexOf(v) === i);
+  const fmtVal = (v: number) => (unit.trim() === "l" ? (Math.round(v * 10) / 10).toString() : Math.round(v).toString());
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full">
+      {/* Y mriežka + popisky hodnôt */}
+      {ticks.map((t, i) => (
+        <g key={`t${i}`}>
+          <line x1={padL} y1={y(t)} x2={W - padR} y2={y(t)} stroke="#eef2f7" strokeWidth="1" />
+          <text x={padL - 4} y={y(t) + 3} textAnchor="end" fontSize="8" fill="#94a3b8">
+            {fmtVal(t)}
+          </text>
+        </g>
+      ))}
+
       {/* stĺpce */}
       {series.map((s, i) => {
         const top = y(s.value);
@@ -308,4 +322,17 @@ function TimelineChart({
       ))}
     </svg>
   );
+}
+
+// Vypočíta „peknú" hornú hranicu Y osi a rovnomerné dieliky (~3–4)
+function niceScale(maxVal: number): { niceMax: number; ticks: number[] } {
+  const m = Math.max(maxVal, 1);
+  const rough = m / 3;
+  const pow = Math.pow(10, Math.floor(Math.log10(rough)));
+  const candidates = [1, 2, 2.5, 5, 10].map((c) => c * pow);
+  const step = candidates.find((c) => c >= rough) ?? candidates[candidates.length - 1];
+  const niceMax = Math.ceil(m / step) * step;
+  const ticks: number[] = [];
+  for (let v = 0; v <= niceMax + step / 1000; v += step) ticks.push(Math.round(v * 1000) / 1000);
+  return { niceMax, ticks };
 }
