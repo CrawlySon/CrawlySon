@@ -9,6 +9,7 @@ const PUBLIC_PATHS = [
   "/api/auth/login",
   "/api/auth/register",
   "/manifest.webmanifest",
+  "/sw.js",
 ];
 
 export async function middleware(req: NextRequest) {
@@ -16,6 +17,7 @@ export async function middleware(req: NextRequest) {
 
   if (
     PUBLIC_PATHS.some((p) => pathname === p) ||
+    pathname.startsWith("/api/cron/") || // plánovač – chránený vlastným CRON_SECRET
     pathname.startsWith("/_next") ||
     pathname.startsWith("/icons") ||
     pathname === "/favicon.ico"

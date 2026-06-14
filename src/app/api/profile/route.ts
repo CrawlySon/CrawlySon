@@ -18,6 +18,8 @@ const PROFILE_SELECT = {
   goalCarbs: true,
   goalFat: true,
   goalWaterMl: true,
+  waterRemind: true,
+  waterReminders: true,
 };
 
 export async function GET() {
@@ -45,6 +47,18 @@ export async function PATCH(req: Request) {
   }
   for (const k of ["goalCalories", "goalProtein", "goalCarbs", "goalFat", "goalWaterMl"]) {
     if (b[k] !== undefined) data[k] = Math.max(0, parseInt(b[k], 10) || 0);
+  }
+
+  if (b.waterRemind !== undefined) data.waterRemind = !!b.waterRemind;
+  if (b.waterReminders !== undefined) {
+    data.waterReminders = Array.isArray(b.waterReminders)
+      ? b.waterReminders
+          .map((r: any) => ({
+            hour: Math.min(23, Math.max(0, parseInt(r.hour, 10) || 0)),
+            minMl: Math.max(0, parseInt(r.minMl, 10) || 0),
+          }))
+          .slice(0, 6)
+      : null;
   }
 
   const profile = await prisma.user.update({ where: { id: userId }, data, select: PROFILE_SELECT });

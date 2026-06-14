@@ -40,6 +40,8 @@ export const api = {
       body: JSON.stringify({ date, mealType }),
     }),
 
+  testPush: () => req<{ ok: true; sent: number }>(`/api/push/test`, { method: "POST" }),
+
   getProfile: () => req<{ profile: Profile }>(`/api/profile`),
   updateProfile: (data: Partial<Profile>) =>
     req<{ profile: Profile }>(`/api/profile`, { method: "PATCH", body: JSON.stringify(data) }),

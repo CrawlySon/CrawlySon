@@ -29,11 +29,30 @@ model User {
   goalFat      Int     @default(65)
   goalWaterMl  Int     @default(2500)
 
+  // Pripomienky pitného režimu (Web Push)
+  waterRemind       Boolean   @default(false)
+  waterReminders    Json?     // [{ hour, minMl }] – napr. [{hour:12,minMl:500},{hour:18,minMl:1000}]
+  waterLastNotified DateTime?
+
   entries    Entry[]
   foods      Food[]
   waterLogs  WaterLog[]
   aiUsage    AiUsage[]
   favorites  Favorite[]
+  pushSubs   PushSubscription[]
+}
+
+// Web Push odber (jeden na zariadenie/prehliadač)
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 // Obľúbené / rýchle pridanie – jedna položka alebo zostava viacerých (napr. presso + mlieko + med)

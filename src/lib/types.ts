@@ -91,4 +91,6 @@ export type Profile = {
   goalCarbs: number;
   goalFat: number;
   goalWaterMl: number;
+  waterRemind?: boolean;
+  waterReminders?: { hour: number; minMl: number }[] | null;
 };

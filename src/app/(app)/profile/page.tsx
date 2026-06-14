@@ -4,7 +4,13 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { recommendedCalories, suggestedMacros, tdee } from "@/lib/nutrition";
+import { enablePush, disablePush, isPushSupported, isStandalone } from "@/lib/push-client";
 import type { Profile } from "@/lib/types";
+
+const DEFAULT_WATER_RULES = [
+  { hour: 12, minMl: 500 },
+  { hour: 18, minMl: 1000 },
+];
 
 type Usage = {
   calls: number;
@@ -20,10 +26,19 @@ export default function ProfilePage() {
   const [p, setP] = useState<Profile | null>(null);
   const [usage, setUsage] = useState<Usage | null>(null);
   const [saved, setSaved] = useState(false);
+  const [pushOn, setPushOn] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushMsg, setPushMsg] = useState<string | null>(null);
 
   useEffect(() => {
     api.getProfile().then((r) => setP(r.profile));
     api.usage().then((u) => setUsage(u)).catch(() => {});
+    (async () => {
+      if (!isPushSupported()) return;
+      const reg = await navigator.serviceWorker.getRegistration();
+      const sub = await reg?.pushManager.getSubscription();
+      setPushOn(!!sub);
+    })().catch(() => {});
   }, []);
 
   if (!p) return <div className="px-4 pt-10 text-center text-slate-400">Načítavam…</div>;
@@ -51,6 +66,49 @@ export default function ProfilePage() {
         ? { ...prev, goalCalories: recommended, goalProtein: m.protein, goalCarbs: m.carbs, goalFat: m.fat }
         : prev
     );
+  }
+
+  const waterRules = p.waterReminders && p.waterReminders.length ? p.waterReminders : DEFAULT_WATER_RULES;
+
+  function setRule(i: number, patch: Partial<{ hour: number; minMl: number }>) {
+    const next = waterRules.map((r, idx) => (idx === i ? { ...r, ...patch } : r));
+    set("waterReminders", next);
+  }
+
+  async function togglePush() {
+    setPushBusy(true);
+    setPushMsg(null);
+    try {
+      if (pushOn) {
+        await disablePush();
+        setPushOn(false);
+        set("waterRemind", false);
+      } else {
+        await enablePush();
+        setPushOn(true);
+        set("waterRemind", true);
+        // ulož pravidlá hneď, nech ich plánovač má k dispozícii
+        await api.updateProfile({ waterRemind: true, waterReminders: waterRules } as any);
+        setPushMsg("Hotovo! Pripomienky pitného režimu sú zapnuté.");
+      }
+    } catch (e: any) {
+      setPushMsg(e?.message || "Nepodarilo sa nastaviť notifikácie.");
+    } finally {
+      setPushBusy(false);
+    }
+  }
+
+  async function sendTest() {
+    setPushBusy(true);
+    setPushMsg(null);
+    try {
+      const r = await api.testPush();
+      setPushMsg(`Testovacia notifikácia odoslaná (${r.sent} zariadenie/í).`);
+    } catch (e: any) {
+      setPushMsg(e?.message || "Test zlyhal.");
+    } finally {
+      setPushBusy(false);
+    }
   }
 
   async function logout() {
@@ -152,6 +210,70 @@ export default function ProfilePage() {
           <Num label="Tuky (g)" value={p.goalFat} onChange={(v) => set("goalFat", v)} />
           <Num label="Voda (ml)" value={p.goalWaterMl} onChange={(v) => set("goalWaterMl", v)} />
         </div>
+      </section>
+
+      {/* Notifikácie – pitný režim */}
+      <section className="card mb-4 space-y-3 p-4">
+        <h2 className="font-semibold text-slate-700">💧 Pripomienky pitného režimu</h2>
+        <p className="text-xs text-slate-500">
+          Pošleme notifikáciu, ak v danom čase nemáš vypité aspoň zadané množstvo. Funguje aj keď je appka zatvorená.
+        </p>
+
+        {!isPushSupported() ? (
+          <p className="rounded-xl bg-amber-50 p-2 text-xs text-amber-700">
+            Toto zariadenie/prehliadač nepodporuje push notifikácie. Na iPhone appku najprv pridaj na plochu
+            (Zdieľať → Pridať na plochu) a otvor ju odtiaľ.
+          </p>
+        ) : !isStandalone() ? (
+          <p className="rounded-xl bg-amber-50 p-2 text-xs text-amber-700">
+            Tip pre iPhone: notifikácie fungujú len keď je appka pridaná na plochu a spustená odtiaľ.
+          </p>
+        ) : null}
+
+        <button
+          onClick={togglePush}
+          disabled={pushBusy || !isPushSupported()}
+          className={`w-full rounded-xl py-2.5 text-sm font-semibold ${
+            pushOn ? "bg-red-50 text-red-600" : "btn-primary"
+          } disabled:opacity-50`}
+        >
+          {pushBusy ? "Pracujem…" : pushOn ? "Vypnúť notifikácie na tomto zariadení" : "Zapnúť notifikácie"}
+        </button>
+
+        {/* Pravidlá */}
+        <div className="space-y-2">
+          {waterRules.map((r, i) => (
+            <div key={i} className="flex items-center gap-2 rounded-xl bg-slate-50 p-2">
+              <span className="text-xs text-slate-500">o</span>
+              <input
+                type="number"
+                min={0}
+                max={23}
+                className="w-16 rounded-lg border border-slate-200 px-2 py-1 text-sm"
+                value={r.hour}
+                onChange={(e) => setRule(i, { hour: Math.min(23, Math.max(0, parseInt(e.target.value) || 0)) })}
+              />
+              <span className="text-xs text-slate-500">:00 aspoň</span>
+              <input
+                type="number"
+                step={0.1}
+                min={0}
+                className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-sm"
+                value={r.minMl / 1000}
+                onChange={(e) => setRule(i, { minMl: Math.max(0, Math.round((Number(e.target.value) || 0) * 1000)) })}
+              />
+              <span className="text-xs text-slate-500">l</span>
+            </div>
+          ))}
+          <p className="text-[11px] text-slate-400">Zmeny pravidiel ulož tlačidlom „Uložiť zmeny".</p>
+        </div>
+
+        {pushOn && (
+          <button onClick={sendTest} disabled={pushBusy} className="btn-ghost w-full py-2 text-sm">
+            Poslať testovaciu notifikáciu
+          </button>
+        )}
+        {pushMsg && <p className="rounded-xl bg-sky-50 p-2 text-xs text-sky-700">{pushMsg}</p>}
       </section>
 
       <button onClick={save} className="btn-primary w-full">
