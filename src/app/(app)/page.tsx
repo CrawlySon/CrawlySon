@@ -65,6 +65,20 @@ export default function TodayPage() {
   const [reload, setReload] = useState(0);
   const [favReload, setFavReload] = useState(0);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [hideFab, setHideFab] = useState(false);
+
+  // Plávajúce tlačidlo sa schová pri scrollovaní dole a zobrazí pri scrollovaní hore
+  useEffect(() => {
+    let lastY = window.scrollY;
+    function onScroll() {
+      const y = window.scrollY;
+      if (y > lastY + 6 && y > 90) setHideFab(true);
+      else if (y < lastY - 6) setHideFab(false);
+      lastY = y;
+    }
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
@@ -153,7 +167,7 @@ export default function TodayPage() {
   })();
 
   return (
-    <div className="px-4 pt-4">
+    <div className="px-4 pb-36 pt-4">
       {/* Hlavička s dátumom */}
       <header className="mb-4 flex items-center justify-between">
         <button onClick={() => setDate((d) => shiftDate(d, -1))} className="rounded-full bg-white p-2 shadow-sm">
@@ -254,10 +268,12 @@ export default function TodayPage() {
         </p>
       )}
 
-      {/* Plávajúce tlačidlo */}
+      {/* Plávajúce tlačidlo – schová sa pri scrollovaní dole */}
       <button
         onClick={() => setSheet("other")}
-        className="fixed bottom-20 left-1/2 z-20 -translate-x-1/2 rounded-full bg-brand-600 px-6 py-3.5 font-semibold text-white shadow-lg shadow-brand-600/30 active:scale-95"
+        className={`fixed bottom-24 left-1/2 z-20 -translate-x-1/2 rounded-full bg-brand-600 px-6 py-3.5 font-semibold text-white shadow-lg shadow-brand-600/30 transition-all duration-300 active:scale-95 ${
+          hideFab ? "pointer-events-none translate-y-28 opacity-0" : "opacity-100"
+        }`}
       >
         ✨ Pridať jedlo
       </button>
