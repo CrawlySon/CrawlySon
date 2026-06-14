@@ -501,6 +501,9 @@ function ManualRow({ food, onAdd }: { food: any; onAdd: (food: any, grams: numbe
         <p className="truncate text-sm font-medium text-slate-700">{food.name}</p>
         <p className="text-xs text-slate-400">
           {food.calories} kcal / {food.baseGrams} g
+          {food.healthIndex != null && (
+            <span className={`ml-1 font-medium ${healthColor(food.healthIndex)}`}>· ♥ {food.healthIndex}/10</span>
+          )}
         </p>
       </div>
       <input

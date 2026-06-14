@@ -1,6 +1,39 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import type { ParsedItem } from "./types";
 
+// Reťaz modelov – ak primárny zlyhá (napr. „on demand"/preťaženie/kvóta),
+// skúsi sa ďalší v poradí. Primárny sa berie z GEMINI_MODEL.
+const FALLBACK_MODELS = Array.from(
+  new Set(
+    [
+      process.env.GEMINI_MODEL || "gemini-3.5-flash",
+      "gemini-2.5-flash",
+      "gemini-2.0-flash",
+      "gemini-flash-latest",
+    ].filter(Boolean)
+  )
+);
+
+// Zavolá generateContent a pri chybe skúša ďalšie modely z reťaze.
+async function generateWithFallback(
+  ai: GoogleGenAI,
+  request: Record<string, any>
+): Promise<{ response: any; model: string }> {
+  let lastErr: unknown;
+  for (const model of FALLBACK_MODELS) {
+    try {
+      const response = await ai.models.generateContent({ ...request, model } as any);
+      return { response, model };
+    } catch (e) {
+      lastErr = e;
+      console.error(`Gemini model "${model}" zlyhal, skúšam ďalší:`, (e as any)?.message || e);
+    }
+  }
+  throw lastErr instanceof Error
+    ? new Error(`Gemini momentálne nedostupný (skúšané: ${FALLBACK_MODELS.join(", ")}). ${lastErr.message}`)
+    : new Error("Všetky Gemini modely zlyhali.");
+}
+
 export type ReferenceFood = {
   name: string;
   baseGrams: number;
@@ -116,12 +149,10 @@ export async function parseFood(text: string, reference: ReferenceFood[]): Promi
   if (!apiKey) throw new Error("Chýba GEMINI_API_KEY v prostredí.");
 
   const ai = new GoogleGenAI({ apiKey });
-  const model = process.env.GEMINI_MODEL || "gemini-3.5-flash";
 
   const prompt = `Používateľ povedal/napísal čo zjedol:\n"""${text}"""${buildReferenceBlock(reference)}`;
 
-  const response = await ai.models.generateContent({
-    model,
+  const { response, model } = await generateWithFallback(ai, {
     contents: prompt,
     config: {
       systemInstruction: SYSTEM_INSTRUCTION,
@@ -201,7 +232,6 @@ export async function lookupProductByWeb(query: string): Promise<WebLookupResult
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("Chýba GEMINI_API_KEY v prostredí.");
   const ai = new GoogleGenAI({ apiKey });
-  const model = process.env.GEMINI_MODEL || "gemini-3.5-flash";
 
   const prompt = `Pomôž identifikovať a nájsť nutričné hodnoty produktu: "${query}".
 Ak je v zadaní čiarový kód (EAN/GTIN), najprv podľa neho na webe zisti, o aký produkt ide
@@ -213,8 +243,7 @@ Odpovedz IBA platným JSON objektom (bez markdownu) v tvare:
  "protein": g, "carbs": g, "fat": g, "fiber": g_alebo_null,
  "category": "kategória (napr. Sladké, Nápoje, Mäso)", "healthIndex": 0-10}`;
 
-  const response = await ai.models.generateContent({
-    model,
+  const { response, model } = await generateWithFallback(ai, {
     contents: prompt,
     config: {
       tools: [{ googleSearch: {} }],
