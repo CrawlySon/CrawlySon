@@ -1,14 +1,16 @@
-export type MealType = "breakfast" | "lunch" | "dinner" | "snack" | "other";
+export type MealType = "breakfast" | "snack" | "lunch" | "afternoon" | "dinner" | "supper" | "other";
 
 export const MEAL_LABELS: Record<MealType, string> = {
   breakfast: "Raňajky",
+  snack: "Desiata",
   lunch: "Obed",
+  afternoon: "Olovrant",
   dinner: "Večera",
-  snack: "Desiata / olovrant",
+  supper: "Druhá večera",
   other: "Iné",
 };
 
-export const MEAL_ORDER: MealType[] = ["breakfast", "snack", "lunch", "dinner", "other"];
+export const MEAL_ORDER: MealType[] = ["breakfast", "snack", "lunch", "afternoon", "dinner", "supper", "other"];
 
 // Položka navrhnutá AI (alebo zadaná ručne) pred uložením do denníka.
 export type ParsedItem = {

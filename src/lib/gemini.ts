@@ -67,8 +67,10 @@ PRAVIDLÁ:
 - "confidence" je tvoja istota odhadu od 0 do 1.
 - Buď realistický, nepreháňaj presnosť. Názvy polož v slovenčine.
 - Z textu rozpoznaj aj typ jedla a vráť ho v poli "mealType":
-  raňajky = "breakfast", obed = "lunch", večera = "dinner",
-  desiata/olovrant = "snack". Ak používateľ typ jedla NEuvedie, vráť "other".
+  raňajky = "breakfast", desiata (dopoludňajšia) = "snack", obed = "lunch",
+  olovrant (popoludňajší) = "afternoon", večera = "dinner",
+  druhá večera / večerné maškrtenie / nočné jedenie = "supper".
+  Ak používateľ typ jedla NEuvedie, vráť "other".
 
 - Ku každej položke urči "category" (hlavná kategória) a "subcategory"
   (podkategória) v slovenčine. Príklady kategórií: Ovocie, Zelenina, Mäso, Ryby,
@@ -96,7 +98,8 @@ const responseSchema = {
   properties: {
     mealType: {
       type: Type.STRING,
-      description: 'Typ jedla z textu: "breakfast" | "lunch" | "dinner" | "snack" | "other"',
+      description:
+        'Typ jedla z textu: "breakfast" | "snack" | "lunch" | "afternoon" | "dinner" | "supper" | "other"',
     },
     waterMl: { type: Type.NUMBER, description: "Vypitá čistá voda v ml (0 ak žiadna)" },
     items: {
@@ -134,7 +137,7 @@ function buildReferenceBlock(foods: ReferenceFood[]): string {
   return `\n\nREFERENČNÁ DATABÁZA POTRAVÍN (orientačné hodnoty):\n${lines.join("\n")}`;
 }
 
-const MEAL_TYPES = ["breakfast", "lunch", "dinner", "snack", "other"] as const;
+const MEAL_TYPES = ["breakfast", "snack", "lunch", "afternoon", "dinner", "supper", "other"] as const;
 export type DetectedMeal = (typeof MEAL_TYPES)[number];
 
 export type ParseResult = {
