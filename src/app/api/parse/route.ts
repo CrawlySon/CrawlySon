@@ -64,8 +64,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Zadaj popis jedla." }, { status: 400 });
     }
 
+    const t0 = Date.now();
     const reference = await pickReference(userId, text.trim());
+    const t1 = Date.now();
     const { items, mealType, waterMl, usage } = await parseFood(text.trim(), reference);
+    const t2 = Date.now();
+
+    const timings = { refMs: t1 - t0, aiMs: t2 - t1, refCount: reference.length };
+    console.log(`[parse] ref=${timings.refMs}ms ai=${timings.aiMs}ms refCount=${timings.refCount} model=${usage.model}`);
 
     // Zaloguj spotrebu tokenov (best-effort, nech nezhodí odpoveď)
     try {
@@ -84,7 +90,7 @@ export async function POST(req: Request) {
       console.error("aiUsage log error:", e);
     }
 
-    return NextResponse.json({ items, mealType, waterMl, usage });
+    return NextResponse.json({ items, mealType, waterMl, usage, timings });
   } catch (err: any) {
     console.error("parse error:", err);
     return NextResponse.json(
