@@ -17,13 +17,15 @@ export default function QuickFavorites({
   const [favorites, setFavorites] = useState<Favorite[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [edit, setEdit] = useState(false);
+  const [error, setError] = useState(false);
 
   const load = useCallback(async () => {
     try {
       const { favorites } = await api.getFavorites();
       setFavorites(favorites);
+      setError(false);
     } catch {
-      /* ignoruj – nech to nezhodí stránku */
+      setError(true); // zobrazíme možnosť skúsiť znova namiesto tichého skrytia
     }
   }, []);
 
@@ -45,6 +47,17 @@ export default function QuickFavorites({
   async function remove(fav: Favorite) {
     await api.deleteFavorite(fav.id);
     setFavorites((prev) => prev.filter((f) => f.id !== fav.id));
+  }
+
+  if (error) {
+    return (
+      <div className="mt-4 flex items-center justify-between rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-700">
+        <span>Obľúbené sa nepodarilo načítať.</span>
+        <button onClick={load} className="font-semibold underline">
+          Skúsiť znova
+        </button>
+      </div>
+    );
   }
 
   if (favorites.length === 0) return null;
