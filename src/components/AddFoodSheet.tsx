@@ -531,6 +531,25 @@ function ItemCard({
   onRemove: () => void;
 }) {
   const [open, setOpen] = useState(false);
+
+  // Zmena gramáže proporcionálne prepočíta kcal a makrá (ak máme z čoho škálovať)
+  function setGrams(g: number) {
+    const old = item.quantityGrams ?? 0;
+    if (old > 0 && g > 0) {
+      const f = g / old;
+      onChange({
+        quantityGrams: g,
+        calories: round(item.calories * f),
+        protein: round(item.protein * f, 1),
+        carbs: round(item.carbs * f, 1),
+        fat: round(item.fat * f, 1),
+        fiber: item.fiber != null ? round(item.fiber * f, 1) : null,
+      });
+    } else {
+      onChange({ quantityGrams: g > 0 ? g : null });
+    }
+  }
+
   return (
     <div className="card p-3">
       <div className="flex items-start gap-2">
@@ -581,6 +600,19 @@ function ItemCard({
 
       {open && (
         <div className="mt-3 space-y-2">
+          <div className="rounded-lg bg-brand-50 p-2">
+            <label className="text-xs">
+              <span className="font-medium text-brand-700">Gramáž (g) — prepočíta kcal aj makrá</span>
+              <input
+                type="number"
+                inputMode="numeric"
+                value={item.quantityGrams ?? ""}
+                onChange={(e) => setGrams(parseInt(e.target.value) || 0)}
+                placeholder="napr. 250"
+                className="mt-0.5 w-full rounded-lg border border-brand-200 bg-white px-2 py-1.5 text-sm"
+              />
+            </label>
+          </div>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             <NumField label="kcal" value={item.calories} onChange={(v) => onChange({ calories: v })} />
             <NumField label="Bielk. (g)" value={item.protein} onChange={(v) => onChange({ protein: v })} />
