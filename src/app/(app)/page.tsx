@@ -107,6 +107,15 @@ export default function TodayPage() {
     await api.deleteEntry(id).catch(load);
   }
 
+  async function editEntry(id: string, patch: Partial<Entry>) {
+    setEntries((prev) => prev.map((e) => (e.id === id ? { ...e, ...patch } : e)));
+    try {
+      await api.updateEntry(id, patch);
+    } catch {
+      load();
+    }
+  }
+
   async function saveFavorite(name: string, mealType: MealType, items: FavoriteItem[]) {
     const trimmed = name.trim();
     if (!trimmed || items.length === 0) return;
@@ -237,6 +246,7 @@ export default function TodayPage() {
                     dimmed={activeId === e.id}
                     onDelete={() => handleDelete(e.id)}
                     onFavorite={() => saveEntryAsFavorite(e)}
+                    onEdit={(patch) => editEntry(e.id, patch)}
                   />
                 ))}
               </MealSection>
@@ -349,46 +359,105 @@ function EntryRow({
   dimmed,
   onDelete,
   onFavorite,
+  onEdit,
 }: {
   entry: Entry;
   dimmed: boolean;
   onDelete: () => void;
   onFavorite: () => void;
+  onEdit: (patch: Partial<Entry>) => void;
 }) {
   const { attributes, listeners, setNodeRef } = useDraggable({ id: entry.id });
+  const [editing, setEditing] = useState(false);
+  const [gramsStr, setGramsStr] = useState(String(entry.quantityGrams ?? ""));
+
+  function openEditor() {
+    setGramsStr(String(entry.quantityGrams ?? ""));
+    setEditing(true);
+  }
+
+  // Zmena gramáže spätne prepočíta kcal a makrá (ak máme z čoho škálovať)
+  function applyGrams() {
+    const g = parseInt(gramsStr) || 0;
+    const old = entry.quantityGrams ?? 0;
+    if (old > 0 && g > 0) {
+      const f = g / old;
+      onEdit({
+        quantityGrams: g,
+        calories: round(entry.calories * f),
+        protein: round(entry.protein * f, 1),
+        carbs: round(entry.carbs * f, 1),
+        fat: round(entry.fat * f, 1),
+        fiber: entry.fiber != null ? round(entry.fiber * f, 1) : null,
+      });
+    } else {
+      onEdit({ quantityGrams: g > 0 ? g : null });
+    }
+    setEditing(false);
+  }
+
   return (
-    <li className={`flex items-center gap-1.5 px-3 py-1.5 ${dimmed ? "opacity-30" : ""}`}>
-      {/* Úchyt na presun – podrž a ťahaj */}
-      <button
-        ref={setNodeRef}
-        {...listeners}
-        {...attributes}
-        className="cursor-grab touch-none select-none px-0.5 text-slate-300 active:cursor-grabbing"
-        title="Podrž a presuň do iného jedla"
-        aria-label="Presunúť"
-      >
-        ⠿
-      </button>
-      <div className="min-w-0 flex-1 leading-tight">
-        <p className="truncate text-sm font-medium text-slate-800">
-          {entry.name}
-          {entry.source === "ai" && <span className="ml-1 text-[10px] text-brand-500">✨</span>}
-        </p>
-        <p className="text-[11px] leading-tight text-slate-400">
-          {entry.quantityGrams ? `${round(entry.quantityGrams)} g · ` : ""}
-          B {round(entry.protein)} · S {round(entry.carbs)} · T {round(entry.fat)}
-          {entry.healthIndex != null && (
-            <span className={`ml-1 font-medium ${entryHealthColor(entry.healthIndex)}`}>· ♥ {entry.healthIndex}</span>
-          )}
-        </p>
+    <li className={`px-3 py-1.5 ${dimmed ? "opacity-30" : ""}`}>
+      <div className="flex items-center gap-1.5">
+        {/* Úchyt na presun – podrž a ťahaj */}
+        <button
+          ref={setNodeRef}
+          {...listeners}
+          {...attributes}
+          className="cursor-grab touch-none select-none px-0.5 text-slate-300 active:cursor-grabbing"
+          title="Podrž a presuň do iného jedla"
+          aria-label="Presunúť"
+        >
+          ⠿
+        </button>
+        <button onClick={openEditor} className="min-w-0 flex-1 text-left leading-tight" title="Upraviť gramáž">
+          <p className="truncate text-sm font-medium text-slate-800">
+            {entry.name}
+            {entry.source === "ai" && <span className="ml-1 text-[10px] text-brand-500">✨</span>}
+          </p>
+          <p className="text-[11px] leading-tight text-slate-400">
+            {entry.quantityGrams ? `${round(entry.quantityGrams)} g · ` : ""}
+            B {round(entry.protein)} · S {round(entry.carbs)} · T {round(entry.fat)}
+            {entry.healthIndex != null && (
+              <span className={`ml-1 font-medium ${entryHealthColor(entry.healthIndex)}`}>· ♥ {entry.healthIndex}</span>
+            )}
+          </p>
+        </button>
+        <span className="text-sm font-semibold text-slate-600">{round(entry.calories)}</span>
+        <button onClick={openEditor} className="px-0.5 text-slate-300 hover:text-brand-500" title="Upraviť gramáž">
+          ✎
+        </button>
+        <button onClick={onFavorite} className="px-0.5 text-slate-300 hover:text-amber-500" title="Uložiť ako obľúbené">
+          ★
+        </button>
+        <button onClick={onDelete} className="px-0.5 text-slate-300 hover:text-red-400">
+          ✕
+        </button>
       </div>
-      <span className="text-sm font-semibold text-slate-600">{round(entry.calories)}</span>
-      <button onClick={onFavorite} className="px-0.5 text-slate-300 hover:text-amber-500" title="Uložiť ako obľúbené">
-        ★
-      </button>
-      <button onClick={onDelete} className="px-0.5 text-slate-300 hover:text-red-400">
-        ✕
-      </button>
+
+      {editing && (
+        <div className="mt-1.5 flex flex-wrap items-center gap-2 rounded-lg bg-brand-50 p-2">
+          <span className="text-xs font-medium text-brand-700">Gramáž (g):</span>
+          <input
+            type="number"
+            inputMode="numeric"
+            autoFocus
+            value={gramsStr}
+            onChange={(e) => setGramsStr(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && applyGrams()}
+            className="w-20 rounded-lg border border-brand-200 bg-white px-2 py-1 text-sm"
+          />
+          <button onClick={applyGrams} className="rounded-lg bg-brand-600 px-2.5 py-1 text-xs font-medium text-white">
+            Uložiť
+          </button>
+          <button onClick={() => setEditing(false)} className="text-xs text-slate-400">
+            zrušiť
+          </button>
+          {entry.quantityGrams == null && (
+            <span className="text-[10px] text-amber-600">bez pôvodnej gramáže sa makrá neprepočítajú</span>
+          )}
+        </div>
+      )}
     </li>
   );
 }
