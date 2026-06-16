@@ -93,4 +93,17 @@ export type Profile = {
   goalWaterMl: number;
   waterRemind?: boolean;
   waterReminders?: { hour: number; minMl: number }[] | null;
+  coachRemind?: boolean;
+};
+
+export type Badge = {
+  key: string;
+  emoji: string;
+  title: string;
+  desc: string;
+  group: string;
+  earned: boolean;
+  earnedAt: string | null;
+  current: number | null;
+  target: number | null;
 };

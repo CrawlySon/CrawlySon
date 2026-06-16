@@ -34,12 +34,29 @@ model User {
   waterReminders    Json?     // [{ hour, minMl }] – napr. [{hour:12,minMl:500},{hour:18,minMl:1000}]
   waterLastNotified DateTime?
 
-  entries    Entry[]
-  foods      Food[]
-  waterLogs  WaterLog[]
-  aiUsage    AiUsage[]
-  favorites  Favorite[]
-  pushSubs   PushSubscription[]
+  // Motivačný „kouč" – chytré pripomienky (kalórie, ovocie, gratulácie k odznakom)
+  coachRemind Boolean @default(true)
+  coachState  Json?   // { [druh]: "YYYY-MM-DD" } – proti opakovaniu tej istej pripomienky za deň
+
+  entries      Entry[]
+  foods        Food[]
+  waterLogs    WaterLog[]
+  aiUsage      AiUsage[]
+  favorites    Favorite[]
+  pushSubs     PushSubscription[]
+  achievements Achievement[]
+}
+
+// Odomknutý odznak (achievement). Kľúč zodpovedá katalógu v src/lib/badges.ts.
+model Achievement {
+  id       String   @id @default(cuid())
+  userId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  key      String
+  earnedAt DateTime @default(now())
+
+  @@unique([userId, key])
+  @@index([userId])
 }
 
 // Web Push odber (jeden na zariadenie/prehliadač)

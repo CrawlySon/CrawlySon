@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { recommendedCalories, suggestedMacros, tdee } from "@/lib/nutrition";
 import { enablePush, disablePush, isPushSupported, isStandalone } from "@/lib/push-client";
-import type { Profile } from "@/lib/types";
+import { getCache, setCache } from "@/lib/page-cache";
+import type { Profile, Badge } from "@/lib/types";
 
 const DEFAULT_WATER_RULES = [
   { hour: 12, minMl: 500 },
@@ -212,6 +213,8 @@ export default function ProfilePage() {
         </div>
       </section>
 
+      <BadgesSection />
+
       {/* Notifikácie – pitný režim */}
       <section className="card mb-4 space-y-3 p-4">
         <h2 className="font-semibold text-slate-700">💧 Pripomienky pitného režimu</h2>
@@ -268,6 +271,21 @@ export default function ProfilePage() {
           <p className="text-[11px] text-slate-400">Zmeny pravidiel ulož tlačidlom „Uložiť zmeny".</p>
         </div>
 
+        {/* Motivačný kouč */}
+        <label className="flex items-start gap-3 rounded-xl bg-slate-50 p-3">
+          <input
+            type="checkbox"
+            className="mt-0.5 h-5 w-5 accent-brand-600"
+            checked={p.coachRemind ?? true}
+            onChange={(e) => set("coachRemind", e.target.checked)}
+          />
+          <span className="text-sm text-slate-600">
+            <b className="text-slate-700">🏅 Motivačný kouč</b>
+            <br />
+            Chytré pripomienky: pozor na kalórie poobede, večerné ovocie a gratulácia k novým odznakom.
+          </span>
+        </label>
+
         {pushOn && (
           <button onClick={sendTest} disabled={pushBusy} className="btn-ghost w-full py-2 text-sm">
             Poslať testovaciu notifikáciu
@@ -319,6 +337,54 @@ export default function ProfilePage() {
         Odhlásiť sa
       </button>
     </div>
+  );
+}
+
+type BadgesData = { badges: Badge[]; earnedCount: number; total: number };
+
+function BadgesSection() {
+  const [data, setData] = useState<BadgesData | null>(() => getCache<BadgesData>("badges") ?? null);
+
+  useEffect(() => {
+    api
+      .getBadges()
+      .then((d) => {
+        setData(d);
+        setCache("badges", d);
+      })
+      .catch(() => {});
+  }, []);
+
+  if (!data) return null;
+
+  return (
+    <section className="card mb-4 p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="font-semibold text-slate-700">🏅 Odznaky</h2>
+        <span className="text-xs text-slate-400">
+          {data.earnedCount} / {data.total}
+        </span>
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        {data.badges.map((b) => (
+          <div
+            key={b.key}
+            title={b.desc}
+            className={`flex flex-col items-center rounded-xl p-2 text-center ${b.earned ? "bg-brand-50" : "bg-slate-50"}`}
+          >
+            <span className={`text-2xl leading-none ${b.earned ? "" : "opacity-30 grayscale"}`}>{b.emoji}</span>
+            <span className={`mt-1 text-[11px] font-medium leading-tight ${b.earned ? "text-slate-700" : "text-slate-400"}`}>
+              {b.title}
+            </span>
+            {!b.earned && b.target ? (
+              <span className="mt-0.5 text-[10px] text-slate-400">
+                {Math.min(b.current ?? 0, b.target)}/{b.target}
+              </span>
+            ) : null}
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
