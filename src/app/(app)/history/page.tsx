@@ -100,19 +100,22 @@ export default function HistoryPage() {
   const chartGoal = category ? null : metric === "kcal" ? goal : metric === "water" ? (profile ? profile.goalWaterMl / 1000 : null) : null;
   const chartMax = Math.max(...series.map((s) => s.value), chartGoal || 0, metric === "health" && !category ? 10 : 0, 1);
   const chartUnit = category || metric === "kcal" ? " kcal" : metric === "water" ? " l" : "";
-  const goalWaterL = profile ? profile.goalWaterMl / 1000 : null;
 
   // Farba stĺpca podľa cieľa / hodnoty
   function colorFor(v: number): string {
     const BLUE = "#3b82f6";
     const RED = "#ef4444";
+    const WATER = "#0ea5e9"; // modrá pre pitný režim
     if (v <= 0) return "#e2e8f0"; // bez dát
     if (category) return BLUE;
     if (metric === "kcal") return v > goal ? RED : BLUE; // nad cieľom = červená
-    if (metric === "water") return goalWaterL && v >= goalWaterL ? BLUE : RED; // pod cieľom = červená
-    // zdravosť: plynulý prechod červená(0) → žltá(5) → zelená(10)
-    const h = Math.max(0, Math.min(10, v));
-    return `hsl(${Math.round(h * 12)}, 72%, 45%)`;
+    if (metric === "water") return WATER; // pitie vody – vždy modrá
+    // zdravosť: 10 odtieňov od tmavo červenej (1) po svetlo modrú (10)
+    const s = Math.max(1, Math.min(10, Math.round(v)));
+    const t = (s - 1) / 9; // 0..1
+    const hue = Math.round(t * 210); // 0 (červená) → 210 (modrá)
+    const light = Math.round(35 + t * 30); // tmavá → svetlá
+    return `hsl(${hue}, 70%, ${light}%)`;
   }
 
   return (
