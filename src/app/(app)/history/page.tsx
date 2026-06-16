@@ -88,7 +88,10 @@ export default function HistoryPage() {
     if (category) return BLUE;
     if (metric === "kcal") return v > goal ? RED : BLUE; // nad cieľom = červená
     if (metric === "water") return goalWaterL && v >= goalWaterL ? BLUE : RED; // pod cieľom = červená
-    return v >= 7 ? BLUE : RED; // zdravosť: dobré = modrá, slabé = červená
+    // zdravosť: zelená = dobré, oranžová = stredné, červená = slabé (konzistentne so zvyškom appky)
+    if (v >= 7) return "#22c55e";
+    if (v >= 4) return "#f59e0b";
+    return "#ef4444";
   }
 
   return (
