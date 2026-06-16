@@ -344,6 +344,7 @@ type BadgesData = { badges: Badge[]; earnedCount: number; total: number };
 
 function BadgesSection() {
   const [data, setData] = useState<BadgesData | null>(() => getCache<BadgesData>("badges") ?? null);
+  const [selected, setSelected] = useState<Badge | null>(null);
 
   useEffect(() => {
     api
@@ -367,10 +368,10 @@ function BadgesSection() {
       </div>
       <div className="grid grid-cols-3 gap-2">
         {data.badges.map((b) => (
-          <div
+          <button
             key={b.key}
-            title={b.desc}
-            className={`flex flex-col items-center rounded-xl p-2 text-center ${b.earned ? "bg-brand-50" : "bg-slate-50"}`}
+            onClick={() => setSelected(b)}
+            className={`flex flex-col items-center rounded-xl p-2 text-center transition active:scale-95 ${b.earned ? "bg-brand-50" : "bg-slate-50"}`}
           >
             <span className={`text-2xl leading-none ${b.earned ? "" : "opacity-30 grayscale"}`}>{b.emoji}</span>
             <span className={`mt-1 text-[11px] font-medium leading-tight ${b.earned ? "text-slate-700" : "text-slate-400"}`}>
@@ -381,10 +382,58 @@ function BadgesSection() {
                 {Math.min(b.current ?? 0, b.target)}/{b.target}
               </span>
             ) : null}
-          </div>
+          </button>
         ))}
       </div>
+
+      {selected && <BadgeModal badge={selected} onClose={() => setSelected(null)} />}
     </section>
+  );
+}
+
+function BadgeModal({ badge, onClose }: { badge: Badge; onClose: () => void }) {
+  const target = badge.target ?? 0;
+  const current = Math.min(badge.current ?? 0, target || Infinity);
+  const pct = target > 0 ? Math.min(100, Math.round((current / target) * 100)) : badge.earned ? 100 : 0;
+  const earnedDate = badge.earnedAt
+    ? new Date(badge.earnedAt).toLocaleDateString("sk-SK", { day: "numeric", month: "long", year: "numeric" })
+    : null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6" onClick={onClose}>
+      <div
+        className="w-full max-w-xs rounded-3xl bg-white p-6 text-center shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <span className={`text-5xl leading-none ${badge.earned ? "" : "opacity-30 grayscale"}`}>{badge.emoji}</span>
+        <h3 className="mt-3 text-lg font-bold text-slate-800">{badge.title}</h3>
+        <p className="mt-1 text-sm text-slate-500">{badge.desc}</p>
+
+        {badge.earned ? (
+          <div className="mt-4 rounded-xl bg-brand-50 p-3 text-sm font-medium text-brand-700">
+            ✓ Odomknuté{earnedDate ? ` · ${earnedDate}` : ""}
+          </div>
+        ) : (
+          <div className="mt-4">
+            {target > 0 && (
+              <>
+                <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                  <div className="h-full rounded-full bg-brand-500 transition-all" style={{ width: `${pct}%` }} />
+                </div>
+                <p className="mt-2 text-xs text-slate-500">
+                  Postup: <b className="text-slate-700">{current}</b> / {target}
+                </p>
+              </>
+            )}
+            {target === 0 && <p className="text-xs text-slate-400">Zatiaľ neodomknuté.</p>}
+          </div>
+        )}
+
+        <button onClick={onClose} className="btn-primary mt-5 w-full">
+          Zavrieť
+        </button>
+      </div>
+    </div>
   );
 }
 
