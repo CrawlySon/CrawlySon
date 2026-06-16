@@ -67,9 +67,13 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
 
   useEffect(() => {
     if (tab !== "manual") return;
+    // 1 znak preskočíme – sken veľkej databázy potravín pri jednom písmene
+    // je drahý a výsledok aj tak nič nehovorí (index sa rozbehne od 2+ znakov).
+    const trimmed = query.trim();
+    if (trimmed.length === 1) return;
     const t = setTimeout(async () => {
       try {
-        const { foods } = await api.searchFoods(query);
+        const { foods } = await api.searchFoods(trimmed);
         setResults(foods);
       } catch {
         /* ignore */

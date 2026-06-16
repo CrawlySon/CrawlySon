@@ -16,15 +16,23 @@ export async function GET(req: Request) {
   const visibility =
     scope === "mine" ? { userId } : scope === "global" ? { userId: null } : { OR: [{ userId: null }, { userId }] };
 
-  const [foods, usage] = await Promise.all([
-    prisma.food.findMany({
-      where: q ? { AND: [visibility, { name: { contains: q, mode: "insensitive" } }] } : visibility,
-      orderBy: { name: "asc" },
-      take: 200,
-    }),
-    // Koľkokrát používateľ daný názov použil vo svojich záznamoch
-    prisma.entry.groupBy({ by: ["name"], where: { userId }, _count: { _all: true } }),
-  ]);
+  const foods = await prisma.food.findMany({
+    where: q ? { AND: [visibility, { name: { contains: q, mode: "insensitive" } }] } : visibility,
+    orderBy: { name: "asc" },
+    take: 200,
+  });
+
+  // Koľkokrát používateľ daný názov použil vo svojich záznamoch.
+  // Zoskupujeme len cez názvy práve nájdených potravín (max 200), nie cez
+  // celý denník – to drží dotaz rýchly aj pri tisíckach záznamov.
+  const names = foods.map((f) => f.name);
+  const usage = names.length
+    ? await prisma.entry.groupBy({
+        by: ["name"],
+        where: { userId, name: { in: names } },
+        _count: { _all: true },
+      })
+    : [];
 
   const useMap = new Map<string, number>();
   for (const u of usage) useMap.set(u.name.toLowerCase(), u._count._all);

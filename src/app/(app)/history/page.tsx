@@ -43,8 +43,12 @@ export default function HistoryPage() {
       setDays(d.days);
       if (!category) setCategories(d.categories);
     });
-    api.getProfile().then((p) => setProfile(p.profile));
   }, [range, category]);
+
+  // Profil stačí načítať raz – nemení sa pri zmene rozsahu/kategórie
+  useEffect(() => {
+    api.getProfile().then((p) => setProfile(p.profile));
+  }, []);
 
   const goal = profile?.goalCalories || 2000;
   const max = Math.max(goal, ...days.map((d) => d.calories), 1);
