@@ -42,6 +42,7 @@ export default function HistoryPage() {
   const [range, setRange] = useState(14);
   const [category, setCategory] = useState<string>("");
   const [metric, setMetric] = useState<"kcal" | "health" | "water">("kcal");
+  const [loading, setLoading] = useState(initial === undefined);
 
   useEffect(() => {
     // Z cache hneď, potom obnov na pozadí – bez bliknutia pri návrate na záložku
@@ -50,10 +51,12 @@ export default function HistoryPage() {
       setDays(cached.days);
       if (!category) setCategories(cached.categories);
     }
+    setLoading(cached === undefined);
     api.history(range, category || undefined).then((d) => {
       setDays(d.days);
       if (!category) setCategories(d.categories);
       setCache(historyKey(range, category), { days: d.days, categories: d.categories });
+      setLoading(false);
     });
   }, [range, category]);
 
@@ -114,7 +117,12 @@ export default function HistoryPage() {
 
   return (
     <div className="px-4 pt-4">
-      <h1 className="mb-4 text-xl font-bold text-slate-800">Analytika</h1>
+      <h1 className="mb-4 flex items-center gap-2 text-xl font-bold text-slate-800">
+        Analytika
+        {loading && (
+          <span className="h-4 w-4 animate-spin rounded-full border-2 border-brand-200 border-t-brand-600" />
+        )}
+      </h1>
 
       <div className="mb-3 flex gap-2">
         {[7, 14, 30].map((r) => (
@@ -204,7 +212,9 @@ export default function HistoryPage() {
       </div>
 
       {days.length === 0 ? (
-        <p className="mt-6 text-center text-sm text-slate-400">Zatiaľ žiadne záznamy v tomto období.</p>
+        <p className="mt-6 text-center text-sm text-slate-400">
+          {loading ? "Načítavam…" : "Zatiaľ žiadne záznamy v tomto období."}
+        </p>
       ) : (
         <div className="card divide-y divide-slate-50">
           {days.map((d) => {
