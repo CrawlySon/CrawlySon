@@ -88,10 +88,9 @@ export default function HistoryPage() {
     if (category) return BLUE;
     if (metric === "kcal") return v > goal ? RED : BLUE; // nad cieľom = červená
     if (metric === "water") return goalWaterL && v >= goalWaterL ? BLUE : RED; // pod cieľom = červená
-    // zdravosť: zelená = dobré, oranžová = stredné, červená = slabé (konzistentne so zvyškom appky)
-    if (v >= 7) return "#22c55e";
-    if (v >= 4) return "#f59e0b";
-    return "#ef4444";
+    // zdravosť: plynulý prechod červená(0) → žltá(5) → zelená(10)
+    const h = Math.max(0, Math.min(10, v));
+    return `hsl(${Math.round(h * 12)}, 72%, 45%)`;
   }
 
   return (
