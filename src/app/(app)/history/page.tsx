@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { getCache, setCache } from "@/lib/page-cache";
 import { round } from "@/lib/nutrition";
 import type { Profile } from "@/lib/types";
 
@@ -30,24 +31,38 @@ function healthText(h: number): string {
   return "text-red-600";
 }
 
+type HistoryState = { days: Day[]; categories: Category[] };
+const historyKey = (range: number, category: string) => `history:${range}:${category}`;
+
 export default function HistoryPage() {
-  const [days, setDays] = useState<Day[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const initial = getCache<HistoryState>(historyKey(14, ""));
+  const [days, setDays] = useState<Day[]>(initial?.days ?? []);
+  const [categories, setCategories] = useState<Category[]>(initial?.categories ?? []);
+  const [profile, setProfile] = useState<Profile | null>(() => getCache<Profile>("profile") ?? null);
   const [range, setRange] = useState(14);
   const [category, setCategory] = useState<string>("");
   const [metric, setMetric] = useState<"kcal" | "health" | "water">("kcal");
 
   useEffect(() => {
+    // Z cache hneď, potom obnov na pozadí – bez bliknutia pri návrate na záložku
+    const cached = getCache<HistoryState>(historyKey(range, category));
+    if (cached) {
+      setDays(cached.days);
+      if (!category) setCategories(cached.categories);
+    }
     api.history(range, category || undefined).then((d) => {
       setDays(d.days);
       if (!category) setCategories(d.categories);
+      setCache(historyKey(range, category), { days: d.days, categories: d.categories });
     });
   }, [range, category]);
 
   // Profil stačí načítať raz – nemení sa pri zmene rozsahu/kategórie
   useEffect(() => {
-    api.getProfile().then((p) => setProfile(p.profile));
+    api.getProfile().then((p) => {
+      setProfile(p.profile);
+      setCache("profile", p.profile);
+    });
   }, []);
 
   const goal = profile?.goalCalories || 2000;

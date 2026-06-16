@@ -14,6 +14,7 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { api } from "@/lib/api";
+import { getCache, setCache } from "@/lib/page-cache";
 import { round, sumTotals, todayISO } from "@/lib/nutrition";
 import { MEAL_LABELS, MEAL_ORDER, type Entry, type FavoriteItem, type MealType, type Profile } from "@/lib/types";
 import MacroSummary from "@/components/MacroSummary";
@@ -56,12 +57,16 @@ function formatDate(date: string): string {
   });
 }
 
+const entriesKey = (date: string) => `entries:${date}`;
+const PROFILE_KEY = "profile";
+
 export default function TodayPage() {
   const [date, setDate] = useState(todayISO());
-  const [entries, setEntries] = useState<Entry[]>([]);
-  const [profile, setProfile] = useState<Profile | null>(null);
+  // Štart z cache (ak existuje) – pri návrate na záložku sa hneď ukáže posledný stav
+  const [entries, setEntries] = useState<Entry[]>(() => getCache<Entry[]>(entriesKey(todayISO())) ?? []);
+  const [profile, setProfile] = useState<Profile | null>(() => getCache<Profile>(PROFILE_KEY) ?? null);
   const [sheet, setSheet] = useState<MealType | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => getCache(entriesKey(todayISO())) === undefined);
   const [reload, setReload] = useState(0);
   const [favReload, setFavReload] = useState(0);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -85,11 +90,31 @@ export default function TodayPage() {
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } })
   );
 
+  // Aktualizácia záznamov, ktorá zároveň zapíše do cache (drží návrat na záložku svieži)
+  const applyEntries = useCallback(
+    (updater: Entry[] | ((prev: Entry[]) => Entry[])) => {
+      setEntries((prev) => {
+        const next = typeof updater === "function" ? (updater as (p: Entry[]) => Entry[])(prev) : updater;
+        setCache(entriesKey(date), next);
+        return next;
+      });
+    },
+    [date]
+  );
+
   const load = useCallback(async () => {
-    setLoading(true);
+    // Ak máme dáta z cache, ukáž ich okamžite a obnov potichu na pozadí.
+    const cachedEntries = getCache<Entry[]>(entriesKey(date));
+    const cachedProfile = getCache<Profile>(PROFILE_KEY);
+    setEntries(cachedEntries ?? []);
+    if (cachedProfile) setProfile(cachedProfile);
+    setLoading(cachedEntries === undefined);
+
     const [{ entries }, { profile }] = await Promise.all([api.getEntries(date), api.getProfile()]);
     setEntries(entries);
+    setCache(entriesKey(date), entries);
     setProfile(profile);
+    setCache(PROFILE_KEY, profile);
     setLoading(false);
   }, [date]);
 
@@ -103,12 +128,12 @@ export default function TodayPage() {
   }, [load]);
 
   async function handleDelete(id: string) {
-    setEntries((prev) => prev.filter((e) => e.id !== id));
+    applyEntries((prev) => prev.filter((e) => e.id !== id));
     await api.deleteEntry(id).catch(load);
   }
 
   async function editEntry(id: string, patch: Partial<Entry>) {
-    setEntries((prev) => prev.map((e) => (e.id === id ? { ...e, ...patch } : e)));
+    applyEntries((prev) => prev.map((e) => (e.id === id ? { ...e, ...patch } : e)));
     try {
       await api.updateEntry(id, patch);
     } catch {
@@ -142,7 +167,7 @@ export default function TodayPage() {
   }
 
   async function moveEntry(id: string, target: MealType) {
-    setEntries((prev) => prev.map((e) => (e.id === id ? { ...e, mealType: target } : e)));
+    applyEntries((prev) => prev.map((e) => (e.id === id ? { ...e, mealType: target } : e)));
     try {
       await api.updateEntry(id, { mealType: target });
     } catch {

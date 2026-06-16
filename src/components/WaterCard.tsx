@@ -2,20 +2,31 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { getCache, setCache } from "@/lib/page-cache";
 
 type Log = { id: string; ml: number; createdAt: string };
+type WaterState = { total: number; goal: number; logs: Log[] };
+const waterKey = (date: string) => `water:${date}`;
 
 export default function WaterCard({ date, reloadSignal }: { date: string; reloadSignal: number }) {
-  const [total, setTotal] = useState(0);
-  const [goal, setGoal] = useState(2500);
-  const [logs, setLogs] = useState<Log[]>([]);
+  const cached = getCache<WaterState>(waterKey(date));
+  const [total, setTotal] = useState(cached?.total ?? 0);
+  const [goal, setGoal] = useState(cached?.goal ?? 2500);
+  const [logs, setLogs] = useState<Log[]>(cached?.logs ?? []);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
+    const c = getCache<WaterState>(waterKey(date));
+    if (c) {
+      setTotal(c.total);
+      setGoal(c.goal);
+      setLogs(c.logs);
+    }
     const d = await api.getWater(date);
     setTotal(d.total);
     setGoal(d.goal);
     setLogs(d.logs);
+    setCache(waterKey(date), { total: d.total, goal: d.goal, logs: d.logs });
   }, [date]);
 
   useEffect(() => {

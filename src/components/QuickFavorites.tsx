@@ -2,8 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { getCache, setCache } from "@/lib/page-cache";
 import { round } from "@/lib/nutrition";
 import type { Favorite } from "@/lib/types";
+
+const FAVORITES_KEY = "favorites";
 
 export default function QuickFavorites({
   date,
@@ -14,15 +17,18 @@ export default function QuickFavorites({
   reloadSignal: number;
   onLogged: () => void;
 }) {
-  const [favorites, setFavorites] = useState<Favorite[]>([]);
+  const [favorites, setFavorites] = useState<Favorite[]>(() => getCache<Favorite[]>(FAVORITES_KEY) ?? []);
   const [busy, setBusy] = useState<string | null>(null);
   const [edit, setEdit] = useState(false);
   const [error, setError] = useState(false);
 
   const load = useCallback(async () => {
+    const cached = getCache<Favorite[]>(FAVORITES_KEY);
+    if (cached) setFavorites(cached);
     try {
       const { favorites } = await api.getFavorites();
       setFavorites(favorites);
+      setCache(FAVORITES_KEY, favorites);
       setError(false);
     } catch {
       setError(true); // zobrazíme možnosť skúsiť znova namiesto tichého skrytia
