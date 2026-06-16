@@ -15,6 +15,7 @@ import {
 } from "@dnd-kit/core";
 import { api } from "@/lib/api";
 import { getCache, setCache } from "@/lib/page-cache";
+import { checkBadges } from "@/lib/badge-check";
 import { round, sumTotals, todayISO } from "@/lib/nutrition";
 import { MEAL_LABELS, MEAL_ORDER, type Entry, type FavoriteItem, type MealType, type Profile } from "@/lib/types";
 import MacroSummary from "@/components/MacroSummary";
@@ -125,7 +126,13 @@ export default function TodayPage() {
   const refreshAll = useCallback(() => {
     setReload((r) => r + 1);
     load();
+    checkBadges(); // po pridaní jedla over, či pribudol odznak
   }, [load]);
+
+  // Pri prvom otvorení založ základnú líniu odznakov (bez toastov)
+  useEffect(() => {
+    checkBadges();
+  }, []);
 
   async function handleDelete(id: string) {
     applyEntries((prev) => prev.filter((e) => e.id !== id));

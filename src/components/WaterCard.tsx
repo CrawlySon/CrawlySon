@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { getCache, setCache } from "@/lib/page-cache";
+import { checkBadges } from "@/lib/badge-check";
 
 type Log = { id: string; ml: number; createdAt: string };
 type WaterState = { total: number; goal: number; logs: Log[] };
@@ -39,6 +40,7 @@ export default function WaterCard({ date, reloadSignal }: { date: string; reload
     try {
       await api.addWater(date, ml);
       await load();
+      checkBadges(); // splnenie cieľa vody môže odomknúť odznak
     } catch {
       await load();
     } finally {

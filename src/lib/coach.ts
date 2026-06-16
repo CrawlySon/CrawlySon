@@ -98,11 +98,11 @@ export async function unlockNewBadges(userId: string, ctx: BadgeContext): Promis
   return fresh;
 }
 
-// Štatistika dnešného dňa (pre pripomienky).
-export function todayStat(ctx: BadgeContext): DailyStat {
+// Štatistika konkrétneho dňa (prázdna, ak preň nie sú dáta).
+export function dayStat(ctx: BadgeContext, date: string): DailyStat {
   return (
-    ctx.byDate.get(ctx.today) ?? {
-      date: ctx.today,
+    ctx.byDate.get(date) ?? {
+      date,
       calories: 0,
       protein: 0,
       healthScore: null,
@@ -111,4 +111,9 @@ export function todayStat(ctx: BadgeContext): DailyStat {
       entryCount: 0,
     }
   );
+}
+
+// Štatistika dnešného dňa (pre pripomienky).
+export function todayStat(ctx: BadgeContext): DailyStat {
+  return dayStat(ctx, ctx.today);
 }
