@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { round } from "@/lib/nutrition";
-import { MEAL_LABELS, MEAL_ORDER, type MealType, type ParsedItem } from "@/lib/types";
+import { MEAL_LABELS, MEAL_ORDER, type MealType, type ParsedItem, type Favorite, type FavoriteItem } from "@/lib/types";
 import BarcodeScanner from "@/components/BarcodeScanner";
 
 type Props = {
@@ -19,7 +19,7 @@ type SpeechRecognition = any;
 export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Props) {
   const [meal, setMeal] = useState<MealType>(defaultMeal);
   const [mealTouched, setMealTouched] = useState(false);
-  const [tab, setTab] = useState<"ai" | "manual">("ai");
+  const [tab, setTab] = useState<"ai" | "manual" | "fav">("ai");
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,6 +34,10 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
   // Ručné pridanie
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<any[]>([]);
+
+  // Obľúbené (rýchle pridanie do vybranej časti dňa)
+  const [favorites, setFavorites] = useState<Favorite[]>([]);
+  const [favError, setFavError] = useState(false);
 
   // Skenovanie čiarových kódov
   const [scanning, setScanning] = useState(false);
@@ -81,6 +85,14 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
     }, 250);
     return () => clearTimeout(t);
   }, [query, tab]);
+
+  // Načítaj obľúbené raz (pre tab „Obľúbené")
+  useEffect(() => {
+    api
+      .getFavorites()
+      .then((r) => setFavorites(r.favorites))
+      .catch(() => setFavError(true));
+  }, []);
 
   function stopListening() {
     if (stopTimerRef.current) {
@@ -196,6 +208,25 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
     ]);
     setQuery("");
     setResults([]);
+  }
+
+  // Vloží položky obľúbeného do návrhu (uložia sa potom do vybranej časti dňa).
+  function addFavorite(fav: Favorite) {
+    const mapped: ParsedItem[] = (fav.items || []).map((it: FavoriteItem) => ({
+      name: it.name,
+      quantityGrams: it.quantityGrams,
+      calories: it.calories,
+      protein: it.protein,
+      carbs: it.carbs,
+      fat: it.fat,
+      fiber: it.fiber,
+      category: it.category,
+      subcategory: it.subcategory,
+      healthIndex: it.healthIndex,
+      confidence: 1,
+    }));
+    if (!mapped.length) return;
+    setItems((prev) => [...prev, ...mapped]);
   }
 
   async function onScanned(code: string) {
@@ -318,13 +349,19 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
             onClick={() => setTab("ai")}
             className={`flex-1 rounded-lg py-1.5 text-sm font-medium ${tab === "ai" ? "bg-white shadow" : "text-slate-500"}`}
           >
-            ✨ AI / diktovanie
+            ✨ AI
           </button>
           <button
             onClick={() => setTab("manual")}
             className={`flex-1 rounded-lg py-1.5 text-sm font-medium ${tab === "manual" ? "bg-white shadow" : "text-slate-500"}`}
           >
-            🔍 Z databázy
+            🔍 Databáza
+          </button>
+          <button
+            onClick={() => setTab("fav")}
+            className={`flex-1 rounded-lg py-1.5 text-sm font-medium ${tab === "fav" ? "bg-white shadow" : "text-slate-500"}`}
+          >
+            ★ Obľúbené
           </button>
         </div>
 
@@ -412,6 +449,41 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
                 <ManualRow key={f.id} food={f} onAdd={addManual} />
               ))}
               {query && !results.length && <p className="py-2 text-sm text-slate-400">Nič nenájdené.</p>}
+            </div>
+          </div>
+        )}
+
+        {tab === "fav" && (
+          <div className="card p-3">
+            <p className="mb-2 text-xs text-slate-500">
+              Ťukni na obľúbené – pridá sa do návrhu a uloží do <b>{MEAL_LABELS[meal]}</b>.
+            </p>
+            {favError && <p className="py-2 text-sm text-red-500">Nepodarilo sa načítať obľúbené.</p>}
+            {!favError && favorites.length === 0 && (
+              <p className="py-4 text-center text-sm text-slate-400">
+                Zatiaľ žiadne obľúbené. Ulož si jedlo cez ★ pri zázname na obrazovke Dnes.
+              </p>
+            )}
+            <div className="max-h-72 space-y-1 overflow-y-auto">
+              {favorites.map((f) => {
+                const kcal = (f.items || []).reduce((s, it) => s + (it.calories || 0), 0);
+                return (
+                  <button
+                    key={f.id}
+                    onClick={() => addFavorite(f)}
+                    className="flex w-full items-center gap-2 rounded-xl border border-slate-100 bg-white px-3 py-2 text-left active:bg-brand-50"
+                  >
+                    <span className="text-amber-400">★</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium text-slate-800">{f.name}</span>
+                      <span className="block text-[11px] text-slate-400">
+                        {(f.items || []).length} {(f.items || []).length === 1 ? "položka" : "položky/iek"} · {round(kcal)} kcal
+                      </span>
+                    </span>
+                    <span className="text-brand-600">＋</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
