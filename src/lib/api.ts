@@ -48,6 +48,9 @@ export const api = {
 
   getBadges: () => req<{ badges: Badge[]; earnedCount: number; total: number }>(`/api/badges`),
 
+  calendarDays: (from: string, to: string) =>
+    req<{ dates: string[] }>(`/api/calendar?from=${from}&to=${to}`),
+
   searchFoods: (q: string, scope: "mine" | "global" | "all" = "all") =>
     req<{ foods: any[] }>(`/api/foods?q=${encodeURIComponent(q)}&scope=${scope}`),
   addFood: (data: any) => req<{ food: any }>(`/api/foods`, { method: "POST", body: JSON.stringify(data) }),

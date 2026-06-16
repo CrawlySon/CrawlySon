@@ -22,6 +22,7 @@ import MacroSummary from "@/components/MacroSummary";
 import AddFoodSheet from "@/components/AddFoodSheet";
 import WaterCard from "@/components/WaterCard";
 import QuickFavorites from "@/components/QuickFavorites";
+import CalendarPopup from "@/components/CalendarPopup";
 
 function entryToFavItem(e: Entry): FavoriteItem {
   return {
@@ -72,6 +73,7 @@ export default function TodayPage() {
   const [favReload, setFavReload] = useState(0);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [hideFab, setHideFab] = useState(false);
+  const [showCal, setShowCal] = useState(false);
 
   // Plávajúce tlačidlo sa schová pri scrollovaní dole a zobrazí pri scrollovaní hore
   useEffect(() => {
@@ -215,19 +217,15 @@ export default function TodayPage() {
           ‹
         </button>
         <div className="text-center">
-          {/* Ťuknutím na dátum sa otvorí kalendár (natívny date picker) */}
-          <label className="relative inline-flex cursor-pointer items-center gap-1">
+          {/* Ťuknutím na dátum sa otvorí vlastný kalendár s bodkami pri dňoch so záznamom */}
+          <button
+            onClick={() => setShowCal(true)}
+            className="inline-flex cursor-pointer items-center gap-1"
+            aria-label="Vyber dátum"
+          >
             <h1 className="text-lg font-bold capitalize text-slate-800">{formatDate(date)}</h1>
             <span className="text-slate-400">📅</span>
-            <input
-              type="date"
-              value={date}
-              max={todayISO()}
-              onChange={(e) => e.target.value && setDate(e.target.value)}
-              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-              aria-label="Vyber dátum"
-            />
-          </label>
+          </button>
           {date !== todayISO() && (
             <button onClick={() => setDate(todayISO())} className="block w-full text-xs text-brand-600">
               späť na dnes
@@ -322,6 +320,10 @@ export default function TodayPage() {
 
       {sheet && (
         <AddFoodSheet date={date} defaultMeal={sheet} onClose={() => setSheet(null)} onSaved={refreshAll} />
+      )}
+
+      {showCal && (
+        <CalendarPopup value={date} max={todayISO()} onSelect={setDate} onClose={() => setShowCal(false)} />
       )}
     </div>
   );
