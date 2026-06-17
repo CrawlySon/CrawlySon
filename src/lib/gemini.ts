@@ -14,19 +14,45 @@ const FALLBACK_MODELS = Array.from(
   )
 );
 
-// Zavolá generateContent a pri chybe skúša ďalšie modely z reťaze.
+// Zavolá generateContent a pri chybe ALEBO timeoute skúša ďalšie modely z reťaze.
+// Každý model má vlastný časový limit – ak „visí" (typická príčina 504),
+// po uplynutí limitu sa preruší a skúsi sa ďalší model, nech sa fallback
+// stihne v rámci behu funkcie.
+const PER_MODEL_TIMEOUT_MS = Number(process.env.GEMINI_MODEL_TIMEOUT_MS || 12000);
+
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(`Model "${label}" neodpovedal do ${ms} ms (timeout).`)), ms);
+    p.then(
+      (v) => {
+        clearTimeout(t);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(t);
+        reject(e);
+      }
+    );
+  });
+}
+
 async function generateWithFallback(
   ai: GoogleGenAI,
-  request: Record<string, any>
+  request: Record<string, any>,
+  timeoutMs: number = PER_MODEL_TIMEOUT_MS
 ): Promise<{ response: any; model: string }> {
   let lastErr: unknown;
   for (const model of FALLBACK_MODELS) {
     try {
-      const response = await ai.models.generateContent({ ...request, model } as any);
+      const response = await withTimeout(
+        ai.models.generateContent({ ...request, model } as any),
+        timeoutMs,
+        model
+      );
       return { response, model };
     } catch (e) {
       lastErr = e;
-      console.error(`Gemini model "${model}" zlyhal, skúšam ďalší:`, (e as any)?.message || e);
+      console.error(`Gemini model "${model}" zlyhal/timeout, skúšam ďalší:`, (e as any)?.message || e);
     }
   }
   throw lastErr instanceof Error
@@ -246,13 +272,17 @@ Odpovedz IBA platným JSON objektom (bez markdownu) v tvare:
  "protein": g, "carbs": g, "fat": g, "fiber": g_alebo_null,
  "category": "kategória (napr. Sladké, Nápoje, Mäso)", "healthIndex": 0-10}`;
 
-  const { response, model } = await generateWithFallback(ai, {
-    contents: prompt,
-    config: {
-      tools: [{ googleSearch: {} }],
-      temperature: 0.2,
+  const { response, model } = await generateWithFallback(
+    ai,
+    {
+      contents: prompt,
+      config: {
+        tools: [{ googleSearch: {} }],
+        temperature: 0.2,
+      },
     },
-  });
+    18000 // web grounding býva pomalšie – dlhší limit na model
+  );
 
   const um: any = (response as any).usageMetadata || {};
   const usage = {
