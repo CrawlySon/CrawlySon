@@ -162,12 +162,16 @@ PRAVIDLÁ:
     ako „suché"/surové, hodnoť ich ako ich varenú prílohu), ovsené vločky,
     syry, chudé červené mäso.
   • 3–4: biele pečivo, údeniny, vyprážané jedlá, sladené nápoje (kola, džús,
-    energetické), a SLADENÉ/OCHUTENÉ mliečne výrobky a nápoje (ochutené mlieka
-    ako Miller Milch, kakao, ochutené jogurty, proteínové nápoje a tyčinky s cukrom).
+    energetické) a bežné SLADENÉ/OCHUTENÉ mliečne výrobky a nápoje (ochutené
+    mlieka ako kakao, ochutené jogurty so štandardným obsahom bielkovín).
   • 0–2: fast food (hamburger, hranolky), sladkosti, čokoláda, zákusky, chipsy,
     alkohol. Napr. hamburger z McDonald's ≈ 1–2.
-  DÔLEŽITÉ: ak je výrobok mliečny ALE sladený/ochutený (má pridaný cukor),
-  NEhodnoť ho ako biely jogurt/mlieko – patrí medzi sladené (3–4).
+  ÚPRAVY (modifikátory):
+  - Ak je výrobok mliečny ALE sladený/ochutený (má pridaný cukor), NEhodnoť ho
+    ako biely jogurt/mlieko – patrí medzi sladené.
+  - Ak má sladený výrobok zároveň VYSOKÝ podiel bielkovín (proteínové mlieka,
+    proteínové nápoje/jogurty, napr. Miller Milch Protein), pridaj +1 oproti
+    bežnému sladenému – teda typicky 4–5, lebo bielkoviny čiastočne vyvážia cukor.
   Index je vlastnosť jedla (nezávisí od zjedeného množstva).
 
 - ČISTÁ VODA (aj perlivá/neperlivá neochutená) sa NEukladá ako jedlo. Jej množstvo
