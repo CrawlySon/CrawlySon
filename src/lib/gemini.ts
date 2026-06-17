@@ -1,23 +1,48 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import type { ParsedItem } from "./types";
 
-// Reťaz modelov – ak primárny zlyhá (napr. „on demand"/preťaženie/kvóta),
-// skúsi sa ďalší v poradí. Primárny sa berie z GEMINI_MODEL.
+// Reťaz modelov – ak primárny zlyhá (preťaženie/kvóta/timeout), skúsi sa ďalší.
+// Primárny sa berie z GEMINI_MODEL. Zámerne miešame rôzne rodiny (2.5/2.0/1.5),
+// lebo majú oddelené kapacity – keď je jedna preťažená (503), iná často beží.
 const FALLBACK_MODELS = Array.from(
   new Set(
     [
-      process.env.GEMINI_MODEL || "gemini-3.5-flash",
-      "gemini-2.5-flash",
+      process.env.GEMINI_MODEL || "gemini-2.5-flash",
       "gemini-2.0-flash",
       "gemini-flash-latest",
+      "gemini-1.5-flash",
+      "gemini-1.5-flash-8b",
     ].filter(Boolean)
   )
 );
 
-// Zavolá generateContent a pri chybe ALEBO timeoute skúša ďalšie modely z reťaze.
-// Každý model má vlastný časový limit – ak „visí" (typická príčina 504),
-// po uplynutí limitu sa preruší a skúsi sa ďalší model, nech sa fallback
-// stihne v rámci behu funkcie.
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// Zistí HTTP status z chyby (rôzne SDK ho dávajú inak).
+function errStatus(e: any): number | null {
+  const s = e?.status ?? e?.statusCode ?? e?.code;
+  if (typeof s === "number") return s;
+  const m = String(e?.message || "");
+  const mm = m.match(/\b(4\d\d|5\d\d)\b/);
+  return mm ? Number(mm[1]) : null;
+}
+
+// Je to dočasné preťaženie/kvóta (oplatí sa krátko počkať a skúsiť znova)?
+function isOverloaded(e: any): boolean {
+  const s = errStatus(e);
+  if (s === 503 || s === 429) return true;
+  const m = String(e?.message || "").toUpperCase();
+  return (
+    m.includes("UNAVAILABLE") ||
+    m.includes("RESOURCE_EXHAUSTED") ||
+    m.includes("OVERLOAD") ||
+    m.includes("HIGH DEMAND")
+  );
+}
+
+// Zavolá generateContent s časovým limitom, retry pri preťažení a fallbackom na
+// ďalšie modely. Per-model limit rieši „visiace" requesty (príčina 504),
+// retry rieši dočasné 503/429 (preťaženie kapacity Gemini).
 const PER_MODEL_TIMEOUT_MS = Number(process.env.GEMINI_MODEL_TIMEOUT_MS || 12000);
 
 function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
@@ -42,21 +67,41 @@ async function generateWithFallback(
   timeoutMs: number = PER_MODEL_TIMEOUT_MS
 ): Promise<{ response: any; model: string }> {
   let lastErr: unknown;
+  let sawOverload = false;
+
   for (const model of FALLBACK_MODELS) {
-    try {
-      const response = await withTimeout(
-        ai.models.generateContent({ ...request, model } as any),
-        timeoutMs,
-        model
-      );
-      return { response, model };
-    } catch (e) {
-      lastErr = e;
-      console.error(`Gemini model "${model}" zlyhal/timeout, skúšam ďalší:`, (e as any)?.message || e);
+    const maxAttempts = 2; // 1 pokus + 1 rýchly retry pri preťažení
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const response = await withTimeout(
+          ai.models.generateContent({ ...request, model } as any),
+          timeoutMs,
+          model
+        );
+        return { response, model };
+      } catch (e) {
+        lastErr = e;
+        const overloaded = isOverloaded(e);
+        if (overloaded) sawOverload = true;
+        console.error(
+          `Gemini model "${model}" pokus ${attempt}/${maxAttempts} zlyhal:`,
+          (e as any)?.message || e
+        );
+        if (overloaded && attempt < maxAttempts) {
+          await sleep(600 * attempt); // krátky backoff a skús ten istý model ešte raz
+          continue;
+        }
+        break; // skús ďalší model v reťazi
+      }
     }
   }
+
+  // Priateľská hláška: keď bolo všetko preťažené, nech používateľ vie skúsiť neskôr.
+  if (sawOverload) {
+    throw new Error("AI je práve preťažené (Google 503). Skús to prosím o chvíľu znova.");
+  }
   throw lastErr instanceof Error
-    ? new Error(`Gemini momentálne nedostupný (skúšané: ${FALLBACK_MODELS.join(", ")}). ${lastErr.message}`)
+    ? new Error(`Gemini nedostupný (skúšané: ${FALLBACK_MODELS.join(", ")}). ${lastErr.message}`)
     : new Error("Všetky Gemini modely zlyhali.");
 }
 
