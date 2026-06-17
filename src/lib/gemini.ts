@@ -153,13 +153,21 @@ PRAVIDLÁ:
   subcategory "Bravčové mäso"; losos → "Ryby" / "Morské ryby".
 
 - Ku každej položke urči "healthIndex" – celé číslo 0 až 10 vyjadrujúce
-  zdravosť jedla. Drž sa týchto orientačných pravidiel:
-  • 9–10: čerstvé ovocie a zelenina, strukoviny, ryby.
-  • 7–8: celozrnné obilniny, orechy, vajcia, biele mäso, biely jogurt.
-  • 5–6: varené prílohy (ryža, zemiaky), syry, chudé mäso.
-  • 3–4: vyprážané jedlá, biele pečivo, údeniny, sladené nápoje.
-  • 0–2: fast food (hamburger, hranolky z fast foodu), sladkosti, alkohol,
-    vyprážané sladké. Napr. hamburger z McDonald's ≈ 1–2.
+  zdravosť jedla. Zohľadni najmä: pridaný cukor, nasýtené tuky, soľ, stupeň
+  spracovania a obsah vlákniny. Drž sa týchto pravidiel:
+  • 9–10: čerstvé ovocie a zelenina, strukoviny, ryby, neochutená voda.
+  • 7–8: celozrnné obilniny, orechy a semená, vajcia, biele mäso,
+    NEochutené (neslazené) mliečne výrobky – biely jogurt, tvaroh, mlieko.
+  • 5–6: varené škrobové prílohy (ryža, cestoviny, zemiaky – aj keď sú uvedené
+    ako „suché"/surové, hodnoť ich ako ich varenú prílohu), ovsené vločky,
+    syry, chudé červené mäso.
+  • 3–4: biele pečivo, údeniny, vyprážané jedlá, sladené nápoje (kola, džús,
+    energetické), a SLADENÉ/OCHUTENÉ mliečne výrobky a nápoje (ochutené mlieka
+    ako Miller Milch, kakao, ochutené jogurty, proteínové nápoje a tyčinky s cukrom).
+  • 0–2: fast food (hamburger, hranolky), sladkosti, čokoláda, zákusky, chipsy,
+    alkohol. Napr. hamburger z McDonald's ≈ 1–2.
+  DÔLEŽITÉ: ak je výrobok mliečny ALE sladený/ochutený (má pridaný cukor),
+  NEhodnoť ho ako biely jogurt/mlieko – patrí medzi sladené (3–4).
   Index je vlastnosť jedla (nezávisí od zjedeného množstva).
 
 - ČISTÁ VODA (aj perlivá/neperlivá neochutená) sa NEukladá ako jedlo. Jej množstvo
