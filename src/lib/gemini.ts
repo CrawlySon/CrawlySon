@@ -2,16 +2,19 @@ import { GoogleGenAI, Type } from "@google/genai";
 import type { ParsedItem } from "./types";
 
 // Reťaz modelov – ak primárny zlyhá (preťaženie/kvóta/timeout), skúsi sa ďalší.
-// Primárny sa berie z GEMINI_MODEL. Zámerne miešame rôzne rodiny (2.5/2.0/1.5),
-// lebo majú oddelené kapacity – keď je jedna preťažená (503), iná často beží.
+// Primárny sa berie z GEMINI_MODEL. Stav k 6/2026 (overené v Google docs):
+//  • gemini-3.5-flash   – aktuálny GA Flash (od 19.5.2026), primárny
+//  • gemini-flash-latest – alias na najnovší Flash
+//  • gemini-3.1-flash-lite – lacný, nízka latencia, iná kapacita (dobrý fallback pri 503)
+//  • gemini-2.5-flash   – beží do 16.10.2026, posledná záchrana
+// POZN.: rodiny 1.5 a 2.0 sú už vypnuté (404), preto v reťazi nie sú.
 const FALLBACK_MODELS = Array.from(
   new Set(
     [
-      process.env.GEMINI_MODEL || "gemini-2.5-flash",
-      "gemini-2.0-flash",
+      process.env.GEMINI_MODEL || "gemini-3.5-flash",
       "gemini-flash-latest",
-      "gemini-1.5-flash",
-      "gemini-1.5-flash-8b",
+      "gemini-3.1-flash-lite",
+      "gemini-2.5-flash",
     ].filter(Boolean)
   )
 );
