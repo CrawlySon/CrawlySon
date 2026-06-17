@@ -298,7 +298,78 @@ export async function parseFood(text: string, reference: ReferenceFood[]): Promi
   return { items, mealType, waterMl, usage };
 }
 
-// ── Agentické dohľadanie produktu na webe (Google Search grounding) ──
+// ── Dávkové prehodnotenie zdravosti (re-scoring existujúcich záznamov) ──
+// Ohodnotí naraz zoznam položiek podľa rovnakej rubriky ako parseFood,
+// aby spätné prehodnotenie minulo minimum tokenov.
+const HEALTH_RUBRIC = `Rubrika zdravosti (healthIndex, celé číslo 0..10). Zohľadni pridaný cukor,
+nasýtené tuky, soľ, spracovanie a vlákninu.
+- 9–10: čerstvé ovocie a zelenina, strukoviny, ryby, neochutená voda.
+- 7–8: celozrnné obilniny, orechy a semená, vajcia, biele mäso, NEslazené mliečne (biely jogurt, tvaroh, mlieko).
+- 5–6: varené škrobové prílohy (ryža, cestoviny, zemiaky – aj „suché"/surové ako varené), ovsené vločky, syry, chudé červené mäso.
+- 3–4: biele pečivo, údeniny, vyprážané jedlá, sladené nápoje a bežné sladené/ochutené mliečne (kakao, ochutené jogurty).
+- 0–2: fast food, sladkosti, čokoláda, zákusky, chipsy, alkohol.
+Modifikátory: sladený/ochutený mliečny výrobok NEhodnoť ako biely jogurt (patrí medzi sladené);
+ak je sladený ALE s vysokým podielom bielkovín (proteínové nápoje/jogurty), pridaj +1 (typicky 4–5).`;
+
+export async function scoreHealthBatch(
+  items: { name: string; category: string | null }[]
+): Promise<Map<number, number>> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error("Chýba GEMINI_API_KEY v prostredí.");
+  const ai = new GoogleGenAI({ apiKey });
+
+  const list = items
+    .map((it, i) => `${i + 1}. ${it.name}${it.category ? ` (kat. ${it.category})` : ""}`)
+    .join("\n");
+
+  const prompt = `Ohodnoť zdravosť každej položky podľa pravidiel a vráť pre každú jej "index" (poradové číslo zo zoznamu) a "healthIndex" (0..10).\n\n${HEALTH_RUBRIC}\n\nPOLOŽKY:\n${list}`;
+
+  const schema = {
+    type: Type.OBJECT,
+    properties: {
+      scores: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            index: { type: Type.NUMBER, description: "Poradové číslo položky zo zoznamu (1-based)" },
+            healthIndex: { type: Type.NUMBER, description: "Zdravosť 0..10" },
+          },
+          required: ["index", "healthIndex"],
+        },
+      },
+    },
+    required: ["scores"],
+  };
+
+  const { response } = await generateWithFallback(ai, {
+    contents: prompt,
+    config: {
+      systemInstruction: "Si výživový asistent. Hodnoť striktne podľa zadanej rubriky a vráť iba JSON.",
+      responseMimeType: "application/json",
+      responseSchema: schema,
+      temperature: 0.1,
+    },
+  });
+
+  const raw = response.text;
+  const out = new Map<number, number>();
+  if (!raw) return out;
+  let parsed: { scores?: { index?: number; healthIndex?: number }[] };
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return out;
+  }
+  for (const s of parsed.scores || []) {
+    const idx = Number(s.index);
+    const hi = Number(s.healthIndex);
+    if (Number.isFinite(idx) && Number.isFinite(hi)) {
+      out.set(idx - 1, Math.min(10, Math.max(0, Math.round(hi)))); // 0-based index
+    }
+  }
+  return out;
+}
 export type WebFood = {
   name: string;
   calories: number; // na 100 g
