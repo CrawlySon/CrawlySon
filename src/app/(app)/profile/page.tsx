@@ -6,7 +6,7 @@ import { api } from "@/lib/api";
 import { recommendedCalories, suggestedMacros, tdee } from "@/lib/nutrition";
 import { enablePush, disablePush, isPushSupported, isStandalone } from "@/lib/push-client";
 import { getCache, setCache } from "@/lib/page-cache";
-import type { Profile, Badge } from "@/lib/types";
+import type { Profile, Badge, Streak } from "@/lib/types";
 
 const DEFAULT_WATER_RULES = [
   { hour: 12, minMl: 500 },
@@ -340,7 +340,63 @@ export default function ProfilePage() {
   );
 }
 
-type BadgesData = { badges: Badge[]; earnedCount: number; total: number };
+type BadgesData = { badges: Badge[]; streaks: Streak[]; earnedCount: number; total: number };
+
+// Slovenský tvar slova „deň" podľa počtu.
+function dni(n: number): string {
+  if (n === 1) return "deň";
+  if (n >= 2 && n <= 4) return "dni";
+  return "dní";
+}
+
+function StreaksSection({ streaks }: { streaks: Streak[] }) {
+  if (!streaks || streaks.length === 0) return null;
+  // Najprv aktívne/rekordné série, potom podľa rekordu.
+  const sorted = [...streaks].sort((a, b) => b.current - a.current || b.best - a.best);
+
+  return (
+    <section className="card mb-4 p-4">
+      <h2 className="mb-1 font-semibold text-slate-700">🔥 Série a rekordy</h2>
+      <p className="mb-3 text-xs text-slate-400">Drž sériu každý deň a prekonaj svoj osobný rekord.</p>
+      <div className="space-y-3">
+        {sorted.map((s) => {
+          const toBeat = Math.max(0, s.best - s.current); // dní k vyrovnaniu rekordu
+          const pct = s.best > 0 ? Math.min(100, Math.round((s.current / s.best) * 100)) : s.current > 0 ? 100 : 0;
+          return (
+            <div key={s.type}>
+              <div className="flex items-center justify-between text-sm">
+                <span className="font-medium text-slate-700">
+                  {s.emoji} {s.title}
+                </span>
+                <span className={s.current > 0 ? "font-semibold text-brand-700" : "text-slate-400"}>
+                  {s.current > 0 ? `${s.current} ${dni(s.current)}` : "—"}
+                </span>
+              </div>
+              <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                <div
+                  className={`h-full rounded-full transition-all ${s.isRecord ? "bg-amber-400" : "bg-brand-500"}`}
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+              <p className="mt-1 text-[11px] text-slate-500">
+                {s.isRecord && s.current > 0 ? (
+                  <span className="font-medium text-amber-600">🏆 Osobný rekord: {s.current} {dni(s.current)}!</span>
+                ) : s.best > 0 ? (
+                  <>
+                    Rekord: <b className="text-slate-700">{s.best}</b> {dni(s.best)}
+                    {s.current > 0 ? ` · ešte ${toBeat} ${dni(toBeat)} k vyrovnaniu` : " · séria prerušená"}
+                  </>
+                ) : (
+                  "Zatiaľ žiadna séria – začni dnes!"
+                )}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
 
 function BadgesSection() {
   const [data, setData] = useState<BadgesData | null>(() => getCache<BadgesData>("badges") ?? null);
@@ -359,6 +415,8 @@ function BadgesSection() {
   if (!data) return null;
 
   return (
+    <>
+    {data.streaks && <StreaksSection streaks={data.streaks} />}
     <section className="card mb-4 p-4">
       <div className="mb-3 flex items-center justify-between">
         <h2 className="font-semibold text-slate-700">🏅 Odznaky</h2>
@@ -388,6 +446,7 @@ function BadgesSection() {
 
       {selected && <BadgeModal badge={selected} onClose={() => setSelected(null)} />}
     </section>
+    </>
   );
 }
 

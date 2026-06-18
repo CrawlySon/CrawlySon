@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getUserId } from "@/lib/server-auth";
 import { BADGES } from "@/lib/badges";
-import { buildBadgeContext, unlockNewBadges } from "@/lib/coach";
+import { buildBadgeContext, unlockNewBadges, buildStreaks } from "@/lib/coach";
 
 export const runtime = "nodejs";
 
@@ -20,6 +20,7 @@ export async function GET() {
 
   const ctx = await buildBadgeContext(userId, user);
   await unlockNewBadges(userId, ctx);
+  const streaks = await buildStreaks(userId, ctx);
 
   const earned = await prisma.achievement.findMany({
     where: { userId },
@@ -45,6 +46,7 @@ export async function GET() {
 
   return NextResponse.json({
     badges,
+    streaks,
     earnedCount: badges.filter((b) => b.earned).length,
     total: badges.length,
   });

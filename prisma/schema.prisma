@@ -45,6 +45,7 @@ model User {
   favorites    Favorite[]
   pushSubs     PushSubscription[]
   achievements Achievement[]
+  streakRecords StreakRecord[]
 }
 
 // Odomknutý odznak (achievement). Kľúč zodpovedá katalógu v src/lib/badges.ts.
@@ -56,6 +57,21 @@ model Achievement {
   earnedAt DateTime @default(now())
 
   @@unique([userId, key])
+  @@index([userId])
+}
+
+// Najdlhšia dosiahnutá séria daného typu (osobný rekord). Typ zodpovedá
+// katalógu STREAKS v src/lib/badges.ts. Prežije aj zmazanie starých dní.
+model StreakRecord {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String
+  best      Int       @default(0)
+  bestAt    DateTime?
+  updatedAt DateTime  @updatedAt
+
+  @@unique([userId, type])
   @@index([userId])
 }
 

@@ -11,7 +11,7 @@ async function req<T>(url: string, options?: RequestInit): Promise<T> {
   return res.json();
 }
 
-import type { Entry, ParsedItem, Profile, MealType, Favorite, FavoriteItem, Badge } from "./types";
+import type { Entry, ParsedItem, Profile, MealType, Favorite, FavoriteItem, Badge, Streak } from "./types";
 
 export const api = {
   getEntries: (date: string) => req<{ entries: Entry[] }>(`/api/entries?date=${date}`),
@@ -46,7 +46,8 @@ export const api = {
   updateProfile: (data: Partial<Profile>) =>
     req<{ profile: Profile }>(`/api/profile`, { method: "PATCH", body: JSON.stringify(data) }),
 
-  getBadges: () => req<{ badges: Badge[]; earnedCount: number; total: number }>(`/api/badges`),
+  getBadges: () =>
+    req<{ badges: Badge[]; streaks: Streak[]; earnedCount: number; total: number }>(`/api/badges`),
 
   calendarDays: (from: string, to: string) =>
     req<{ dates: string[] }>(`/api/calendar?from=${from}&to=${to}`),

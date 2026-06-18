@@ -4,9 +4,9 @@
 import { api } from "./api";
 import { getCache, setCache } from "./page-cache";
 import { showToast } from "./toast";
-import type { Badge } from "./types";
+import type { Badge, Streak } from "./types";
 
-type BadgesData = { badges: Badge[]; earnedCount: number; total: number };
+type BadgesData = { badges: Badge[]; streaks: Streak[]; earnedCount: number; total: number };
 
 export async function checkBadges(): Promise<void> {
   const prev = getCache<BadgesData>("badges");

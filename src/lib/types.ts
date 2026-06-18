@@ -107,3 +107,13 @@ export type Badge = {
   current: number | null;
   target: number | null;
 };
+
+export type Streak = {
+  type: string;
+  emoji: string;
+  title: string;
+  desc: string;
+  current: number;
+  best: number;
+  isRecord: boolean;
+};
