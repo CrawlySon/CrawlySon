@@ -54,7 +54,8 @@ async function run(req: Request) {
   let notified = 0;
 
   for (const u of users) {
-    const ctx = await buildBadgeContext(u.id, u);
+    try {
+      const ctx = await buildBadgeContext(u.id, u);
 
     // 1) Gratulácia k novo odomknutým odznakom (najvyššia priorita, kedykoľvek)
     const fresh = await unlockNewBadges(u.id, ctx);
@@ -146,6 +147,10 @@ async function run(req: Request) {
         await setState("fruit");
         continue;
       }
+    }
+    } catch (e) {
+      console.error("coach: používateľ zlyhal, pokračujem:", u.id, (e as any)?.message || e);
+      continue;
     }
   }
 
