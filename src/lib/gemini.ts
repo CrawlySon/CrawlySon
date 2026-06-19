@@ -455,3 +455,77 @@ Odpovedz IBA platným JSON objektom (bez markdownu) v tvare:
   };
   return { food, usage };
 }
+
+// Prečíta tabuľku nutričných hodnôt z fotky obalu (vision) a vráti hodnoty na 100 g.
+// Názov produktu na tabuľke zvyčajne nie je – ten dopĺňa používateľ.
+export async function parseNutritionLabel(imageBase64: string, mimeType: string): Promise<WebLookupResult> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error("Chýba GEMINI_API_KEY v prostredí.");
+  const ai = new GoogleGenAI({ apiKey });
+
+  const prompt = `Na obrázku je tabuľka nutričných hodnôt z obalu potravinového výrobku.
+Prečítaj z nej hodnoty NA 100 g (alebo 100 ml) – ak je v tabuľke aj stĺpec na porciu,
+použi stĺpec na 100 g. Energiu ber v kcal (nie v kJ; ak je len kJ, preveď: kcal = kJ / 4,184).
+Ak je na obale čitateľný názov výrobku, vráť ho, inak nechaj prázdny reťazec.
+Odhadni aj index zdravosti (healthIndex) 0–10 a hlavnú kategóriu.
+Odpovedz IBA platným JSON objektom (bez markdownu) v tvare:
+{"found": true/false, "name": "názov alebo \\"\\"", "calories": kcal_na_100g,
+ "protein": g, "carbs": g, "fat": g, "fiber": g_alebo_null,
+ "category": "kategória (napr. Sladké, Nápoje, Mäso)", "healthIndex": 0-10}
+Ak tabuľku nevieš spoľahlivo prečítať, vráť {"found": false}.`;
+
+  const { response, model } = await generateWithFallback(
+    ai,
+    {
+      contents: [
+        { inlineData: { mimeType, data: imageBase64 } },
+        { text: prompt },
+      ],
+      config: {
+        responseMimeType: "application/json",
+        temperature: 0.1,
+      },
+    },
+    20000 // čítanie obrázka býva pomalšie
+  );
+
+  const um: any = (response as any).usageMetadata || {};
+  const usage = {
+    model,
+    promptTokens: Number(um.promptTokenCount ?? 0),
+    outputTokens: Number(um.candidatesTokenCount ?? 0),
+    totalTokens: Number(um.totalTokenCount ?? 0),
+  };
+
+  const raw = (response.text || "").trim();
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) return { food: null, usage };
+
+  let parsed: any;
+  try {
+    parsed = JSON.parse(match[0]);
+  } catch {
+    return { food: null, usage };
+  }
+
+  if (!parsed || parsed.found === false || parsed.calories == null) {
+    return { food: null, usage };
+  }
+
+  const num = (v: any) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+  const food: WebFood = {
+    name: String(parsed.name || "").trim(),
+    calories: Math.max(0, Math.round(num(parsed.calories))),
+    protein: Math.max(0, Math.round(num(parsed.protein) * 10) / 10),
+    carbs: Math.max(0, Math.round(num(parsed.carbs) * 10) / 10),
+    fat: Math.max(0, Math.round(num(parsed.fat) * 10) / 10),
+    fiber: parsed.fiber != null && Number.isFinite(Number(parsed.fiber)) ? Number(parsed.fiber) : null,
+    category: parsed.category ? String(parsed.category) : null,
+    healthIndex:
+      parsed.healthIndex != null && Number.isFinite(Number(parsed.healthIndex))
+        ? Math.min(10, Math.max(0, Math.round(Number(parsed.healthIndex))))
+        : null,
+    found: true,
+  };
+  return { food, usage };
+}

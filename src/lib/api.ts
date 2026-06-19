@@ -66,6 +66,23 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ name, code }),
     }),
+  parseNutritionPhoto: (imageBase64: string, mimeType: string) =>
+    req<{
+      found: boolean;
+      nutrition?: {
+        name: string;
+        calories: number;
+        protein: number;
+        carbs: number;
+        fat: number;
+        fiber: number | null;
+        category: string | null;
+        healthIndex: number | null;
+      };
+    }>(`/api/barcode/photo`, {
+      method: "POST",
+      body: JSON.stringify({ imageBase64, mimeType }),
+    }),
 
   getWater: (date: string) =>
     req<{ logs: { id: string; ml: number; createdAt: string }[]; total: number; goal: number }>(

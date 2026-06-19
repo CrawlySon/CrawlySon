@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { api } from "@/lib/api";
 import { round } from "@/lib/nutrition";
 import { MEAL_LABELS, MEAL_ORDER, type MealType, type ParsedItem, type Favorite, type FavoriteItem } from "@/lib/types";
@@ -53,6 +53,8 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
     healthIndex: number | null;
   }>({ name: "", calories: 0, protein: 0, carbs: 0, fat: 0, category: "", healthIndex: null });
   const [estimating, setEstimating] = useState(false);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [showForm, setShowForm] = useState(false);
 
   // Zistenie podpory rozpoznávania reči až na klientovi (bez SSR nesúladu)
   useEffect(() => {
@@ -241,8 +243,9 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
         setScanMsg(`Nájdené (${r.source === "openfoodfacts" ? "Open Food Facts" : "databáza"}): ${r.food.name} — zvoľ gramáž a pridaj.`);
       } else {
         setUnknownCode(code);
+        setShowForm(false);
         setUnknownForm({ name: "", calories: 0, protein: 0, carbs: 0, fat: 0, category: "", healthIndex: null });
-        setScanMsg(`Kód ${code} nie je v databázach. Napíš názov a nechaj AI dohľadať údaje, alebo zadaj ručne.`);
+        setScanMsg(`Kód ${code} nie je v databázach. Dohľadaj cez AI, odfoť tabuľku nutričných hodnôt, alebo zadaj ručne.`);
       }
     } catch (e: any) {
       setScanMsg(e.message || "Chyba pri hľadaní kódu.");
@@ -267,6 +270,71 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
       setScanMsg(e.message || "Chyba pri dohľadávaní.");
     } finally {
       setEstimating(false);
+    }
+  }
+
+  // Zmenší fotku (max strana 1280 px, JPEG ~0,7) a vráti base64 bez prefixu.
+  async function fileToCompressedBase64(file: File): Promise<{ base64: string; mime: string }> {
+    const dataUrl = await new Promise<string>((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(r.result as string);
+      r.onerror = rej;
+      r.readAsDataURL(file);
+    });
+    const img = await new Promise<HTMLImageElement>((res, rej) => {
+      const i = new Image();
+      i.onload = () => res(i);
+      i.onerror = rej;
+      i.src = dataUrl;
+    });
+    const maxDim = 1280;
+    const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+    const w = Math.max(1, Math.round(img.width * scale));
+    const h = Math.max(1, Math.round(img.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return { base64: dataUrl.split(",")[1] || "", mime: file.type || "image/jpeg" };
+    ctx.drawImage(img, 0, 0, w, h);
+    const out = canvas.toDataURL("image/jpeg", 0.7);
+    return { base64: out.split(",")[1] || "", mime: "image/jpeg" };
+  }
+
+  // Odfotenie tabuľky nutričných hodnôt → AI ju prečíta a predvyplní formulár.
+  async function onLabelPhoto(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // umožni vybrať tú istú fotku znova
+    if (!file) return;
+    setPhotoBusy(true);
+    setScanMsg("Čítam tabuľku z fotky…");
+    try {
+      const { base64, mime } = await fileToCompressedBase64(file);
+      if (!base64) throw new Error("Fotku sa nepodarilo spracovať.");
+      const r = await api.parseNutritionPhoto(base64, mime);
+      if (r.found && r.nutrition) {
+        const n = r.nutrition;
+        setUnknownForm((f) => ({
+          name: f.name || n.name || "",
+          calories: n.calories,
+          protein: n.protein,
+          carbs: n.carbs,
+          fat: n.fat,
+          category: n.category || f.category,
+          healthIndex: n.healthIndex,
+        }));
+        setShowForm(true);
+        setScanMsg(
+          `Z fotky načítané (na 100 g): ${n.calories} kcal · B ${n.protein} · S ${n.carbs} · T ${n.fat}. Doplň názov a ulož.`
+        );
+      } else {
+        setShowForm(true);
+        setScanMsg("Z fotky sa nepodarilo prečítať hodnoty. Skús ostrejšiu fotku samotnej tabuľky, alebo zadaj ručne.");
+      }
+    } catch (err: any) {
+      setScanMsg(err?.message || "Chyba pri čítaní fotky.");
+    } finally {
+      setPhotoBusy(false);
     }
   }
 
@@ -410,7 +478,7 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
 
             {scanMsg && <p className="mb-2 rounded-xl bg-sky-50 p-2 text-xs text-sky-700">{scanMsg}</p>}
 
-            {/* Neznámy kód → agentické dohľadanie podľa kódu alebo manuálne zadanie */}
+            {/* Neznámy kód → dohľadať cez web, odfotiť tabuľku, alebo zadať ručne */}
             {unknownCode && (
               <div className="mb-2 space-y-2 rounded-xl border border-amber-100 bg-amber-50 p-2">
                 <p className="text-sm text-amber-800">
@@ -418,29 +486,68 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
                 </p>
                 <button
                   onClick={aiLookupUnknown}
-                  disabled={estimating}
+                  disabled={estimating || photoBusy}
                   className="btn-primary w-full py-2 text-sm"
                 >
-                  {estimating ? "Dohľadávam na webe…" : "🔎 Dohľadať produkt cez AI"}
+                  {estimating ? "Dohľadávam na webe…" : "🔎 Dohľadať produkt cez web (AI)"}
                 </button>
+
+                <label
+                  className={`flex w-full cursor-pointer items-center justify-center rounded-xl border border-amber-300 bg-white py-2 text-sm font-medium text-amber-800 ${
+                    photoBusy ? "opacity-60" : "active:bg-amber-100"
+                  }`}
+                >
+                  {photoBusy ? "Čítam fotku…" : "📸 Odfotiť tabuľku nutričných hodnôt"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    className="hidden"
+                    disabled={photoBusy || estimating}
+                    onChange={onLabelPhoto}
+                  />
+                </label>
+
                 <input
                   value={unknownForm.name}
                   onChange={(e) => setUnknownForm({ ...unknownForm, name: e.target.value })}
-                  placeholder="(voliteľné) upresni názov produktu"
+                  placeholder="Názov produktu (povinný na uloženie)"
                   className="input py-2 text-sm"
                 />
-                <details className="text-xs text-amber-700">
-                  <summary className="cursor-pointer">alebo zadať ručne (na 100 g)</summary>
-                  <div className="mt-2 grid grid-cols-4 gap-1.5">
-                    <SmallNum label="kcal" v={unknownForm.calories} on={(v) => setUnknownForm({ ...unknownForm, calories: v })} />
-                    <SmallNum label="B g" v={unknownForm.protein} on={(v) => setUnknownForm({ ...unknownForm, protein: v })} />
-                    <SmallNum label="S g" v={unknownForm.carbs} on={(v) => setUnknownForm({ ...unknownForm, carbs: v })} />
-                    <SmallNum label="T g" v={unknownForm.fat} on={(v) => setUnknownForm({ ...unknownForm, fat: v })} />
-                  </div>
-                  <button onClick={saveUnknown} disabled={!unknownForm.name.trim()} className="btn-ghost mt-2 w-full py-2 text-sm">
-                    Uložiť ručne ku kódu {unknownCode}
+
+                {!showForm && (
+                  <button
+                    onClick={() => setShowForm(true)}
+                    className="w-full text-xs text-amber-700 underline"
+                  >
+                    alebo zadať / upraviť hodnoty ručne (na 100 g)
                   </button>
-                </details>
+                )}
+
+                {showForm && (
+                  <div className="space-y-2 rounded-lg bg-white/70 p-2">
+                    <p className="text-[11px] text-amber-700">Hodnoty na 100 g – skontroluj a uprav:</p>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      <SmallNum label="kcal" v={unknownForm.calories} on={(v) => setUnknownForm({ ...unknownForm, calories: v })} />
+                      <SmallNum label="B g" v={unknownForm.protein} on={(v) => setUnknownForm({ ...unknownForm, protein: v })} />
+                      <SmallNum label="S g" v={unknownForm.carbs} on={(v) => setUnknownForm({ ...unknownForm, carbs: v })} />
+                      <SmallNum label="T g" v={unknownForm.fat} on={(v) => setUnknownForm({ ...unknownForm, fat: v })} />
+                    </div>
+                    <input
+                      value={unknownForm.category}
+                      onChange={(e) => setUnknownForm({ ...unknownForm, category: e.target.value })}
+                      placeholder="Kategória (napr. Sladké, Nápoje)"
+                      className="input py-1.5 text-sm"
+                    />
+                    <button
+                      onClick={saveUnknown}
+                      disabled={!unknownForm.name.trim() || unknownForm.calories <= 0}
+                      className="btn-primary w-full py-2 text-sm"
+                    >
+                      Uložiť ku kódu {unknownCode}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
