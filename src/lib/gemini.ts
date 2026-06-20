@@ -3,17 +3,17 @@ import type { ParsedItem } from "./types";
 
 // Reťaz modelov – ak primárny zlyhá (preťaženie/kvóta/timeout), skúsi sa ďalší.
 // Primárny sa berie z GEMINI_MODEL. Stav k 6/2026 (overené v Google docs):
-//  • gemini-3.5-flash      – aktuálny GA Flash (od 19.5.2026), primárny
-//  • gemini-3.1-flash-lite – lacný, nízka latencia, INÁ kapacita (dobrý fallback pri 503)
+//  • gemini-3.1-flash-lite – lacný, nízka latencia, PRIMÁRNY (rýchly a stabilný)
+//  • gemini-3.5-flash      – silnejší GA Flash, fallback pri zlyhaní
 //  • gemini-2.5-flash      – beží do 16.10.2026, posledná záchrana
-// POZN.: zámerne NEpridávame "gemini-flash-latest" – je to alias na primárny
-// model, takže pri preťažení by sme dostali tú istú chybu druhýkrát a len míňali čas.
-// Rodiny 1.5 a 2.0 sú už vypnuté (404), preto v reťazi nie sú.
+// POZN.: zámerne NEpridávame "gemini-flash-latest" – je to alias na iný model
+// v reťazi, takže pri preťažení by sme dostali tú istú chybu druhýkrát a len
+// míňali čas. Rodiny 1.5 a 2.0 sú už vypnuté (404), preto v reťazi nie sú.
 const FALLBACK_MODELS = Array.from(
   new Set(
     [
-      process.env.GEMINI_MODEL || "gemini-3.5-flash",
-      "gemini-3.1-flash-lite",
+      process.env.GEMINI_MODEL || "gemini-3.1-flash-lite",
+      "gemini-3.5-flash",
       "gemini-2.5-flash",
     ].filter(Boolean)
   )
