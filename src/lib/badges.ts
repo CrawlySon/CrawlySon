@@ -8,6 +8,8 @@ export type DailyStat = {
   healthScore: number | null; // vážený priemer zdravosti dňa (0..10)
   hasFruit: boolean; // bol v daný deň zaznamenaný kus ovocia?
   hasVegetable: boolean; // bola v daný deň zaznamenaná zelenina?
+  hasSweets: boolean; // bolo v daný deň niečo sladké?
+  hasAlcohol: boolean; // bol v daný deň alkohol?
   waterMl: number;
   entryCount: number;
 };
@@ -93,6 +95,9 @@ const hadFruit = (s: DailyStat) => s.hasFruit;
 const hadVegetable = (s: DailyStat) => s.hasVegetable;
 const healthy = (s: DailyStat) => s.healthScore != null && s.healthScore >= 7;
 const metProtein = (ctx: BadgeContext) => (s: DailyStat) => ctx.goalProtein > 0 && s.protein >= ctx.goalProtein;
+// „Bez ..." sa počíta len pre dni, v ktorých si naozaj niečo zapísal (inak nevieme).
+const noSweets = (s: DailyStat) => s.entryCount > 0 && !s.hasSweets;
+const noAlcohol = (s: DailyStat) => s.entryCount > 0 && !s.hasAlcohol;
 const perfect = (ctx: BadgeContext) => (s: DailyStat) =>
   s.calories > 0 && ctx.goalCalories > 0 && Math.abs(s.calories - ctx.goalCalories) <= ctx.goalCalories * 0.1;
 
@@ -187,6 +192,12 @@ export const BADGES: BadgeDef[] = [
   dayBadge("protein_goal", "💪", "Bielkovinový cieľ", "Splnený denný cieľ bielkovín", "strava", metProtein),
   streakBadge("protein_streak_5", "🥩", "Päť dní bielkovín", "5 dní po sebe cieľ bielkovín", "strava", 5, metProtein),
   streakBadge("protein_streak_10", "🍗", "Desať dní bielkovín", "10 dní po sebe cieľ bielkovín", "strava", 10, metProtein),
+
+  // Sebadisciplína – série „bez ..." (počítajú sa len zapísané dni)
+  streakBadge("no_sweets_streak_7", "🚫🍭", "Týždeň bez sladkého", "7 dní po sebe bez sladkého", "strava", 7, () => noSweets),
+  streakBadge("no_sweets_streak_30", "🦷", "Mesiac bez sladkého", "30 dní po sebe bez sladkého", "strava", 30, () => noSweets),
+  streakBadge("no_alcohol_streak_7", "🚱", "Týždeň bez alkoholu", "7 dní po sebe bez alkoholu", "strava", 7, () => noAlcohol),
+  streakBadge("no_alcohol_streak_30", "🧘", "Mesiac bez alkoholu", "30 dní po sebe bez alkoholu", "strava", 30, () => noAlcohol),
 ];
 
 // Katalóg typov sérií pre sekciu „Série a rekordy". Pre každý typ vieme určiť
@@ -207,6 +218,8 @@ export const STREAKS: StreakDef[] = [
   { type: "veg", emoji: "🥗", title: "Zelenina", desc: "dni po sebe so zeleninou", pred: () => hadVegetable },
   { type: "healthy", emoji: "🥦", title: "Zdravé dni", desc: "dni po sebe so zdravosťou ≥ 7", pred: () => healthy },
   { type: "protein", emoji: "💪", title: "Bielkoviny", desc: "dni po sebe splnený cieľ bielkovín", pred: metProtein },
+  { type: "no_sweets", emoji: "🚫🍭", title: "Bez sladkého", desc: "dni po sebe bez sladkého", pred: () => noSweets },
+  { type: "no_alcohol", emoji: "🚱", title: "Bez alkoholu", desc: "dni po sebe bez alkoholu", pred: () => noAlcohol },
 ];
 
 export const BADGE_BY_KEY = new Map(BADGES.map((b) => [b.key, b]));

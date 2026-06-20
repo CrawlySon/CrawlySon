@@ -13,6 +13,12 @@ import {
 
 const FRUIT_RX = /ovoc/i; // kategória „Ovocie" (case-insensitive)
 const VEG_RX = /zelenin/i; // kategória „Zelenina" (case-insensitive)
+// Sladké: spoľahlivá je AI kategória „Sladké".
+const SWEETS_RX = /slad/i;
+// Alkohol nemá vlastnú kategóriu vo všetkých záznamoch – detegujeme aj podľa
+// názvu/podkategórie (kľúčové slová majú nízke riziko falošnej zhody).
+const ALCOHOL_RX =
+  /alkohol|\bpiv(o|a|om|e)\b|ležiak|lezia|radler|\bvín(o|a|om|e)\b|\bvin(o|a)\b|prosecco|šampan|sampan|\bsekt\b|vodk|whisk|\brum\b|\bgin\b|tequil|likér|liker|borovičk|borovick|slivovic|hruškovic|hruskovic|brandy|koňak|konak|cognac|aperol|spritz|mojito|jäger|jager|absint|metax|becher|fernet|\bcider\b|martini|campari|baileys|\bpálenk|palenk/i;
 
 // Lokálny dátum (Europe/Bratislava) vo formáte YYYY-MM-DD.
 export function skToday(d = new Date()): string {
@@ -46,7 +52,7 @@ export async function buildBadgeContext(userId: string, goals: UserGoals): Promi
   const [entries, waterLogs, totalEntries] = await Promise.all([
     prisma.entry.findMany({
       where: { userId, date: { gte: since } },
-      select: { date: true, calories: true, protein: true, quantityGrams: true, healthIndex: true, category: true },
+      select: { date: true, calories: true, protein: true, quantityGrams: true, healthIndex: true, category: true, subcategory: true, name: true },
     }),
     prisma.waterLog.findMany({ where: { userId, date: { gte: since } }, select: { date: true, ml: true } }),
     prisma.entry.count({ where: { userId } }),
@@ -57,7 +63,7 @@ export async function buildBadgeContext(userId: string, goals: UserGoals): Promi
   const ensure = (date: string): Acc => {
     let d = byDate.get(date);
     if (!d) {
-      d = { date, calories: 0, protein: 0, healthScore: null, hasFruit: false, hasVegetable: false, waterMl: 0, entryCount: 0, hSum: 0, hWeight: 0 };
+      d = { date, calories: 0, protein: 0, healthScore: null, hasFruit: false, hasVegetable: false, hasSweets: false, hasAlcohol: false, waterMl: 0, entryCount: 0, hSum: 0, hWeight: 0 };
       byDate.set(date, d);
     }
     return d;
@@ -70,6 +76,9 @@ export async function buildBadgeContext(userId: string, goals: UserGoals): Promi
     d.entryCount += 1;
     if (e.category && FRUIT_RX.test(e.category)) d.hasFruit = true;
     if (e.category && VEG_RX.test(e.category)) d.hasVegetable = true;
+    if (e.category && SWEETS_RX.test(e.category)) d.hasSweets = true;
+    const blob = `${e.category || ""} ${e.subcategory || ""} ${e.name || ""}`;
+    if (ALCOHOL_RX.test(blob)) d.hasAlcohol = true;
     if (e.healthIndex != null) {
       const w = weightOf(e.quantityGrams, e.calories);
       d.hSum += e.healthIndex * w;
@@ -118,6 +127,8 @@ export function dayStat(ctx: BadgeContext, date: string): DailyStat {
       healthScore: null,
       hasFruit: false,
       hasVegetable: false,
+      hasSweets: false,
+      hasAlcohol: false,
       waterMl: 0,
       entryCount: 0,
     }

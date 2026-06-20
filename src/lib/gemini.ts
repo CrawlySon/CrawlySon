@@ -172,8 +172,11 @@ PRAVIDLÁ:
 - Ku každej položke urči "category" (hlavná kategória) a "subcategory"
   (podkategória) v slovenčine. Príklady kategórií: Ovocie, Zelenina, Mäso, Ryby,
   Mliečne, Obilniny, Pečivo, Strukoviny, Orechy, Tuky, Sladké, Nápoje,
-  Hotové jedlo, Fast food. Príklad: bravčový rezeň → category "Mäso",
+  Alkohol, Hotové jedlo, Fast food. Príklad: bravčový rezeň → category "Mäso",
   subcategory "Bravčové mäso"; losos → "Ryby" / "Morské ryby".
+  DÔLEŽITÉ: každý alkoholický nápoj (pivo, víno, tvrdý alkohol, likér, cider,
+  miešané drinky) zaraď do category "Alkohol". Sladkosti, čokoládu, zákusky,
+  sušienky a dezerty zaraď do category "Sladké".
 
 - Ku každej položke urči "healthIndex" – celé číslo 0 až 10 vyjadrujúce
   zdravosť jedla. Zohľadni najmä: pridaný cukor, nasýtené tuky, soľ, stupeň
