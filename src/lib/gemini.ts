@@ -3,16 +3,16 @@ import type { ParsedItem } from "./types";
 
 // Reťaz modelov – ak primárny zlyhá (preťaženie/kvóta/timeout), skúsi sa ďalší.
 // Primárny sa berie z GEMINI_MODEL. Stav k 6/2026 (overené v Google docs):
-//  • gemini-3.5-flash   – aktuálny GA Flash (od 19.5.2026), primárny
-//  • gemini-flash-latest – alias na najnovší Flash
-//  • gemini-3.1-flash-lite – lacný, nízka latencia, iná kapacita (dobrý fallback pri 503)
-//  • gemini-2.5-flash   – beží do 16.10.2026, posledná záchrana
-// POZN.: rodiny 1.5 a 2.0 sú už vypnuté (404), preto v reťazi nie sú.
+//  • gemini-3.5-flash      – aktuálny GA Flash (od 19.5.2026), primárny
+//  • gemini-3.1-flash-lite – lacný, nízka latencia, INÁ kapacita (dobrý fallback pri 503)
+//  • gemini-2.5-flash      – beží do 16.10.2026, posledná záchrana
+// POZN.: zámerne NEpridávame "gemini-flash-latest" – je to alias na primárny
+// model, takže pri preťažení by sme dostali tú istú chybu druhýkrát a len míňali čas.
+// Rodiny 1.5 a 2.0 sú už vypnuté (404), preto v reťazi nie sú.
 const FALLBACK_MODELS = Array.from(
   new Set(
     [
       process.env.GEMINI_MODEL || "gemini-3.5-flash",
-      "gemini-flash-latest",
       "gemini-3.1-flash-lite",
       "gemini-2.5-flash",
     ].filter(Boolean)
@@ -44,9 +44,12 @@ function isOverloaded(e: any): boolean {
 }
 
 // Zavolá generateContent s časovým limitom, retry pri preťažení a fallbackom na
-// ďalšie modely. Per-model limit rieši „visiace" requesty (príčina 504),
-// retry rieši dočasné 503/429 (preťaženie kapacity Gemini).
-const PER_MODEL_TIMEOUT_MS = Number(process.env.GEMINI_MODEL_TIMEOUT_MS || 12000);
+// ďalšie modely. Per-model limit rieši „visiace" requesty, GLOBÁLNY rozpočet
+// (budgetMs) rieši 504: zaručí, že celý reťazec skončí skôr, než Vercel zabije
+// funkciu, takže používateľ vždy dostane slušnú JSON hlášku namiesto 504.
+const PER_MODEL_TIMEOUT_MS = Number(process.env.GEMINI_MODEL_TIMEOUT_MS || 11000);
+// Nemá zmysel začínať volanie, ak do konca rozpočtu zostáva menej ako toto.
+const MIN_ATTEMPT_MS = 2500;
 
 function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -67,18 +70,30 @@ function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
 async function generateWithFallback(
   ai: GoogleGenAI,
   request: Record<string, any>,
-  timeoutMs: number = PER_MODEL_TIMEOUT_MS
+  timeoutMs: number = PER_MODEL_TIMEOUT_MS,
+  budgetMs: number = 24000
 ): Promise<{ response: any; model: string }> {
+  const start = Date.now();
+  const remaining = () => budgetMs - (Date.now() - start);
   let lastErr: unknown;
   let sawOverload = false;
+  let ranOutOfTime = false;
 
   for (const model of FALLBACK_MODELS) {
     const maxAttempts = 2; // 1 pokus + 1 rýchly retry pri preťažení
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      // Globálny strop: ak nezostáva dosť času na zmysluplný pokus, končíme.
+      const left = remaining();
+      if (left < MIN_ATTEMPT_MS) {
+        ranOutOfTime = true;
+        break;
+      }
+      // Timeout pokusu = menší z per-model limitu a zvyšného rozpočtu.
+      const attemptTimeout = Math.min(timeoutMs, left);
       try {
         const response = await withTimeout(
           ai.models.generateContent({ ...request, model } as any),
-          timeoutMs,
+          attemptTimeout,
           model
         );
         return { response, model };
@@ -90,16 +105,24 @@ async function generateWithFallback(
           `Gemini model "${model}" pokus ${attempt}/${maxAttempts} zlyhal:`,
           (e as any)?.message || e
         );
-        if (overloaded && attempt < maxAttempts) {
+        // Retry toho istého modelu len pri preťažení a ak zostáva čas.
+        if (overloaded && attempt < maxAttempts && remaining() > MIN_ATTEMPT_MS + 700) {
           await sleep(600 * attempt); // krátky backoff a skús ten istý model ešte raz
           continue;
         }
         break; // skús ďalší model v reťazi
       }
     }
+    if (ranOutOfTime || remaining() < MIN_ATTEMPT_MS) {
+      ranOutOfTime = true;
+      break;
+    }
   }
 
-  // Priateľská hláška: keď bolo všetko preťažené, nech používateľ vie skúsiť neskôr.
+  // Priateľské hlášky podľa príčiny.
+  if (ranOutOfTime) {
+    throw new Error("AI nestihla odpovedať včas. Skús to prosím o chvíľu znova.");
+  }
   if (sawOverload) {
     throw new Error("AI je práve preťažené (Google 503). Skús to prosím o chvíľu znova.");
   }
@@ -412,7 +435,8 @@ Odpovedz IBA platným JSON objektom (bez markdownu) v tvare:
         temperature: 0.2,
       },
     },
-    18000 // web grounding býva pomalšie – dlhší limit na model
+    16000, // web grounding býva pomalšie – dlhší limit na model
+    45000 // väčší rozpočet (route má maxDuration 60)
   );
 
   const um: any = (response as any).usageMetadata || {};
@@ -486,7 +510,8 @@ Ak tabuľku nevieš spoľahlivo prečítať, vráť {"found": false}.`;
         temperature: 0.1,
       },
     },
-    20000 // čítanie obrázka býva pomalšie
+    16000, // čítanie obrázka býva pomalšie
+    45000 // väčší rozpočet (route má maxDuration 60)
   );
 
   const um: any = (response as any).usageMetadata || {};

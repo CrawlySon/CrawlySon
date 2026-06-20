@@ -4,7 +4,7 @@ import { getUserId } from "@/lib/server-auth";
 import { parseNutritionLabel } from "@/lib/gemini";
 
 export const runtime = "nodejs";
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 function todayLocalISO() {
   return new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
