@@ -714,19 +714,39 @@ function ItemCard({
   onRemove: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  // Pevný základ na škálovanie. Zachytí sa pri vstupe do poľa gramáže, takže
+  // prepočet pri písaní neškáluje z priebežne menenej (a zaokrúhľovanej)
+  // hodnoty – inak by sa chyby navrstvili (napr. 150 g/300 kcal → 50 g = 20 kcal).
+  const baseRef = useRef<{
+    grams: number;
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+    fiber: number | null;
+  } | null>(null);
+
+  function snapshotBase() {
+    const g = item.quantityGrams ?? 0;
+    baseRef.current =
+      g > 0
+        ? { grams: g, calories: item.calories, protein: item.protein, carbs: item.carbs, fat: item.fat, fiber: item.fiber }
+        : null;
+  }
 
   // Zmena gramáže proporcionálne prepočíta kcal a makrá (ak máme z čoho škálovať)
   function setGrams(g: number) {
-    const old = item.quantityGrams ?? 0;
-    if (old > 0 && g > 0) {
-      const f = g / old;
+    if (!baseRef.current) snapshotBase(); // poistka, ak onFocus nestihol bežať
+    const base = baseRef.current;
+    if (base && base.grams > 0 && g > 0) {
+      const f = g / base.grams;
       onChange({
         quantityGrams: g,
-        calories: round(item.calories * f),
-        protein: round(item.protein * f, 1),
-        carbs: round(item.carbs * f, 1),
-        fat: round(item.fat * f, 1),
-        fiber: item.fiber != null ? round(item.fiber * f, 1) : null,
+        calories: round(base.calories * f),
+        protein: round(base.protein * f, 1),
+        carbs: round(base.carbs * f, 1),
+        fat: round(base.fat * f, 1),
+        fiber: base.fiber != null ? round(base.fiber * f, 1) : null,
       });
     } else {
       onChange({ quantityGrams: g > 0 ? g : null });
@@ -790,6 +810,7 @@ function ItemCard({
                 type="number"
                 inputMode="numeric"
                 value={item.quantityGrams ?? ""}
+                onFocus={snapshotBase}
                 onChange={(e) => setGrams(parseInt(e.target.value) || 0)}
                 placeholder="napr. 250"
                 className="mt-0.5 w-full rounded-lg border border-brand-200 bg-white px-2 py-1.5 text-sm"

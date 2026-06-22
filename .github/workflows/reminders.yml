@@ -1,0 +1,58 @@
+name: Pripomienky (push notifikácie)
+
+# PREČO: Vercel Hobby plán spúšťa cron len raz denne a v negarantovanom čase,
+# takže časované pripomienky (ráno/poobede/večer) sa netrafia do okna.
+# Tento workflow „štuchne" endpointy každú hodinu – tie si samy vyberú správne
+# okno (SK čas) a deduplikujú, takže žiadne dvojité notifikácie nehrozia.
+#
+# NASTAVENIE (raz):
+#  1) Tento súbor musí byť na DEFAULT vetve repozitára (napr. main) – plánované
+#     workflowy bežia len z default vetvy. Po zmergovaní sa rozbehne automaticky.
+#  2) V GitHube: Settings → Secrets and variables → Actions → New repository secret:
+#       APP_URL      = https://tvoja-appka.vercel.app   (bez lomky na konci)
+#       CRON_SECRET  = rovnaká hodnota ako vo Verceli (ak ju tam máš; inak nechaj prázdne)
+
+on:
+  schedule:
+    - cron: "0 * * * *" # každú celú hodinu (UTC)
+  workflow_dispatch: {} # možnosť spustiť ručne z karty Actions
+
+# Aby sa súbežné behy neprekrývali.
+concurrency:
+  group: reminders
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Kontrola APP_URL
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+        run: |
+          if [ -z "$APP_URL" ]; then
+            echo "::error::Chýba repo secret APP_URL (URL nasadenej appky)."
+            exit 1
+          fi
+
+      - name: Pripomienky kouča (ovocie, kalórie, zhrnutie)
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          code=$(curl -sS -X POST "${APP_URL%/}/api/cron/coach" \
+            ${CRON_SECRET:+-H "Authorization: Bearer $CRON_SECRET"} \
+            -o /dev/null -w "%{http_code}")
+          echo "coach -> HTTP $code"
+          [ "$code" = "200" ] || echo "::warning::coach vrátil $code"
+
+      - name: Pripomienky pitného režimu
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          code=$(curl -sS -X POST "${APP_URL%/}/api/cron/water" \
+            ${CRON_SECRET:+-H "Authorization: Bearer $CRON_SECRET"} \
+            -o /dev/null -w "%{http_code}")
+          echo "water -> HTTP $code"
+          [ "$code" = "200" ] || echo "::warning::water vrátil $code"
