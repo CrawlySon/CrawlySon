@@ -20,11 +20,6 @@ type Day = {
 };
 type Category = { name: string; calories: number; count: number };
 
-function healthColor(h: number): string {
-  if (h >= 7) return "bg-brand-500";
-  if (h >= 4) return "bg-amber-400";
-  return "bg-red-400";
-}
 function healthText(h: number): string {
   if (h >= 7) return "text-brand-700";
   if (h >= 4) return "text-amber-600";
@@ -291,7 +286,7 @@ export default function HistoryPage() {
                 <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-slate-100">
                   <div
                     className={`h-full rounded-full ${
-                      showCat ? "bg-slate-700" : over ? "bg-red-400" : d.healthScore != null ? healthColor(d.healthScore) : "bg-brand-500"
+                      showCat ? "bg-slate-700" : over ? "bg-red-400" : "bg-blue-500"
                     }`}
                     style={{ width: `${pct}%` }}
                   />
@@ -309,7 +304,7 @@ export default function HistoryPage() {
 
       {!category && (
         <p className="mt-3 px-1 text-xs text-slate-400">
-          Farba pruhu = zdravosť dňa (zelená = zdravé, červená = menej zdravé). Klikni na kategóriu hore pre filter.
+          Farba pruhu: modrá = v rámci kalorického cieľa, červená = nad cieľom. Zdravosť dňa ukazuje ♥ skóre. Klikni na kategóriu hore pre filter.
         </p>
       )}
     </div>
