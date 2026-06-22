@@ -41,6 +41,7 @@ export default function HistoryPage() {
   const [profile, setProfile] = useState<Profile | null>(() => getCache<Profile>("profile") ?? null);
   const [range, setRange] = useState(14);
   const [category, setCategory] = useState<string>("");
+  const [catOpen, setCatOpen] = useState(false);
   const [metric, setMetric] = useState<"kcal" | "health" | "water">("kcal");
   const [loading, setLoading] = useState(initial === undefined);
 
@@ -139,24 +140,67 @@ export default function HistoryPage() {
         ))}
       </div>
 
-      {/* Filter podľa kategórie */}
+      {/* Filter podľa kategórie – zbalený, aby nezaberal pol obrazovky */}
       {categories.length > 0 && (
-        <div className="mb-4 flex flex-wrap gap-2">
+        <div className="mb-4">
           <button
-            onClick={() => setCategory("")}
-            className={`whitespace-nowrap rounded-full px-3 py-1.5 text-sm ${category === "" ? "bg-slate-800 text-white" : "bg-white text-slate-600 border border-slate-200"}`}
+            onClick={() => setCatOpen((o) => !o)}
+            className="flex w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
           >
-            Všetko
+            <span className="flex items-center gap-2 truncate text-slate-700">
+              <span className="text-slate-400">Kategória:</span>
+              <span className="truncate font-medium">{category || "Všetko"}</span>
+              {category && (
+                <span className="shrink-0 text-xs text-slate-400">
+                  {categories.find((c) => c.name === category)?.calories ?? 0} kcal
+                </span>
+              )}
+            </span>
+            <span className="flex shrink-0 items-center gap-2">
+              {category && (
+                <span
+                  role="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setCategory("");
+                    setCatOpen(false);
+                  }}
+                  className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500"
+                >
+                  ✕
+                </span>
+              )}
+              <span className={`text-slate-400 transition-transform ${catOpen ? "rotate-180" : ""}`}>▾</span>
+            </span>
           </button>
-          {categories.map((c) => (
-            <button
-              key={c.name}
-              onClick={() => setCategory(c.name)}
-              className={`whitespace-nowrap rounded-full px-3 py-1.5 text-sm ${category === c.name ? "bg-slate-800 text-white" : "bg-white text-slate-600 border border-slate-200"}`}
-            >
-              {c.name} <span className="opacity-60">{c.calories} kcal</span>
-            </button>
-          ))}
+
+          {catOpen && (
+            <div className="mt-2 max-h-60 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2">
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => {
+                    setCategory("");
+                    setCatOpen(false);
+                  }}
+                  className={`whitespace-nowrap rounded-full px-3 py-1.5 text-sm ${category === "" ? "bg-slate-800 text-white" : "bg-slate-50 text-slate-600 border border-slate-200"}`}
+                >
+                  Všetko
+                </button>
+                {categories.map((c) => (
+                  <button
+                    key={c.name}
+                    onClick={() => {
+                      setCategory(c.name);
+                      setCatOpen(false);
+                    }}
+                    className={`whitespace-nowrap rounded-full px-3 py-1.5 text-sm ${category === c.name ? "bg-slate-800 text-white" : "bg-slate-50 text-slate-600 border border-slate-200"}`}
+                  >
+                    {c.name} <span className="opacity-60">{c.calories} kcal</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
