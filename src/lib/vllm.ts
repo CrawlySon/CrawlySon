@@ -8,7 +8,7 @@
 
 const VLLM_BASE_URL = (process.env.VLLM_BASE_URL || "https://vllm.gymbeam.tech").replace(/\/+$/, "");
 const VLLM_MODEL = process.env.VLLM_MODEL || "openai/gpt-oss-120b";
-const VLLM_TIMEOUT_MS = Number(process.env.VLLM_TIMEOUT_MS || 25000);
+const VLLM_TIMEOUT_MS = Number(process.env.VLLM_TIMEOUT_MS || 40000);
 
 // Fallback je aktívny iba ak je nastavený token. Bez neho sa správame, akoby
 // fallback neexistoval (a necháme prebublať pôvodnú chybu z Gemini).
