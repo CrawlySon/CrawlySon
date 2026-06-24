@@ -240,7 +240,7 @@ const responseSchema = {
   required: ["items"],
 };
 
-// Pre vLLM fallback (nedostane responseSchema) opíšeme presný tvar JSON textom.
+// Pre OpenAI fallback (nedostane responseSchema) opíšeme presný tvar JSON textom.
 const PARSE_JSON_SHAPE = `
 
 FORMÁT ODPOVEDE: Vráť IBA platný JSON objekt (bez markdownu, bez vysvetlení) presne v tomto tvare:

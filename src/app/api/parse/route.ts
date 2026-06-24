@@ -4,7 +4,7 @@ import { parseFood, type ReferenceFood } from "@/lib/gemini";
 import { getUserId } from "@/lib/server-auth";
 
 export const runtime = "nodejs";
-// 90s: Gemini môže minúť ~24s, potom 120B vLLM potrebuje ~35-40s → spolu ~65s.
+// 90s: Gemini môže minúť ~24s, potom OpenAI fallback ~30s → spolu ~55s.
 export const maxDuration = 90;
 
 // Vyberie z DB potraviny, ktoré sa aspoň trochu zhodujú s textom (slová >= 3 znaky),

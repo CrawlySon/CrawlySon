@@ -173,9 +173,9 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
     try {
       const { items, mealType, waterMl, usage } = await api.parse(text);
       if (!items.length && !waterMl) setError("AI nerozpoznala žiadne jedlo ani vodu. Skús to upresniť.");
-      // Daj vedieť, keď Gemini zlyhalo a odpovedal záložný interný engine.
-      if (usage?.model?.startsWith("vllm:")) {
-        setNotice("ℹ️ Gemini bolo nedostupné – spracované záložným interným enginom (gpt-oss).");
+      // Daj vedieť, keď Gemini zlyhalo a odpovedal záložný OpenAI engine.
+      if (usage?.model?.startsWith("openai:")) {
+        setNotice("ℹ️ Gemini bolo nedostupné – spracované záložným enginom (OpenAI).");
       }
       setItems(items);
       setWater(waterMl || 0);
