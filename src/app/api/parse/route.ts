@@ -4,7 +4,8 @@ import { parseFood, type ReferenceFood } from "@/lib/gemini";
 import { getUserId } from "@/lib/server-auth";
 
 export const runtime = "nodejs";
-export const maxDuration = 30;
+// 60s, aby po (prípadne pomalom) zlyhaní Gemini stihol dobehnúť aj vLLM fallback.
+export const maxDuration = 60;
 
 // Vyberie z DB potraviny, ktoré sa aspoň trochu zhodujú s textom (slová >= 3 znaky),
 // aby sme AI poskytli relevantnú referenciu bez posielania celej databázy.

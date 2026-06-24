@@ -1,5 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import type { ParsedItem } from "./types";
+import { isVllmConfigured, vllmChatJSON } from "./vllm";
 
 // Reťaz modelov – ak primárny zlyhá (preťaženie/kvóta/timeout), skúsi sa ďalší.
 // Primárny sa berie z GEMINI_MODEL. Stav k 6/2026 (overené v Google docs):
@@ -239,6 +240,12 @@ const responseSchema = {
   required: ["items"],
 };
 
+// Pre vLLM fallback (nedostane responseSchema) opíšeme presný tvar JSON textom.
+const PARSE_JSON_SHAPE = `
+
+FORMÁT ODPOVEDE: Vráť IBA platný JSON objekt (bez markdownu, bez vysvetlení) presne v tomto tvare:
+{"mealType":"breakfast|snack|lunch|afternoon|dinner|supper|other","waterMl":0,"items":[{"name":"string","quantityGrams":0,"calories":0,"protein":0,"carbs":0,"fat":0,"fiber":0,"category":"string","subcategory":"string","healthIndex":0,"confidence":0.0,"assumption":"string"}]}`;
+
 function buildReferenceBlock(foods: ReferenceFood[]): string {
   if (!foods.length) return "";
   const lines = foods.map((f) => {
@@ -260,33 +267,48 @@ export type ParseResult = {
 };
 
 export async function parseFood(text: string, reference: ReferenceFood[]): Promise<ParseResult> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error("Chýba GEMINI_API_KEY v prostredí.");
-
-  const ai = new GoogleGenAI({ apiKey });
-
   const prompt = `Používateľ povedal/napísal čo zjedol:\n"""${text}"""${buildReferenceBlock(reference)}`;
 
-  const { response, model } = await generateWithFallback(ai, {
-    contents: prompt,
-    config: {
-      systemInstruction: SYSTEM_INSTRUCTION,
-      responseMimeType: "application/json",
-      responseSchema,
+  let raw: string;
+  let usage: ParseResult["usage"];
+  try {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) throw new Error("Chýba GEMINI_API_KEY v prostredí.");
+    const ai = new GoogleGenAI({ apiKey });
+
+    const { response, model } = await generateWithFallback(ai, {
+      contents: prompt,
+      config: {
+        systemInstruction: SYSTEM_INSTRUCTION,
+        responseMimeType: "application/json",
+        responseSchema,
+        temperature: 0.3,
+      },
+    });
+
+    const text = response.text;
+    if (!text) throw new Error("Prázdna odpoveď z Gemini.");
+    raw = text;
+
+    const um: any = (response as any).usageMetadata || {};
+    usage = {
+      model,
+      promptTokens: Number(um.promptTokenCount ?? 0),
+      outputTokens: Number(um.candidatesTokenCount ?? 0),
+      totalTokens: Number(um.totalTokenCount ?? 0),
+    };
+  } catch (geminiErr) {
+    // Fallback na interný vLLM engine (len ak je nakonfigurovaný tokenom).
+    if (!isVllmConfigured()) throw geminiErr;
+    console.error("Gemini zlyhal – skúšam interný vLLM fallback:", (geminiErr as any)?.message || geminiErr);
+    const r = await vllmChatJSON({
+      system: SYSTEM_INSTRUCTION + PARSE_JSON_SHAPE,
+      user: prompt,
       temperature: 0.3,
-    },
-  });
-
-  const raw = response.text;
-  if (!raw) throw new Error("Prázdna odpoveď z Gemini.");
-
-  const um: any = (response as any).usageMetadata || {};
-  const usage = {
-    model,
-    promptTokens: Number(um.promptTokenCount ?? 0),
-    outputTokens: Number(um.candidatesTokenCount ?? 0),
-    totalTokens: Number(um.totalTokenCount ?? 0),
-  };
+    });
+    raw = r.text;
+    usage = r.usage;
+  }
 
   let parsed: { items?: any[]; mealType?: string; waterMl?: number };
   try {
@@ -340,10 +362,6 @@ ak je sladený ALE s vysokým podielom bielkovín (proteínové nápoje/jogurty)
 export async function scoreHealthBatch(
   items: { name: string; category: string | null }[]
 ): Promise<Map<number, number>> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error("Chýba GEMINI_API_KEY v prostredí.");
-  const ai = new GoogleGenAI({ apiKey });
-
   const list = items
     .map((it, i) => `${i + 1}. ${it.name}${it.category ? ` (kat. ${it.category})` : ""}`)
     .join("\n");
@@ -368,17 +386,34 @@ export async function scoreHealthBatch(
     required: ["scores"],
   };
 
-  const { response } = await generateWithFallback(ai, {
-    contents: prompt,
-    config: {
-      systemInstruction: "Si výživový asistent. Hodnoť striktne podľa zadanej rubriky a vráť iba JSON.",
-      responseMimeType: "application/json",
-      responseSchema: schema,
-      temperature: 0.1,
-    },
-  });
+  let raw: string | undefined;
+  try {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) throw new Error("Chýba GEMINI_API_KEY v prostredí.");
+    const ai = new GoogleGenAI({ apiKey });
 
-  const raw = response.text;
+    const { response } = await generateWithFallback(ai, {
+      contents: prompt,
+      config: {
+        systemInstruction: "Si výživový asistent. Hodnoť striktne podľa zadanej rubriky a vráť iba JSON.",
+        responseMimeType: "application/json",
+        responseSchema: schema,
+        temperature: 0.1,
+      },
+    });
+    raw = response.text;
+  } catch (geminiErr) {
+    if (!isVllmConfigured()) throw geminiErr;
+    console.error("Gemini zlyhal (scoreHealthBatch) – skúšam interný vLLM fallback:", (geminiErr as any)?.message || geminiErr);
+    const r = await vllmChatJSON({
+      system:
+        'Si výživový asistent. Hodnoť striktne podľa zadanej rubriky a vráť IBA JSON objekt v tvare {"scores":[{"index":1,"healthIndex":0}]}.',
+      user: prompt,
+      temperature: 0.1,
+    });
+    raw = r.text;
+  }
+
   const out = new Map<number, number>();
   if (!raw) return out;
   let parsed: { scores?: { index?: number; healthIndex?: number }[] };

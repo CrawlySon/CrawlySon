@@ -23,6 +23,7 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [items, setItems] = useState<ParsedItem[]>([]);
   const [listening, setListening] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(false);
@@ -168,9 +169,14 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
     stopListening(); // ukonči prípadné nahrávanie pred spracovaním
     setLoading(true);
     setError(null);
+    setNotice(null);
     try {
-      const { items, mealType, waterMl } = await api.parse(text);
+      const { items, mealType, waterMl, usage } = await api.parse(text);
       if (!items.length && !waterMl) setError("AI nerozpoznala žiadne jedlo ani vodu. Skús to upresniť.");
+      // Daj vedieť, keď Gemini zlyhalo a odpovedal záložný interný engine.
+      if (usage?.model?.startsWith("vllm:")) {
+        setNotice("ℹ️ Gemini bolo nedostupné – spracované záložným interným enginom (gpt-oss).");
+      }
       setItems(items);
       setWater(waterMl || 0);
       // Ak AI z textu rozpoznala typ jedla a používateľ ho ručne nezmenil,
@@ -596,6 +602,7 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
         )}
 
         {error && <p className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-600">{error}</p>}
+        {notice && <p className="mt-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-700">{notice}</p>}
 
         {/* Návrh položiek */}
         {items.length > 0 && (

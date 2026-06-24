@@ -25,7 +25,7 @@ export const api = {
   deleteEntry: (id: string) => req<{ ok: true }>(`/api/entries/${id}`, { method: "DELETE" }),
 
   parse: (text: string) =>
-    req<{ items: ParsedItem[]; mealType: MealType; waterMl: number }>(`/api/parse`, {
+    req<{ items: ParsedItem[]; mealType: MealType; waterMl: number; usage?: { model: string } }>(`/api/parse`, {
       method: "POST",
       body: JSON.stringify({ text }),
     }),
