@@ -1,6 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import type { ParsedItem } from "./types";
-import { isVllmConfigured, vllmChatJSON } from "./vllm";
+import { isOpenAIConfigured, openAIChatJSON } from "./openai-fallback";
 
 // Reťaz modelov – ak primárny zlyhá (preťaženie/kvóta/timeout), skúsi sa ďalší.
 // Primárny sa berie z GEMINI_MODEL. Stav k 6/2026 (overené v Google docs):
@@ -298,10 +298,10 @@ export async function parseFood(text: string, reference: ReferenceFood[]): Promi
       totalTokens: Number(um.totalTokenCount ?? 0),
     };
   } catch (geminiErr) {
-    // Fallback na interný vLLM engine (len ak je nakonfigurovaný tokenom).
-    if (!isVllmConfigured()) throw geminiErr;
-    console.error("Gemini zlyhal – skúšam interný vLLM fallback:", (geminiErr as any)?.message || geminiErr);
-    const r = await vllmChatJSON({
+    // Fallback na OpenAI engine (len ak je nakonfigurovaný tokenom).
+    if (!isOpenAIConfigured()) throw geminiErr;
+    console.error("Gemini zlyhal – skúšam OpenAI fallback:", (geminiErr as any)?.message || geminiErr);
+    const r = await openAIChatJSON({
       system: SYSTEM_INSTRUCTION + PARSE_JSON_SHAPE,
       user: prompt,
       temperature: 0.3,
@@ -403,9 +403,9 @@ export async function scoreHealthBatch(
     });
     raw = response.text;
   } catch (geminiErr) {
-    if (!isVllmConfigured()) throw geminiErr;
-    console.error("Gemini zlyhal (scoreHealthBatch) – skúšam interný vLLM fallback:", (geminiErr as any)?.message || geminiErr);
-    const r = await vllmChatJSON({
+    if (!isOpenAIConfigured()) throw geminiErr;
+    console.error("Gemini zlyhal (scoreHealthBatch) – skúšam OpenAI fallback:", (geminiErr as any)?.message || geminiErr);
+    const r = await openAIChatJSON({
       system:
         'Si výživový asistent. Hodnoť striktne podľa zadanej rubriky a vráť IBA JSON objekt v tvare {"scores":[{"index":1,"healthIndex":0}]}.',
       user: prompt,
