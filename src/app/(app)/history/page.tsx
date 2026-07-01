@@ -100,17 +100,21 @@ export default function HistoryPage() {
   // Farba stĺpca podľa cieľa / hodnoty
   function colorFor(v: number): string {
     const BLUE = "#3b82f6";
+    const AMBER = "#f59e0b";
     const RED = "#ef4444";
-    const WATER = "#0ea5e9"; // modrá pre pitný režim
-    if (v <= 0) return "#e2e8f0"; // bez dát
+    const WATER = "#0ea5e9";
+    if (v <= 0) return "#e2e8f0";
     if (category) return BLUE;
-    if (metric === "kcal") return v > goal ? RED : BLUE; // nad cieľom = červená
-    if (metric === "water") return WATER; // pitie vody – vždy modrá
-    // zdravosť: 10 odtieňov od tmavo červenej (1) po svetlo modrú (10)
+    if (metric === "kcal") {
+      if (v <= goal) return BLUE;
+      if (v <= goal * 1.5) return AMBER;
+      return RED;
+    }
+    if (metric === "water") return WATER;
     const s = Math.max(1, Math.min(10, Math.round(v)));
-    const t = (s - 1) / 9; // 0..1
-    const hue = Math.round(t * 210); // 0 (červená) → 210 (modrá)
-    const light = Math.round(35 + t * 30); // tmavá → svetlá
+    const t = (s - 1) / 9;
+    const hue = Math.round(t * 210);
+    const light = Math.round(35 + t * 30);
     return `hsl(${hue}, 70%, ${light}%)`;
   }
 
@@ -286,7 +290,13 @@ export default function HistoryPage() {
                 <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-slate-100">
                   <div
                     className={`h-full rounded-full ${
-                      showCat ? "bg-slate-700" : over ? "bg-red-400" : "bg-blue-500"
+                      showCat
+                        ? "bg-slate-700"
+                        : !over
+                          ? "bg-blue-500"
+                          : d.calories <= goal * 1.5
+                            ? "bg-amber-400"
+                            : "bg-red-400"
                     }`}
                     style={{ width: `${pct}%` }}
                   />
@@ -304,7 +314,7 @@ export default function HistoryPage() {
 
       {!category && (
         <p className="mt-3 px-1 text-xs text-slate-400">
-          Farba pruhu: modrá = v rámci kalorického cieľa, červená = nad cieľom. Zdravosť dňa ukazuje ♥ skóre. Klikni na kategóriu hore pre filter.
+          Farba pruhu: modrá = v rámci cieľa, žltá = do +50 %, červená = nad +50 %. Zdravosť ukazuje ♥ skóre.
         </p>
       )}
     </div>
