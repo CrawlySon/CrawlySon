@@ -111,11 +111,10 @@ export default function HistoryPage() {
       return RED;
     }
     if (metric === "water") return WATER;
-    const s = Math.max(1, Math.min(10, Math.round(v)));
-    const t = (s - 1) / 9;
-    const hue = Math.round(t * 210);
-    const light = Math.round(35 + t * 30);
-    return `hsl(${hue}, 70%, ${light}%)`;
+    const s = Math.max(0, Math.min(10, Math.round(v)));
+    const t = s / 10; // 0 = červená, 1 = modrá
+    const hue = Math.round(t * 220); // 0 (červená) → 220 (modrá)
+    return `hsl(${hue}, 88%, 48%)`;
   }
 
   return (
