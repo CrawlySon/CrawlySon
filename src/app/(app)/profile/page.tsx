@@ -398,8 +398,6 @@ function StreaksSection({ streaks }: { streaks: Streak[] }) {
   );
 }
 
-const LEVEL_LABEL: Record<number, string> = { 1: "1×", 3: "3d", 7: "7d", 30: "30d" };
-
 function BadgesSection() {
   const [data, setData] = useState<BadgesData | null>(() => getCache<BadgesData>("badges") ?? null);
   const [selected, setSelected] = useState<Badge | null>(null);
@@ -416,19 +414,6 @@ function BadgesSection() {
 
   if (!data) return null;
 
-  // Group by challengeId; badges without one (or empty string) go to milestones.
-  const challengeMap = new Map<string, Badge[]>();
-  const milestones: Badge[] = [];
-  for (const b of data.badges) {
-    if (b.challengeId) {
-      const arr = challengeMap.get(b.challengeId) ?? [];
-      arr.push(b);
-      challengeMap.set(b.challengeId, arr);
-    } else {
-      milestones.push(b);
-    }
-  }
-
   return (
     <>
       {data.streaks && <StreaksSection streaks={data.streaks} />}
@@ -439,75 +424,25 @@ function BadgesSection() {
             {data.earnedCount} / {data.total}
           </span>
         </div>
-
-        {/* Challenge rows — 4 levels side by side */}
-        <div className="space-y-1.5 mb-4">
-          {[...challengeMap.entries()].map(([id, badges]) => {
-            const first = badges[0];
-            const baseTitle = first.title.replace(/ · .*$/, "");
-            const anyEarned = badges.some((b) => b.earned);
-            return (
-              <div key={id} className={`flex items-center gap-2 rounded-xl px-2 py-1.5 ${anyEarned ? "bg-brand-50" : "bg-slate-50"}`}>
-                <span className="shrink-0 text-base leading-none">{first.emoji}</span>
-                <span className={`flex-1 min-w-0 truncate text-xs font-semibold ${anyEarned ? "text-slate-700" : "text-slate-500"}`}>
-                  {baseTitle}
+        <div className="grid grid-cols-4 gap-2">
+          {data.badges.map((b) => (
+            <button
+              key={b.key}
+              onClick={() => setSelected(b)}
+              className={`flex flex-col items-center rounded-xl p-2 text-center transition active:scale-95 ${b.earned ? "bg-brand-50" : "bg-slate-50"}`}
+            >
+              <span className={`text-2xl leading-none ${b.earned ? "" : "opacity-30 grayscale"}`}>{b.emoji}</span>
+              <span className={`mt-1 text-[10px] font-medium leading-tight ${b.earned ? "text-slate-700" : "text-slate-400"}`}>
+                {b.title}
+              </span>
+              {!b.earned && b.target ? (
+                <span className="mt-0.5 text-[10px] text-slate-400">
+                  {Math.min(b.current ?? 0, b.target)}/{b.target}
                 </span>
-                <div className="flex shrink-0 gap-1">
-                  {badges.map((b) => {
-                    const lvl = b.target ? (LEVEL_LABEL[b.target] ?? `${b.target}d`) : "?";
-                    const cur = Math.min(b.current ?? 0, b.target ?? 0);
-                    return (
-                      <button
-                        key={b.key}
-                        onClick={() => setSelected(b)}
-                        title={b.title}
-                        className={`flex flex-col items-center rounded-lg px-1.5 py-1 w-11 text-center transition active:scale-95 ${b.earned ? "bg-white shadow-sm" : "bg-slate-100"}`}
-                      >
-                        <span className={`text-sm leading-none ${b.earned ? "" : "opacity-25 grayscale"}`}>{b.emoji}</span>
-                        <span className={`mt-0.5 text-[10px] font-semibold leading-none ${b.earned ? "text-brand-700" : "text-slate-400"}`}>
-                          {lvl}
-                        </span>
-                        {!b.earned && b.target ? (
-                          <span className="text-[9px] text-slate-400 leading-tight mt-0.5">
-                            {cur}/{b.target}
-                          </span>
-                        ) : b.earned ? (
-                          <span className="text-[9px] text-brand-500 leading-tight mt-0.5">✓</span>
-                        ) : null}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
+              ) : null}
+            </button>
+          ))}
         </div>
-
-        {/* Milestone badges */}
-        {milestones.length > 0 && (
-          <>
-            <p className="mb-2 text-xs font-medium text-slate-500">Míľniky</p>
-            <div className="grid grid-cols-3 gap-2">
-              {milestones.map((b) => (
-                <button
-                  key={b.key}
-                  onClick={() => setSelected(b)}
-                  className={`flex flex-col items-center rounded-xl p-2 text-center transition active:scale-95 ${b.earned ? "bg-brand-50" : "bg-slate-50"}`}
-                >
-                  <span className={`text-2xl leading-none ${b.earned ? "" : "opacity-30 grayscale"}`}>{b.emoji}</span>
-                  <span className={`mt-1 text-[11px] font-medium leading-tight ${b.earned ? "text-slate-700" : "text-slate-400"}`}>
-                    {b.title}
-                  </span>
-                  {!b.earned && b.target ? (
-                    <span className="mt-0.5 text-[10px] text-slate-400">
-                      {Math.min(b.current ?? 0, b.target)}/{b.target}
-                    </span>
-                  ) : null}
-                </button>
-              ))}
-            </div>
-          </>
-        )}
 
         {selected && <BadgeModal badge={selected} onClose={() => setSelected(null)} />}
       </section>
