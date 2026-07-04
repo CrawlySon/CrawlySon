@@ -6,8 +6,9 @@ export type DailyStat = {
   calories: number;
   protein: number;
   healthScore: number | null; // vážený priemer zdravosti dňa (0..10)
-  hasFruit: boolean; // bol v daný deň zaznamenaný kus ovocia?
-  hasVegetable: boolean; // bola v daný deň zaznamenaná zelenina?
+  hasFruit: boolean;      // surové/čerstvé ovocie (healthIndex ≥ 8, kat. Ovocie)
+  hasVegetable: boolean;  // surová/čerstvá zelenina (healthIndex ≥ 8, kat. Zelenina)
+  hasProteinShake: boolean; // proteínový šejk podľa názvu/podkategórie
   hasSweets: boolean; // bolo v daný deň niečo sladké?
   hasAlcohol: boolean; // bol v daný deň alkohol?
   waterMl: number;
@@ -93,6 +94,7 @@ const logged = (s: DailyStat) => s.entryCount > 0;
 const metWater = (ctx: BadgeContext) => (s: DailyStat) => ctx.goalWaterMl > 0 && s.waterMl >= ctx.goalWaterMl;
 const hadFruit = (s: DailyStat) => s.hasFruit;
 const hadVegetable = (s: DailyStat) => s.hasVegetable;
+const hadProteinShake = (s: DailyStat) => s.hasProteinShake;
 const healthy = (s: DailyStat) => s.healthScore != null && s.healthScore >= 7;
 const metProtein = (ctx: BadgeContext) => (s: DailyStat) => ctx.goalProtein > 0 && s.protein >= ctx.goalProtein;
 // „Bez ..." sa počíta len pre dni, v ktorých si naozaj niečo zapísal (inak nevieme).
@@ -179,19 +181,19 @@ export const BADGES: BadgeDef[] = [
   streakBadge("water_streak_7", "🌊", "Vodný režim", "7 dní po sebe splnený cieľ vody", "voda", 7, metWater),
   streakBadge("water_streak_14", "🐳", "Dva týždne vody", "14 dní po sebe splnený cieľ vody", "voda", 14, metWater),
 
-  // Strava (ovocie, zelenina, zdravosť, bielkoviny)
-  dayBadge("fruit_day", "🍎", "Vitamínka", "Ovocie aspoň v jeden deň", "strava", () => hadFruit),
-  streakBadge("fruit_streak_5", "🍓", "Päť dní ovocia", "5 dní po sebe ovocie", "strava", 5, () => hadFruit),
-  streakBadge("fruit_streak_10", "🍇", "Desať dní ovocia", "10 dní po sebe ovocie", "strava", 10, () => hadFruit),
-  dayBadge("veg_day", "🥗", "Zelený tanier", "Zelenina aspoň v jeden deň", "strava", () => hadVegetable),
-  streakBadge("veg_streak_5", "🥕", "Päť dní zeleniny", "5 dní po sebe zelenina", "strava", 5, () => hadVegetable),
-  streakBadge("veg_streak_10", "🥬", "Desať dní zeleniny", "10 dní po sebe zelenina", "strava", 10, () => hadVegetable),
+  // Strava (surové ovocie, surová zelenina, zdravosť, proteínový šejk)
+  dayBadge("fruit_day", "🍎", "Vitamínka", "Surové ovocie aspoň v jeden deň", "strava", () => hadFruit),
+  streakBadge("fruit_streak_5", "🍓", "Päť dní ovocia", "5 dní po sebe surové ovocie", "strava", 5, () => hadFruit),
+  streakBadge("fruit_streak_10", "🍇", "Desať dní ovocia", "10 dní po sebe surové ovocie", "strava", 10, () => hadFruit),
+  dayBadge("veg_day", "🥗", "Zelený tanier", "Surová zelenina aspoň v jeden deň", "strava", () => hadVegetable),
+  streakBadge("veg_streak_5", "🥕", "Päť dní zeleniny", "5 dní po sebe surová zelenina", "strava", 5, () => hadVegetable),
+  streakBadge("veg_streak_10", "🥬", "Desať dní zeleniny", "10 dní po sebe surová zelenina", "strava", 10, () => hadVegetable),
   dayBadge("healthy_day", "🥦", "Zdravý tanier", "Deň s priemernou zdravosťou ≥ 7", "strava", () => healthy),
   streakBadge("healthy_streak_5", "🌿", "Čistá strava", "5 dní po sebe zdravosť ≥ 7", "strava", 5, () => healthy),
   streakBadge("healthy_streak_10", "🌳", "Desať čistých dní", "10 dní po sebe zdravosť ≥ 7", "strava", 10, () => healthy),
-  dayBadge("protein_goal", "💪", "Bielkovinový cieľ", "Splnený denný cieľ bielkovín", "strava", metProtein),
-  streakBadge("protein_streak_5", "🥩", "Päť dní bielkovín", "5 dní po sebe cieľ bielkovín", "strava", 5, metProtein),
-  streakBadge("protein_streak_10", "🍗", "Desať dní bielkovín", "10 dní po sebe cieľ bielkovín", "strava", 10, metProtein),
+  dayBadge("protein_goal", "🥤", "Proteínový šejk", "Proteínový šejk aspoň v jeden deň", "strava", () => hadProteinShake),
+  streakBadge("protein_streak_5", "🥤", "Päť dní šejku", "5 dní po sebe proteínový šejk", "strava", 5, () => hadProteinShake),
+  streakBadge("protein_streak_10", "🥤", "Desať dní šejku", "10 dní po sebe proteínový šejk", "strava", 10, () => hadProteinShake),
 
   // Sebadisciplína – série „bez ..." (počítajú sa len zapísané dni)
   streakBadge("no_sweets_streak_7", "🚫🍭", "Týždeň bez sladkého", "7 dní po sebe bez sladkého", "strava", 7, () => noSweets),
@@ -214,10 +216,10 @@ export const STREAKS: StreakDef[] = [
   { type: "cal", emoji: "🎯", title: "Kalorický cieľ", desc: "dni po sebe v kalorickom cieli", pred: inCalorieGoal },
   { type: "log", emoji: "📝", title: "Zápis jedál", desc: "dni po sebe so zapísaným jedlom", pred: () => logged },
   { type: "water", emoji: "💧", title: "Pitný režim", desc: "dni po sebe splnený cieľ vody", pred: metWater },
-  { type: "fruit", emoji: "🍎", title: "Ovocie", desc: "dni po sebe s ovocím", pred: () => hadFruit },
-  { type: "veg", emoji: "🥗", title: "Zelenina", desc: "dni po sebe so zeleninou", pred: () => hadVegetable },
+  { type: "fruit", emoji: "🍎", title: "Surové ovocie", desc: "dni po sebe so surovým ovocím", pred: () => hadFruit },
+  { type: "veg", emoji: "🥗", title: "Surová zelenina", desc: "dni po sebe so surovou zeleninou", pred: () => hadVegetable },
   { type: "healthy", emoji: "🥦", title: "Zdravé dni", desc: "dni po sebe so zdravosťou ≥ 7", pred: () => healthy },
-  { type: "protein", emoji: "💪", title: "Bielkoviny", desc: "dni po sebe splnený cieľ bielkovín", pred: metProtein },
+  { type: "protein", emoji: "🥤", title: "Proteínový šejk", desc: "dni po sebe s proteínovým šejkom", pred: () => hadProteinShake },
   { type: "no_sweets", emoji: "🚫🍭", title: "Bez sladkého", desc: "dni po sebe bez sladkého", pred: () => noSweets },
   { type: "no_alcohol", emoji: "🚱", title: "Bez alkoholu", desc: "dni po sebe bez alkoholu", pred: () => noAlcohol },
 ];

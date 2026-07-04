@@ -11,8 +11,9 @@ import {
   type DailyStat,
 } from "./badges";
 
-const FRUIT_RX = /ovoc/i; // kategória „Ovocie" (case-insensitive)
-const VEG_RX = /zelenin/i; // kategória „Zelenina" (case-insensitive)
+const FRUIT_RX = /ovoc/i;
+const VEG_RX = /zelenin/i;
+const SHAKE_RX = /proteín|protein|šejk|shake|whey|srvátkový|srvátkov|izolát|izolat|koncentrát|koncentrat|gainer/i;
 // Sladké: spoľahlivá je AI kategória „Sladké".
 const SWEETS_RX = /slad/i;
 // Alkohol nemá vlastnú kategóriu vo všetkých záznamoch – detegujeme aj podľa
@@ -63,7 +64,7 @@ export async function buildBadgeContext(userId: string, goals: UserGoals): Promi
   const ensure = (date: string): Acc => {
     let d = byDate.get(date);
     if (!d) {
-      d = { date, calories: 0, protein: 0, healthScore: null, hasFruit: false, hasVegetable: false, hasSweets: false, hasAlcohol: false, waterMl: 0, entryCount: 0, hSum: 0, hWeight: 0 };
+      d = { date, calories: 0, protein: 0, healthScore: null, hasFruit: false, hasVegetable: false, hasProteinShake: false, hasSweets: false, hasAlcohol: false, waterMl: 0, entryCount: 0, hSum: 0, hWeight: 0 };
       byDate.set(date, d);
     }
     return d;
@@ -74,11 +75,13 @@ export async function buildBadgeContext(userId: string, goals: UserGoals): Promi
     d.calories += e.calories;
     d.protein += e.protein;
     d.entryCount += 1;
-    if (e.category && FRUIT_RX.test(e.category)) d.hasFruit = true;
-    if (e.category && VEG_RX.test(e.category)) d.hasVegetable = true;
+    const isRaw = e.healthIndex == null || e.healthIndex >= 8;
+    if (e.category && FRUIT_RX.test(e.category) && isRaw) d.hasFruit = true;
+    if (e.category && VEG_RX.test(e.category) && isRaw) d.hasVegetable = true;
     if (e.category && SWEETS_RX.test(e.category)) d.hasSweets = true;
     const blob = `${e.category || ""} ${e.subcategory || ""} ${e.name || ""}`;
     if (ALCOHOL_RX.test(blob)) d.hasAlcohol = true;
+    if (SHAKE_RX.test(blob)) d.hasProteinShake = true;
     if (e.healthIndex != null) {
       const w = weightOf(e.quantityGrams, e.calories);
       d.hSum += e.healthIndex * w;
@@ -127,6 +130,7 @@ export function dayStat(ctx: BadgeContext, date: string): DailyStat {
       healthScore: null,
       hasFruit: false,
       hasVegetable: false,
+      hasProteinShake: false,
       hasSweets: false,
       hasAlcohol: false,
       waterMl: 0,
