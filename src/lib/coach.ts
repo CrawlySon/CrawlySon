@@ -16,10 +16,12 @@ const VEG_RX = /zelenin/i;
 const SHAKE_RX = /proteín|protein|šejk|shake|whey|srvátkový|srvátkov|izolát|izolat|koncentrát|koncentrat|gainer/i;
 // Sladké: spoľahlivá je AI kategória „Sladké".
 const SWEETS_RX = /slad/i;
-// Alkohol nemá vlastnú kategóriu vo všetkých záznamoch – detegujeme aj podľa
-// názvu/podkategórie (kľúčové slová majú nízke riziko falošnej zhody).
+// Akýkoľvek alkohol (pivo, víno, tvrdý).
 const ALCOHOL_RX =
   /alkohol|\bpiv(o|a|om|e)\b|ležiak|lezia|radler|\bvín(o|a|om|e)\b|\bvin(o|a)\b|prosecco|šampan|sampan|\bsekt\b|vodk|whisk|\brum\b|\bgin\b|tequil|likér|liker|borovičk|borovick|slivovic|hruškovic|hruskovic|brandy|koňak|konak|cognac|aperol|spritz|mojito|jäger|jager|absint|metax|becher|fernet|\bcider\b|martini|campari|baileys|\bpálenk|palenk/i;
+// Tvrdý alkohol (destiláty) – pivo a víno tu NIE SÚ.
+const HARD_ALCOHOL_RX =
+  /vodk|whisk|\brum\b|\bgin\b|tequil|likér|liker|borovičk|borovick|slivovic|hruškovic|hruskovic|brandy|koňak|konak|cognac|aperol|spritz|mojito|jäger|jager|absint|metax|becher|fernet|martini|campari|baileys|\bpálenk|palenk/i;
 
 // Lokálny dátum (Europe/Bratislava) vo formáte YYYY-MM-DD.
 export function skToday(d = new Date()): string {
@@ -64,7 +66,7 @@ export async function buildBadgeContext(userId: string, goals: UserGoals): Promi
   const ensure = (date: string): Acc => {
     let d = byDate.get(date);
     if (!d) {
-      d = { date, calories: 0, protein: 0, healthScore: null, hasFruit: false, hasVegetable: false, hasProteinShake: false, hasSweets: false, hasAlcohol: false, waterMl: 0, entryCount: 0, hSum: 0, hWeight: 0 };
+      d = { date, calories: 0, protein: 0, healthScore: null, hasFruit: false, hasVegetable: false, hasProteinShake: false, hasSweets: false, hasAlcohol: false, hasHardAlcohol: false, waterMl: 0, entryCount: 0, hSum: 0, hWeight: 0 };
       byDate.set(date, d);
     }
     return d;
@@ -81,6 +83,7 @@ export async function buildBadgeContext(userId: string, goals: UserGoals): Promi
     if (e.category && SWEETS_RX.test(e.category)) d.hasSweets = true;
     const blob = `${e.category || ""} ${e.subcategory || ""} ${e.name || ""}`;
     if (ALCOHOL_RX.test(blob)) d.hasAlcohol = true;
+    if (HARD_ALCOHOL_RX.test(blob)) d.hasHardAlcohol = true;
     if (SHAKE_RX.test(blob)) d.hasProteinShake = true;
     if (e.healthIndex != null) {
       const w = weightOf(e.quantityGrams, e.calories);
@@ -133,6 +136,7 @@ export function dayStat(ctx: BadgeContext, date: string): DailyStat {
       hasProteinShake: false,
       hasSweets: false,
       hasAlcohol: false,
+      hasHardAlcohol: false,
       waterMl: 0,
       entryCount: 0,
     }

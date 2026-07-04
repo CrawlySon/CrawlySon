@@ -9,8 +9,9 @@ export type DailyStat = {
   hasFruit: boolean;      // surové/čerstvé ovocie (healthIndex ≥ 8, kat. Ovocie)
   hasVegetable: boolean;  // surová/čerstvá zelenina (healthIndex ≥ 8, kat. Zelenina)
   hasProteinShake: boolean; // proteínový šejk podľa názvu/podkategórie
-  hasSweets: boolean; // bolo v daný deň niečo sladké?
-  hasAlcohol: boolean; // bol v daný deň alkohol?
+  hasSweets: boolean;
+  hasAlcohol: boolean;
+  hasHardAlcohol: boolean; // tvrdý alkohol (destiláty – bez piva/vína)
   waterMl: number;
   entryCount: number;
 };
@@ -100,6 +101,7 @@ const metProtein = (ctx: BadgeContext) => (s: DailyStat) => ctx.goalProtein > 0 
 // „Bez ..." sa počíta len pre dni, v ktorých si naozaj niečo zapísal (inak nevieme).
 const noSweets = (s: DailyStat) => s.entryCount > 0 && !s.hasSweets;
 const noAlcohol = (s: DailyStat) => s.entryCount > 0 && !s.hasAlcohol;
+const noHardAlcohol = (s: DailyStat) => s.entryCount > 0 && !s.hasHardAlcohol;
 const perfect = (ctx: BadgeContext) => (s: DailyStat) =>
   s.calories > 0 && ctx.goalCalories > 0 && Math.abs(s.calories - ctx.goalCalories) <= ctx.goalCalories * 0.1;
 
@@ -200,6 +202,8 @@ export const BADGES: BadgeDef[] = [
   streakBadge("no_sweets_streak_30", "🦷", "Mesiac bez sladkého", "30 dní po sebe bez sladkého", "strava", 30, () => noSweets),
   streakBadge("no_alcohol_streak_7", "🚱", "Týždeň bez alkoholu", "7 dní po sebe bez alkoholu", "strava", 7, () => noAlcohol),
   streakBadge("no_alcohol_streak_30", "🧘", "Mesiac bez alkoholu", "30 dní po sebe bez alkoholu", "strava", 30, () => noAlcohol),
+  streakBadge("no_hard_alcohol_streak_7", "🥃", "Týždeň bez tvrdého", "7 dní po sebe bez tvrdého alkoholu", "strava", 7, () => noHardAlcohol),
+  streakBadge("no_hard_alcohol_streak_30", "🏅", "Mesiac bez tvrdého", "30 dní po sebe bez tvrdého alkoholu", "strava", 30, () => noHardAlcohol),
 ];
 
 // Katalóg typov sérií pre sekciu „Série a rekordy". Pre každý typ vieme určiť
@@ -222,6 +226,7 @@ export const STREAKS: StreakDef[] = [
   { type: "protein", emoji: "🥤", title: "Proteínový šejk", desc: "dni po sebe s proteínovým šejkom", pred: () => hadProteinShake },
   { type: "no_sweets", emoji: "🚫🍭", title: "Bez sladkého", desc: "dni po sebe bez sladkého", pred: () => noSweets },
   { type: "no_alcohol", emoji: "🚱", title: "Bez alkoholu", desc: "dni po sebe bez alkoholu", pred: () => noAlcohol },
+  { type: "no_hard_alcohol", emoji: "🥃", title: "Bez tvrdého alkoholu", desc: "dni po sebe bez tvrdého alkoholu", pred: () => noHardAlcohol },
 ];
 
 export const BADGE_BY_KEY = new Map(BADGES.map((b) => [b.key, b]));
