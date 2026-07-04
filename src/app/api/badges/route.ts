@@ -37,6 +37,7 @@ export async function GET() {
       title: b.title,
       desc: b.desc,
       group: b.group,
+      challengeId: b.challengeId,
       earned: earnedAt != null,
       earnedAt,
       current: ev.current ?? null,

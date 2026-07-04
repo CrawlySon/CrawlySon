@@ -102,6 +102,7 @@ export type Badge = {
   title: string;
   desc: string;
   group: string;
+  challengeId?: string;
   earned: boolean;
   earnedAt: string | null;
   current: number | null;
