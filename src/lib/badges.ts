@@ -164,46 +164,91 @@ function countBadge(
   };
 }
 
+// Otaguje badge do challenge skupiny.
+function inChallenge(id: string, b: BadgeDef): BadgeDef {
+  return { ...b, challengeId: id };
+}
+
+// Metadata challenge skupín pre UI (poradie = poradie zobrazenia).
+export const CHALLENGE_META: Record<string, { emoji: string; title: string }> = {
+  cal:         { emoji: "🎯",    title: "Kalorická disciplína" },
+  log:         { emoji: "📝",    title: "Pravidelnosť zápisu" },
+  water:       { emoji: "💧",    title: "Hydratácia" },
+  fruit:       { emoji: "🍎",    title: "Surové ovocie" },
+  veg:         { emoji: "🥗",    title: "Surová zelenina" },
+  healthy:     { emoji: "🥦",    title: "Zdravá strava" },
+  protein:     { emoji: "🥤",    title: "Proteínový šejk" },
+  no_sweets:   { emoji: "🚫🍭", title: "Bez sladkého" },
+  no_alcohol:  { emoji: "🚱",    title: "Bez alkoholu" },
+  no_hard_alc: { emoji: "🥃",    title: "Bez tvrdého alkoholu" },
+};
+export const CHALLENGE_ORDER = Object.keys(CHALLENGE_META);
+
 export const BADGES: BadgeDef[] = [
-  // Kalorická disciplína
-  streakBadge("cal_streak_3",  "🎯", "Na ceste",             "3 dni po sebe v kalorickom cieli",  "kalórie", 3,  inCalorieGoal),
-  streakBadge("cal_streak_7",  "🔥", "Týždeň disciplíny",    "7 dní po sebe v kalorickom cieli",  "kalórie", 7,  inCalorieGoal),
-  streakBadge("cal_streak_14", "🏆", "Majster sebakontroly", "14 dní po sebe v kalorickom cieli", "kalórie", 14, inCalorieGoal),
-  streakBadge("cal_streak_30", "🥇", "Mesiac v cieli",       "30 dní po sebe v kalorickom cieli", "kalórie", 30, inCalorieGoal),
-  dayBadge("perfect_day",      "⭐", "Presný zásah",         "Deň v rozmedzí ±10 % kalorického cieľa", "míľnik", perfect),
+  // Kalorická disciplína (1d → 3d → 7d → 30d)
+  inChallenge("cal", streakBadge("cal_1",  "🎯", "Prvý krok",           "1 deň v kalorickom cieli",    "kalórie", 1,  inCalorieGoal)),
+  inChallenge("cal", streakBadge("cal_3",  "🎯", "Na ceste",            "3 dni po sebe v cieli",       "kalórie", 3,  inCalorieGoal)),
+  inChallenge("cal", streakBadge("cal_7",  "🔥", "Týždeň disciplíny",   "7 dní po sebe v cieli",       "kalórie", 7,  inCalorieGoal)),
+  inChallenge("cal", streakBadge("cal_30", "🥇", "Mesiac v cieli",      "30 dní po sebe v cieli",      "kalórie", 30, inCalorieGoal)),
 
   // Pravidelnosť zápisu
-  streakBadge("log_streak_7",  "📝", "Pravidelný",    "7 dní po sebe zapísané jedlo",  "zápis", 7,  () => logged),
-  streakBadge("log_streak_30", "📅", "Mesiac v kuse", "30 dní po sebe zapísané jedlo", "zápis", 30, () => logged),
-  countBadge("entries_10",  "🌱",  "Začiatočník", "10 zapísaných jedál",  10),
-  countBadge("entries_100", "🍽️", "Foodlogger",  "100 zapísaných jedál", 100),
+  inChallenge("log", streakBadge("log_1",  "📝", "Zapisovač",     "1 deň so zapísaným jedlom",   "zápis", 1,  () => logged)),
+  inChallenge("log", streakBadge("log_3",  "📝", "Pravidelný",    "3 dni po sebe zapísané",      "zápis", 3,  () => logged)),
+  inChallenge("log", streakBadge("log_7",  "📅", "Fooddiarista",  "7 dní po sebe zapísané",      "zápis", 7,  () => logged)),
+  inChallenge("log", streakBadge("log_30", "📅", "Mesiac v kuse", "30 dní po sebe zapísané",     "zápis", 30, () => logged)),
 
   // Hydratácia
-  dayBadge("water_goal",         "💧", "Hydratovaný",     "Splnený denný cieľ vody",           "voda", metWater),
-  streakBadge("water_streak_7",  "🌊", "Vodný režim",     "7 dní po sebe splnený cieľ vody",   "voda", 7,  metWater),
-  streakBadge("water_streak_14", "🐳", "Dva týždne vody", "14 dní po sebe splnený cieľ vody",  "voda", 14, metWater),
+  inChallenge("water", streakBadge("water_1",  "💧", "Hydratovaný",    "1 deň splnený cieľ vody",    "voda", 1,  metWater)),
+  inChallenge("water", streakBadge("water_3",  "💧", "Vodná rutina",   "3 dni po sebe splnený cieľ", "voda", 3,  metWater)),
+  inChallenge("water", streakBadge("water_7",  "🌊", "Vodný režim",    "7 dní po sebe splnený cieľ", "voda", 7,  metWater)),
+  inChallenge("water", streakBadge("water_30", "🐳", "Vodný majster",  "30 dní po sebe splnený cieľ","voda", 30, metWater)),
 
-  // Strava – surové ovocie, surová zelenina, zdravosť, proteínový šejk
-  dayBadge("fruit_day",            "🍎", "Vitamínka",          "Surové ovocie aspoň v jeden deň",     "strava", () => hadFruit),
-  streakBadge("fruit_streak_5",    "🍓", "Päť dní ovocia",     "5 dní po sebe surové ovocie",         "strava", 5,  () => hadFruit),
-  streakBadge("fruit_streak_10",   "🍇", "Desať dní ovocia",   "10 dní po sebe surové ovocie",        "strava", 10, () => hadFruit),
-  dayBadge("veg_day",              "🥗", "Zelený tanier",      "Surová zelenina aspoň v jeden deň",   "strava", () => hadVegetable),
-  streakBadge("veg_streak_5",      "🥕", "Päť dní zeleniny",   "5 dní po sebe surová zelenina",       "strava", 5,  () => hadVegetable),
-  streakBadge("veg_streak_10",     "🥬", "Desať dní zeleniny", "10 dní po sebe surová zelenina",      "strava", 10, () => hadVegetable),
-  dayBadge("healthy_day",          "🥦", "Zdravý tanier",      "Deň s priemernou zdravosťou ≥ 7",    "strava", () => healthy),
-  streakBadge("healthy_streak_5",  "🌿", "Čistá strava",       "5 dní po sebe zdravosť ≥ 7",         "strava", 5,  () => healthy),
-  streakBadge("healthy_streak_10", "🌳", "Desať čistých dní",  "10 dní po sebe zdravosť ≥ 7",        "strava", 10, () => healthy),
-  dayBadge("protein_goal",         "🥤", "Šejkár",             "Proteínový šejk aspoň v jeden deň",  "strava", () => hadProteinShake),
-  streakBadge("protein_streak_5",  "🥤", "Päť dní šejku",      "5 dní po sebe proteínový šejk",      "strava", 5,  () => hadProteinShake),
-  streakBadge("protein_streak_10", "🥤", "Desať dní šejku",    "10 dní po sebe proteínový šejk",     "strava", 10, () => hadProteinShake),
+  // Surové ovocie
+  inChallenge("fruit", streakBadge("fruit_1",  "🍎", "Vitamínka",     "1 deň surové ovocie",         "strava", 1,  () => hadFruit)),
+  inChallenge("fruit", streakBadge("fruit_3",  "🍓", "Ovocná trojka", "3 dni po sebe surové ovocie", "strava", 3,  () => hadFruit)),
+  inChallenge("fruit", streakBadge("fruit_7",  "🍓", "Týždeň ovocia","7 dní po sebe surové ovocie",  "strava", 7,  () => hadFruit)),
+  inChallenge("fruit", streakBadge("fruit_30", "🍇", "Ovocný mesiac", "30 dní po sebe surové ovocie","strava", 30, () => hadFruit)),
 
-  // Sebadisciplína – série „bez ..."
-  streakBadge("no_sweets_streak_7",        "🚫🍭", "Týždeň bez sladkého", "7 dní po sebe bez sladkého",         "strava", 7,  () => noSweets),
-  streakBadge("no_sweets_streak_30",       "🦷",   "Mesiac bez sladkého", "30 dní po sebe bez sladkého",        "strava", 30, () => noSweets),
-  streakBadge("no_alcohol_streak_7",       "🚱",   "Týždeň bez alkoholu", "7 dní po sebe bez alkoholu",         "strava", 7,  () => noAlcohol),
-  streakBadge("no_alcohol_streak_30",      "🧘",   "Mesiac bez alkoholu", "30 dní po sebe bez alkoholu",        "strava", 30, () => noAlcohol),
-  streakBadge("no_hard_alcohol_streak_7",  "🥃",   "Týždeň bez tvrdého",  "7 dní po sebe bez tvrdého alkoholu", "strava", 7,  () => noHardAlcohol),
-  streakBadge("no_hard_alcohol_streak_30", "🏅",   "Mesiac bez tvrdého",  "30 dní po sebe bez tvrdého alkoholu","strava", 30, () => noHardAlcohol),
+  // Surová zelenina
+  inChallenge("veg", streakBadge("veg_1",  "🥗", "Zelený tanier",    "1 deň surová zelenina",         "strava", 1,  () => hadVegetable)),
+  inChallenge("veg", streakBadge("veg_3",  "🥕", "Zelená trojka",    "3 dni po sebe surová zelenina", "strava", 3,  () => hadVegetable)),
+  inChallenge("veg", streakBadge("veg_7",  "🥕", "Týždeň zeleniny", "7 dní po sebe surová zelenina",  "strava", 7,  () => hadVegetable)),
+  inChallenge("veg", streakBadge("veg_30", "🥬", "Zelený mesiac",    "30 dní po sebe surová zelenina","strava", 30, () => hadVegetable)),
+
+  // Zdravá strava
+  inChallenge("healthy", streakBadge("healthy_1",  "🥦", "Zdravý tanier",   "1 deň zdravosť ≥ 7",          "strava", 1,  () => healthy)),
+  inChallenge("healthy", streakBadge("healthy_3",  "🌿", "Čistá trojka",    "3 dni po sebe zdravosť ≥ 7",  "strava", 3,  () => healthy)),
+  inChallenge("healthy", streakBadge("healthy_7",  "🌿", "Zdravý týždeň",   "7 dní po sebe zdravosť ≥ 7",  "strava", 7,  () => healthy)),
+  inChallenge("healthy", streakBadge("healthy_30", "🌳", "Mesiac čistoty",  "30 dní po sebe zdravosť ≥ 7", "strava", 30, () => healthy)),
+
+  // Proteínový šejk
+  inChallenge("protein", streakBadge("protein_1",  "🥤", "Šejkár",      "1 deň proteínový šejk",          "strava", 1,  () => hadProteinShake)),
+  inChallenge("protein", streakBadge("protein_3",  "🥤", "Šejk trojka", "3 dni po sebe proteínový šejk",  "strava", 3,  () => hadProteinShake)),
+  inChallenge("protein", streakBadge("protein_7",  "🥤", "Šejk týždeň", "7 dní po sebe proteínový šejk",  "strava", 7,  () => hadProteinShake)),
+  inChallenge("protein", streakBadge("protein_30", "🥤", "Šejk mesiac", "30 dní po sebe proteínový šejk", "strava", 30, () => hadProteinShake)),
+
+  // Bez sladkého
+  inChallenge("no_sweets", streakBadge("no_sweets_1",  "🚫🍭", "Odolný",               "1 deň bez sladkého",          "strava", 1,  () => noSweets)),
+  inChallenge("no_sweets", streakBadge("no_sweets_3",  "🚫🍭", "Silná vôľa",           "3 dni po sebe bez sladkého",  "strava", 3,  () => noSweets)),
+  inChallenge("no_sweets", streakBadge("no_sweets_7",  "🚫🍭", "Týždeň bez sladkého",  "7 dní po sebe bez sladkého",  "strava", 7,  () => noSweets)),
+  inChallenge("no_sweets", streakBadge("no_sweets_30", "🦷",   "Mesiac bez sladkého",  "30 dní po sebe bez sladkého", "strava", 30, () => noSweets)),
+
+  // Bez alkoholu
+  inChallenge("no_alcohol", streakBadge("no_alcohol_1",  "🚱", "Striedmy",             "1 deň bez alkoholu",          "strava", 1,  () => noAlcohol)),
+  inChallenge("no_alcohol", streakBadge("no_alcohol_3",  "🚱", "Čistá myseľ",          "3 dni po sebe bez alkoholu",  "strava", 3,  () => noAlcohol)),
+  inChallenge("no_alcohol", streakBadge("no_alcohol_7",  "🚱", "Týždeň bez alkoholu",  "7 dní po sebe bez alkoholu",  "strava", 7,  () => noAlcohol)),
+  inChallenge("no_alcohol", streakBadge("no_alcohol_30", "🧘", "Mesiac bez alkoholu",  "30 dní po sebe bez alkoholu", "strava", 30, () => noAlcohol)),
+
+  // Bez tvrdého alkoholu
+  inChallenge("no_hard_alc", streakBadge("no_hard_alc_1",  "🥃", "Bez pálenky",        "1 deň bez tvrdého alkoholu",          "strava", 1,  () => noHardAlcohol)),
+  inChallenge("no_hard_alc", streakBadge("no_hard_alc_3",  "🥃", "Čistý víkend",       "3 dni po sebe bez tvrdého alkoholu",  "strava", 3,  () => noHardAlcohol)),
+  inChallenge("no_hard_alc", streakBadge("no_hard_alc_7",  "🥃", "Týždeň bez tvrdého", "7 dní po sebe bez tvrdého alkoholu",  "strava", 7,  () => noHardAlcohol)),
+  inChallenge("no_hard_alc", streakBadge("no_hard_alc_30", "🏅", "Mesiac bez tvrdého", "30 dní po sebe bez tvrdého alkoholu", "strava", 30, () => noHardAlcohol)),
+
+  // Míľniky (bez challengeId)
+  countBadge("entries_10",  "🌱",  "Začiatočník", "10 zapísaných jedál",  10),
+  countBadge("entries_100", "🍽️", "Foodlogger",  "100 zapísaných jedál", 100),
+  dayBadge("perfect_day",   "⭐",  "Presný zásah","Deň v rozmedzí ±10 % kalorického cieľa", "míľnik", perfect),
 ];
 
 // Katalóg typov sérií pre sekciu „Série a rekordy". Pre každý typ vieme určiť

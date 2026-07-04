@@ -7,6 +7,7 @@ import { recommendedCalories, suggestedMacros, tdee } from "@/lib/nutrition";
 import { enablePush, disablePush, isPushSupported, isStandalone } from "@/lib/push-client";
 import { getCache, setCache } from "@/lib/page-cache";
 import type { Profile, Badge, Streak } from "@/lib/types";
+import { CHALLENGE_META, CHALLENGE_ORDER } from "@/lib/badges";
 
 const DEFAULT_WATER_RULES = [
   { hour: 12, minMl: 500 },
@@ -414,35 +415,83 @@ function BadgesSection() {
 
   if (!data) return null;
 
+  // Group badges by challengeId; ungrouped → milestones.
+  const groups = new Map<string, Badge[]>();
+  const milestones: Badge[] = [];
+  for (const b of data.badges) {
+    if (b.challengeId) {
+      const arr = groups.get(b.challengeId) ?? [];
+      arr.push(b);
+      groups.set(b.challengeId, arr);
+    } else {
+      milestones.push(b);
+    }
+  }
+
   return (
     <>
       {data.streaks && <StreaksSection streaks={data.streaks} />}
       <section className="card mb-4 p-4">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="font-semibold text-slate-700">🏅 Odznaky</h2>
-          <span className="text-xs text-slate-400">
-            {data.earnedCount} / {data.total}
-          </span>
+          <span className="text-xs text-slate-400">{data.earnedCount} / {data.total}</span>
         </div>
-        <div className="grid grid-cols-4 gap-2">
-          {data.badges.map((b) => (
-            <button
-              key={b.key}
-              onClick={() => setSelected(b)}
-              className={`flex flex-col items-center rounded-xl p-2 text-center transition active:scale-95 ${b.earned ? "bg-brand-50" : "bg-slate-50"}`}
-            >
-              <span className={`text-2xl leading-none ${b.earned ? "" : "opacity-30 grayscale"}`}>{b.emoji}</span>
-              <span className={`mt-1 text-[10px] font-medium leading-tight ${b.earned ? "text-slate-700" : "text-slate-400"}`}>
-                {b.title}
-              </span>
-              {!b.earned && b.target ? (
-                <span className="mt-0.5 text-[10px] text-slate-400">
-                  {Math.min(b.current ?? 0, b.target)}/{b.target}
-                </span>
-              ) : null}
-            </button>
-          ))}
+
+        <div className="space-y-4">
+          {CHALLENGE_ORDER.map((id) => {
+            const badges = groups.get(id);
+            if (!badges?.length) return null;
+            const meta = CHALLENGE_META[id];
+            const anyEarned = badges.some((b) => b.earned);
+            return (
+              <div key={id}>
+                <p className={`mb-1.5 text-[11px] font-semibold uppercase tracking-wide ${anyEarned ? "text-slate-500" : "text-slate-400"}`}>
+                  {meta.emoji} {meta.title}
+                </p>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {badges.map((b) => (
+                    <button
+                      key={b.key}
+                      onClick={() => setSelected(b)}
+                      className={`flex flex-col items-center rounded-xl p-2 text-center transition active:scale-95 ${b.earned ? "bg-brand-50" : "bg-slate-50"}`}
+                    >
+                      <span className={`text-xl leading-none ${b.earned ? "" : "opacity-30 grayscale"}`}>{b.emoji}</span>
+                      <span className={`mt-1 text-[10px] font-medium leading-tight ${b.earned ? "text-slate-700" : "text-slate-400"}`}>
+                        {b.title}
+                      </span>
+                      {!b.earned && b.target ? (
+                        <span className="mt-0.5 text-[9px] text-slate-400">{Math.min(b.current ?? 0, b.target)}/{b.target}</span>
+                      ) : null}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
+
+        {milestones.length > 0 && (
+          <>
+            <p className="mt-4 mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">🏆 Míľniky</p>
+            <div className="grid grid-cols-3 gap-2">
+              {milestones.map((b) => (
+                <button
+                  key={b.key}
+                  onClick={() => setSelected(b)}
+                  className={`flex flex-col items-center rounded-xl p-2 text-center transition active:scale-95 ${b.earned ? "bg-brand-50" : "bg-slate-50"}`}
+                >
+                  <span className={`text-2xl leading-none ${b.earned ? "" : "opacity-30 grayscale"}`}>{b.emoji}</span>
+                  <span className={`mt-1 text-[11px] font-medium leading-tight ${b.earned ? "text-slate-700" : "text-slate-400"}`}>
+                    {b.title}
+                  </span>
+                  {!b.earned && b.target ? (
+                    <span className="mt-0.5 text-[10px] text-slate-400">{Math.min(b.current ?? 0, b.target)}/{b.target}</span>
+                  ) : null}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
 
         {selected && <BadgeModal badge={selected} onClose={() => setSelected(null)} />}
       </section>
