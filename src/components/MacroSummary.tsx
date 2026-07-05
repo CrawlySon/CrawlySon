@@ -4,24 +4,23 @@ import { round } from "@/lib/nutrition";
 import type { Totals, Profile } from "@/lib/types";
 
 function Ring({ value, goal, color }: { value: number; goal: number; color: string }) {
-  const pct = goal > 0 ? Math.min(1, value / goal) : 0;
   const r = 52;
   const c = 2 * Math.PI * r;
+  const pctGreen  = goal > 0 ? Math.min(1, value / goal) : 0;
+  const pctYellow = goal > 0 ? Math.max(0, Math.min(1, (value - goal) / goal)) : 0;
+  const pctRed    = goal > 0 ? Math.max(0, Math.min(1, (value - 2 * goal) / goal)) : 0;
   return (
     <svg viewBox="0 0 120 120" className="h-32 w-32 -rotate-90">
       <circle cx="60" cy="60" r={r} fill="none" stroke="#e2e8f0" strokeWidth="12" />
-      <circle
-        cx="60"
-        cy="60"
-        r={r}
-        fill="none"
-        stroke={color}
-        strokeWidth="12"
-        strokeLinecap="round"
-        strokeDasharray={c}
-        strokeDashoffset={c * (1 - pct)}
-        className="transition-all duration-500"
-      />
+      <circle cx="60" cy="60" r={r} fill="none" stroke={color} strokeWidth="12"
+        strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - pctGreen)}
+        className="transition-all duration-500" />
+      <circle cx="60" cy="60" r={r} fill="none" stroke="#f59e0b" strokeWidth="12"
+        strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - pctYellow)}
+        className="transition-all duration-500" />
+      <circle cx="60" cy="60" r={r} fill="none" stroke="#ef4444" strokeWidth="12"
+        strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - pctRed)}
+        className="transition-all duration-500" />
     </svg>
   );
 }
