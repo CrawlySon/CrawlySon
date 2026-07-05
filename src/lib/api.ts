@@ -92,7 +92,7 @@ export const api = {
     req<{ log: any }>(`/api/water`, { method: "POST", body: JSON.stringify({ date, ml }) }),
   deleteWater: (id: string) => req<{ ok: true }>(`/api/water/${id}`, { method: "DELETE" }),
 
-  history: (days: number, category?: string) =>
+  history: (from: string, to: string, category?: string) =>
     req<{
       days: {
         date: string;
@@ -107,7 +107,7 @@ export const api = {
         waterMl: number;
       }[];
       categories: { name: string; calories: number; count: number }[];
-    }>(`/api/history?days=${days}${category ? `&category=${encodeURIComponent(category)}` : ""}`),
+    }>(`/api/history?from=${from}&to=${to}${category ? `&category=${encodeURIComponent(category)}` : ""}`),
 
   login: (username: string, password: string) =>
     req<{ ok: true; username: string }>(`/api/auth/login`, {

@@ -30,19 +30,30 @@ export async function GET(req: Request) {
   if (!userId) return NextResponse.json({ error: "Neprihlásený" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
-  const days = Math.min(120, Math.max(1, parseInt(searchParams.get("days") || "14", 10)));
   const category = (searchParams.get("category") || "").trim();
 
-  const since = new Date();
-  since.setDate(since.getDate() - (days - 1));
-  const sinceISO = since.toISOString().slice(0, 10);
+  const fromParam = searchParams.get("from");
+  const toParam = searchParams.get("to");
+  let sinceISO: string;
+  let untilISO: string;
+  if (fromParam && toParam) {
+    sinceISO = fromParam;
+    untilISO = toParam;
+  } else {
+    const days = Math.min(400, Math.max(1, parseInt(searchParams.get("days") || "14", 10)));
+    const now = new Date();
+    untilISO = now.toISOString().slice(0, 10);
+    const since = new Date(now);
+    since.setDate(since.getDate() - (days - 1));
+    sinceISO = since.toISOString().slice(0, 10);
+  }
 
   const [entries, waterLogs] = await Promise.all([
     prisma.entry.findMany({
-      where: { userId, date: { gte: sinceISO } },
+      where: { userId, date: { gte: sinceISO, lte: untilISO } },
       select: { date: true, calories: true, protein: true, carbs: true, fat: true, quantityGrams: true, healthIndex: true, category: true },
     }),
-    prisma.waterLog.findMany({ where: { userId, date: { gte: sinceISO } }, select: { date: true, ml: true } }),
+    prisma.waterLog.findMany({ where: { userId, date: { gte: sinceISO, lte: untilISO } }, select: { date: true, ml: true } }),
   ]);
 
   const waterByDate = new Map<string, number>();
