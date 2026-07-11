@@ -26,6 +26,7 @@ export type ParsedItem = {
   healthIndex: number | null; // 0..10
   confidence: number; // 0..1
   assumption?: string; // čo AI predpokladala
+  mealType?: MealType; // per-item typ jedla (multi-meal diktovanie)
 };
 
 export type Entry = {

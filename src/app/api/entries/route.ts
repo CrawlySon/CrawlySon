@@ -69,13 +69,14 @@ export async function POST(req: Request) {
 
   const items = Array.isArray(body.items) ? body.items : [body];
 
+  const VALID_MEALS = ["breakfast", "snack", "lunch", "afternoon", "dinner", "supper", "other"];
   const created = await prisma.$transaction(
     items.map((it: any) =>
       prisma.entry.create({
         data: {
           userId,
           date,
-          mealType,
+          mealType: it.mealType && VALID_MEALS.includes(it.mealType) ? String(it.mealType) : mealType,
           name: String(it.name || "Jedlo"),
           quantityGrams: it.quantityGrams != null ? Number(it.quantityGrams) : null,
           calories: Math.max(0, Number(it.calories || 0)),

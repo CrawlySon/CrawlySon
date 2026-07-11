@@ -391,6 +391,26 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
     { calories: 0, protein: 0, carbs: 0, fat: 0 }
   );
 
+  // Multi-meal: more than 1 distinct AI-assigned meal type across items
+  const isMultiMeal = (() => {
+    const distinct = new Set(
+      items.map((it) => it.mealType).filter((m): m is MealType => !!m && m !== "other")
+    );
+    return distinct.size > 1;
+  })();
+
+  const mealGroups: { mealKey: MealType; indices: number[] }[] = isMultiMeal
+    ? (() => {
+        const map = new Map<MealType, number[]>();
+        items.forEach((it, idx) => {
+          const m: MealType = it.mealType && it.mealType !== "other" ? it.mealType : meal;
+          if (!map.has(m)) map.set(m, []);
+          map.get(m)!.push(idx);
+        });
+        return MEAL_ORDER.filter((m) => map.has(m)).map((m) => ({ mealKey: m, indices: map.get(m)! }));
+      })()
+    : [];
+
   return (
     <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/40" onClick={onClose}>
       <div
@@ -610,9 +630,22 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
             <h3 className="px-1 text-sm font-semibold text-slate-500">
               Návrh ({items.length}) — skontroluj a uprav:
             </h3>
-            {items.map((it, idx) => (
-              <ItemCard key={idx} item={it} onChange={(p) => updateItem(idx, p)} onRemove={() => removeItem(idx)} />
-            ))}
+            {isMultiMeal
+              ? mealGroups.map(({ mealKey, indices }) => (
+                  <div key={mealKey}>
+                    <p className="mt-1 px-1 text-[11px] font-semibold uppercase tracking-wide text-brand-600">
+                      {MEAL_LABELS[mealKey]}
+                    </p>
+                    {indices.map((idx) => (
+                      <div key={idx} className="mt-1.5">
+                        <ItemCard item={items[idx]} onChange={(p) => updateItem(idx, p)} onRemove={() => removeItem(idx)} />
+                      </div>
+                    ))}
+                  </div>
+                ))
+              : items.map((it, idx) => (
+                  <ItemCard key={idx} item={it} onChange={(p) => updateItem(idx, p)} onRemove={() => removeItem(idx)} />
+                ))}
 
             <div className="card flex items-center justify-between p-3 text-sm">
               <span className="font-semibold text-slate-700">Spolu</span>
@@ -799,6 +832,11 @@ function ItemCard({
           >
             {Math.round(item.confidence * 100)} %
           </span>
+          {item.mealType && item.mealType !== "other" && (
+            <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-medium text-brand-600">
+              {MEAL_LABELS[item.mealType]}
+            </span>
+          )}
           <button onClick={() => setOpen((o) => !o)} className="text-xs text-slate-400">
             {open ? "skryť" : "upraviť"}
           </button>
@@ -810,6 +848,24 @@ function ItemCard({
 
       {open && (
         <div className="mt-3 space-y-2">
+          <div>
+            <p className="mb-1 text-xs text-slate-400">Typ jedla</p>
+            <div className="flex flex-wrap gap-1">
+              {MEAL_ORDER.map((m) => (
+                <button
+                  key={m}
+                  onClick={() => onChange({ mealType: m })}
+                  className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium ${
+                    (item.mealType ?? "other") === m
+                      ? "bg-brand-600 text-white"
+                      : "bg-slate-100 text-slate-600"
+                  }`}
+                >
+                  {MEAL_LABELS[m]}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="rounded-lg bg-brand-50 p-2">
             <label className="text-xs">
               <span className="font-medium text-brand-700">Gramáž (g) — prepočíta kcal aj makrá</span>

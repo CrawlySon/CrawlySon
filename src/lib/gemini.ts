@@ -164,11 +164,16 @@ PRAVIDLÁ:
   gramáž a prepočítaj. Inak odhadni podľa bežných nutričných tabuliek.
 - "confidence" je tvoja istota odhadu od 0 do 1.
 - Buď realistický, nepreháňaj presnosť. Názvy polož v slovenčine.
-- Z textu rozpoznaj aj typ jedla a vráť ho v poli "mealType":
+- Z textu rozpoznaj typ jedla a prirad ho KAŽDEJ položke zvlášť v poli "mealType"
+  (aj v "items" pri každej položke zvlášť!):
   raňajky = "breakfast", desiata (dopoludňajšia) = "snack", obed = "lunch",
   olovrant (popoludňajší) = "afternoon", večera = "dinner",
   druhá večera / večerné maškrtenie / nočné jedenie = "supper".
-  Ak používateľ typ jedla NEuvedie, vráť "other".
+  Ak typ jedla pre danú položku NEuvedie, vráť "other".
+  Keď používateľ spomína viac jedál z rôznych častí dňa naraz (napr. „ráno
+  som jedol banán, na obed sviečkovú, na večeru kurací steak"), každá položka
+  dostane správny mealType. Na úrovni top-level "mealType" vráť typ prvého /
+  dominantného jedla.
 
 - Ku každej položke urči "category" (hlavná kategória) a "subcategory"
   (podkategória) v slovenčine. Príklady kategórií: Ovocie, Zelenina, Mäso, Ryby,
@@ -221,6 +226,10 @@ const responseSchema = {
         type: Type.OBJECT,
         properties: {
           name: { type: Type.STRING, description: "Názov potraviny/jedla" },
+          mealType: {
+            type: Type.STRING,
+            description: 'Typ jedla pre túto položku: "breakfast"|"snack"|"lunch"|"afternoon"|"dinner"|"supper"|"other"',
+          },
           quantityGrams: { type: Type.NUMBER, description: "Odhadovaná gramáž porcie (g), 0 ak neznáma" },
           calories: { type: Type.NUMBER, description: "Celkové kcal za porciu" },
           protein: { type: Type.NUMBER, description: "Bielkoviny (g) za porciu" },
@@ -244,7 +253,7 @@ const responseSchema = {
 const PARSE_JSON_SHAPE = `
 
 FORMÁT ODPOVEDE: Vráť IBA platný JSON objekt (bez markdownu, bez vysvetlení) presne v tomto tvare:
-{"mealType":"breakfast|snack|lunch|afternoon|dinner|supper|other","waterMl":0,"items":[{"name":"string","quantityGrams":0,"calories":0,"protein":0,"carbs":0,"fat":0,"fiber":0,"category":"string","subcategory":"string","healthIndex":0,"confidence":0.0,"assumption":"string"}]}`;
+{"mealType":"breakfast|snack|lunch|afternoon|dinner|supper|other","waterMl":0,"items":[{"name":"string","mealType":"breakfast|snack|lunch|afternoon|dinner|supper|other","quantityGrams":0,"calories":0,"protein":0,"carbs":0,"fat":0,"fiber":0,"category":"string","subcategory":"string","healthIndex":0,"confidence":0.0,"assumption":"string"}]}`;
 
 function buildReferenceBlock(foods: ReferenceFood[]): string {
   if (!foods.length) return "";
@@ -325,23 +334,30 @@ export async function parseFood(text: string, reference: ReferenceFood[]): Promi
   const waterMl = parsed.waterMl && Number(parsed.waterMl) > 0 ? Math.round(Number(parsed.waterMl)) : 0;
 
   const arr = Array.isArray(parsed.items) ? parsed.items : [];
-  const items = arr.map((it): ParsedItem => ({
-    name: String(it.name ?? "Neznáme jedlo"),
-    quantityGrams: it.quantityGrams && it.quantityGrams > 0 ? Number(it.quantityGrams) : null,
-    calories: Math.max(0, Number(it.calories ?? 0)),
-    protein: Math.max(0, Number(it.protein ?? 0)),
-    carbs: Math.max(0, Number(it.carbs ?? 0)),
-    fat: Math.max(0, Number(it.fat ?? 0)),
-    fiber: it.fiber && it.fiber > 0 ? Number(it.fiber) : null,
-    category: it.category ? String(it.category) : null,
-    subcategory: it.subcategory ? String(it.subcategory) : null,
-    healthIndex:
-      it.healthIndex != null && !Number.isNaN(Number(it.healthIndex))
-        ? Math.min(10, Math.max(0, Math.round(Number(it.healthIndex))))
-        : null,
-    confidence: Math.min(1, Math.max(0, Number(it.confidence ?? 0.5))),
-    assumption: it.assumption ? String(it.assumption) : undefined,
-  }));
+  const items = arr.map((it): ParsedItem => {
+    const rawItMeal = String(it.mealType ?? "");
+    const itMealType = (MEAL_TYPES as readonly string[]).includes(rawItMeal) && rawItMeal !== "other"
+      ? (rawItMeal as DetectedMeal)
+      : undefined;
+    return {
+      name: String(it.name ?? "Neznáme jedlo"),
+      quantityGrams: it.quantityGrams && it.quantityGrams > 0 ? Number(it.quantityGrams) : null,
+      calories: Math.max(0, Number(it.calories ?? 0)),
+      protein: Math.max(0, Number(it.protein ?? 0)),
+      carbs: Math.max(0, Number(it.carbs ?? 0)),
+      fat: Math.max(0, Number(it.fat ?? 0)),
+      fiber: it.fiber && it.fiber > 0 ? Number(it.fiber) : null,
+      category: it.category ? String(it.category) : null,
+      subcategory: it.subcategory ? String(it.subcategory) : null,
+      healthIndex:
+        it.healthIndex != null && !Number.isNaN(Number(it.healthIndex))
+          ? Math.min(10, Math.max(0, Math.round(Number(it.healthIndex))))
+          : null,
+      confidence: Math.min(1, Math.max(0, Number(it.confidence ?? 0.5))),
+      assumption: it.assumption ? String(it.assumption) : undefined,
+      mealType: itMealType,
+    };
+  });
 
   return { items, mealType, waterMl, usage };
 }
