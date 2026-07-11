@@ -86,13 +86,15 @@ function aggregateSeries(
   allDates: string[],
   valueByDate: Map<string, number>,
   granularity: "weekly" | "monthly",
-  skipZero: boolean
+  skipZero: boolean,
+  skipDates?: Set<string>
 ): { label: string; value: number }[] {
   const groups = new Map<string, { sum: number; count: number }>();
   const order: string[] = [];
   for (const date of allDates) {
     const key = granularity === "weekly" ? weekStartISO(date) : date.slice(0, 7);
     if (!groups.has(key)) { groups.set(key, { sum: 0, count: 0 }); order.push(key); }
+    if (skipDates?.has(date)) continue; // nekompletné dni nezapočítavame do priemeru
     const g = groups.get(key)!;
     const v = valueByDate.get(date) ?? 0;
     if (!skipZero || v > 0) { g.sum += v; g.count++; }
@@ -174,12 +176,21 @@ export default function HistoryPage() {
   }, []);
 
   const goal = profile?.goalCalories || 2000;
-  const avg = days.length ? days.reduce((s, d) => s + d.calories, 0) / days.length : 0;
-  const healthDays = days.filter((d) => d.healthScore != null);
+
+  // Deň je „nekompletný", ak nemá žiadne jedlo alebo má menej než polovicu
+  // denného kalorického cieľa (napr. pri cieli 2000 = pod 1000 kcal). Také dni
+  // sú zjavne nedozadané a nezapočítavajú sa do priemerov, mediánu ani agregácií.
+  const INCOMPLETE_FRACTION = 0.5;
+  const isIncompleteDay = (d: Day) => d.count === 0 || d.calories < goal * INCOMPLETE_FRACTION;
+  const incompleteSet = new Set(days.filter(isIncompleteDay).map((d) => d.date));
+  const completeDays = days.filter((d) => !incompleteSet.has(d.date));
+
+  const avg = completeDays.length ? completeDays.reduce((s, d) => s + d.calories, 0) / completeDays.length : 0;
+  const healthDays = completeDays.filter((d) => d.healthScore != null);
   const avgHealth = healthDays.length
     ? healthDays.reduce((s, d) => s + (d.healthScore || 0), 0) / healthDays.length
     : null;
-  const avgWater = days.length ? days.reduce((s, d) => s + (d.waterMl || 0), 0) / days.length : 0;
+  const avgWater = completeDays.length ? completeDays.reduce((s, d) => s + (d.waterMl || 0), 0) / completeDays.length : 0;
 
   const max = Math.max(goal, ...days.map((d) => d.calories), 1);
   const catMax = Math.max(...days.map((d) => d.catCalories), 1);
@@ -204,15 +215,16 @@ export default function HistoryPage() {
   }
 
   // Chart series
-  const chartSeries: { label: string; value: number }[] = isDaily
+  const chartSeries: { label: string; value: number; incomplete?: boolean }[] = isDaily
     ? allDates.map((date) => {
         const [, m, dd] = date.split("-");
-        return { label: `${parseInt(dd)}.${parseInt(m)}.`, value: valueByDate.get(date) ?? 0 };
+        return { label: `${parseInt(dd)}.${parseInt(m)}.`, value: valueByDate.get(date) ?? 0, incomplete: incompleteSet.has(date) };
       })
-    : aggregateSeries(allDates, valueByDate, granularity, isHealthMetric);
+    : aggregateSeries(allDates, valueByDate, granularity, isHealthMetric, incompleteSet);
 
-  // 7-day rolling median (only daily mode, only when toggled)
-  const dailyValues = allDates.map((d) => valueByDate.get(d) ?? 0);
+  // 7-day rolling median (only daily mode, only when toggled) – nekompletné dni
+  // nastavíme na 0, aby ich rollingMedian vynechal (filtruje hodnoty > 0).
+  const dailyValues = allDates.map((d) => (incompleteSet.has(d) ? 0 : valueByDate.get(d) ?? 0));
   const medianValues: (number | null)[] = isDaily && showMedian ? rollingMedian(dailyValues) : [];
 
   const chartGoal = category ? null : metric === "kcal" ? goal : metric === "water" ? (profile ? profile.goalWaterMl / 1000 : null) : null;
@@ -417,20 +429,29 @@ export default function HistoryPage() {
         <div className="card divide-y divide-slate-50">
           {days.map((d) => {
             const showCat = category !== "";
+            const incomplete = incompleteSet.has(d.date);
             const value = showCat ? d.catCalories : d.calories;
             const pct = showCat
               ? Math.min(100, (d.catCalories / catMax) * 100)
               : Math.min(100, (d.calories / max) * 100);
             const over = !showCat && d.calories > goal;
             return (
-              <div key={d.date} className="px-4 py-3">
+              <div key={d.date} className={`px-4 py-3 ${incomplete ? "bg-slate-50/60" : ""}`}>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium capitalize text-slate-700">
+                  <span className="flex items-center gap-1.5 font-medium capitalize text-slate-700">
                     {new Date(d.date + "T00:00:00").toLocaleDateString("sk-SK", {
                       weekday: "short",
                       day: "numeric",
                       month: "numeric",
                     })}
+                    {incomplete && (
+                      <span
+                        className="rounded-full bg-slate-200 px-1.5 py-0.5 text-[10px] font-medium normal-case text-slate-500"
+                        title="Nekompletný deň – nezapočítava sa do priemerov ani mediánu"
+                      >
+                        nekompletné
+                      </span>
+                    )}
                   </span>
                   <span className="flex items-center gap-2">
                     {!showCat && d.healthScore != null && (
@@ -438,13 +459,14 @@ export default function HistoryPage() {
                         ♥ {d.healthScore}
                       </span>
                     )}
-                    <span className={over ? "text-red-500" : "text-slate-600"}>{round(value)} kcal</span>
+                    <span className={incomplete ? "text-slate-400" : over ? "text-red-500" : "text-slate-600"}>{round(value)} kcal</span>
                   </span>
                 </div>
                 <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-slate-100">
                   <div
                     className={`h-full rounded-full ${
-                      showCat ? "bg-slate-700"
+                      incomplete ? "bg-slate-300"
+                        : showCat ? "bg-slate-700"
                         : !over ? "bg-blue-500"
                         : d.calories <= goal * 1.5 ? "bg-amber-400"
                         : "bg-red-400"
@@ -468,6 +490,10 @@ export default function HistoryPage() {
           Farba pruhu: modrá = v rámci cieľa, žltá = do +50 %, červená = nad +50 %.
         </p>
       )}
+      <p className="mt-1 px-1 text-xs text-slate-400">
+        Sivé „nekompletné" dni (bez jedla alebo pod {Math.round(INCOMPLETE_FRACTION * 100)} % cieľa) sa nezapočítavajú do
+        priemerov ani mediánu.
+      </p>
     </div>
   );
 }
@@ -482,7 +508,7 @@ function TimelineChart({
   unit,
   median,
 }: {
-  series: { label: string; value: number }[];
+  series: { label: string; value: number; incomplete?: boolean }[];
   max: number;
   goal: number | null;
   colorFor: (v: number) => string;
@@ -531,12 +557,12 @@ function TimelineChart({
         </g>
       ))}
 
-      {/* Bars */}
+      {/* Bars – nekompletné dni sivé */}
       {series.map((s, i) => {
         const h = Math.max(s.value > 0 ? 1.5 : 0, baseline - y(s.value));
         return (
           <rect key={i} x={cx(i) - barW / 2} y={baseline - h} width={barW} height={h}
-            rx={Math.min(3, barW / 2)} fill={colorFor(s.value)} />
+            rx={Math.min(3, barW / 2)} fill={s.incomplete ? "#cbd5e1" : colorFor(s.value)} />
         );
       })}
 
