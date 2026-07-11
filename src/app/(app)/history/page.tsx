@@ -178,12 +178,18 @@ export default function HistoryPage() {
   const goal = profile?.goalCalories || 2000;
 
   // Deň je „nekompletný", ak nemá žiadne jedlo alebo má menej než polovicu
-  // denného kalorického cieľa (napr. pri cieli 2000 = pod 1000 kcal). Také dni
-  // sú zjavne nedozadané a nezapočítavajú sa do priemerov, mediánu ani agregácií.
+  // denného kalorického cieľa (napr. pri cieli 2000 = pod 1000 kcal).
   const INCOMPLETE_FRACTION = 0.5;
-  const isIncompleteDay = (d: Day) => d.count === 0 || d.calories < goal * INCOMPLETE_FRACTION;
-  const incompleteSet = new Set(days.filter(isIncompleteDay).map((d) => d.date));
-  const completeDays = days.filter((d) => !incompleteSet.has(d.date));
+  const isBelowThreshold = (d: Day) => d.count === 0 || d.calories < goal * INCOMPLETE_FRACTION;
+  // Zo štatistík (priemery, medián, agregácie) vylúčime všetky neúplné dni –
+  // vrátane DNEŠNÉHO, kým je rozrobený, aby priebežný stav neťahal čísla dole.
+  const statsExcludeSet = new Set(days.filter(isBelowThreshold).map((d) => d.date));
+  // Vizuálne (sivá + štítok „nekompletné") označíme len uzavreté minulé dni.
+  // Dnešok necháme normálne farebný, nech je priebežné nahadzovanie vidno v grafe.
+  const incompleteSet = new Set(
+    days.filter((d) => isBelowThreshold(d) && d.date !== today).map((d) => d.date)
+  );
+  const completeDays = days.filter((d) => !statsExcludeSet.has(d.date));
 
   const avg = completeDays.length ? completeDays.reduce((s, d) => s + d.calories, 0) / completeDays.length : 0;
   const healthDays = completeDays.filter((d) => d.healthScore != null);
@@ -220,11 +226,12 @@ export default function HistoryPage() {
         const [, m, dd] = date.split("-");
         return { label: `${parseInt(dd)}.${parseInt(m)}.`, value: valueByDate.get(date) ?? 0, incomplete: incompleteSet.has(date) };
       })
-    : aggregateSeries(allDates, valueByDate, granularity, isHealthMetric, incompleteSet);
+    : aggregateSeries(allDates, valueByDate, granularity, isHealthMetric, statsExcludeSet);
 
-  // 7-day rolling median (only daily mode, only when toggled) – nekompletné dni
-  // nastavíme na 0, aby ich rollingMedian vynechal (filtruje hodnoty > 0).
-  const dailyValues = allDates.map((d) => (incompleteSet.has(d) ? 0 : valueByDate.get(d) ?? 0));
+  // 7-day rolling median (only daily mode, only when toggled) – dni vylúčené zo
+  // štatistík (vrátane rozrobeného dneška) nastavíme na 0, aby ich rollingMedian
+  // vynechal (filtruje hodnoty > 0).
+  const dailyValues = allDates.map((d) => (statsExcludeSet.has(d) ? 0 : valueByDate.get(d) ?? 0));
   const medianValues: (number | null)[] = isDaily && showMedian ? rollingMedian(dailyValues) : [];
 
   const chartGoal = category ? null : metric === "kcal" ? goal : metric === "water" ? (profile ? profile.goalWaterMl / 1000 : null) : null;
@@ -492,7 +499,7 @@ export default function HistoryPage() {
       )}
       <p className="mt-1 px-1 text-xs text-slate-400">
         Sivé „nekompletné" dni (bez jedla alebo pod {Math.round(INCOMPLETE_FRACTION * 100)} % cieľa) sa nezapočítavajú do
-        priemerov ani mediánu.
+        priemerov ani mediánu. Dnešok je v grafe vidno priebežne a do štatistík vstúpi po prekročení prahu.
       </p>
     </div>
   );
