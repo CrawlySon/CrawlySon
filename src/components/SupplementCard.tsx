@@ -20,6 +20,10 @@ function doseText(amount: number | null, unit: string | null): string {
   return `${a} ${u}`.trim();
 }
 
+// Ponuka jednotiek/foriem pre suplementy a lieky
+const UNIT_OPTIONS = ["tableta", "kapsula", "kvapka", "odmerka", "vrecko", "ml", "g", "mg", "µg", "IU", "ks"];
+const UNIT_CUSTOM = "__custom__";
+
 export default function SupplementCard({ date, reloadSignal }: { date: string; reloadSignal: number }) {
   const cached = getCache<State>(suppKey(date));
   const [supplements, setSupplements] = useState<Supplement[]>(cached?.supplements ?? []);
@@ -55,24 +59,35 @@ export default function SupplementCard({ date, reloadSignal }: { date: string; r
 
   const logsForCatalog = (supId: string) => logs.filter((l) => l.supplementId === supId);
 
-  // Ťuknutie na položku katalógu: prepne „užité dnes" (pridá alebo odoberie záznam).
-  async function toggle(sup: Supplement) {
+  // +1 užitie daného suplementu/lieku v tento deň
+  async function inc(sup: Supplement) {
     if (busy.has(sup.id)) return;
     setItemBusy(sup.id, true);
     try {
-      const existing = logsForCatalog(sup.id);
-      if (existing.length) {
-        await api.deleteSupplementLog(existing[existing.length - 1].id);
-      } else {
-        await api.logSupplement({
-          date,
-          supplementId: sup.id,
-          name: sup.name,
-          kind: sup.kind,
-          amount: sup.amount,
-          unit: sup.unit,
-        });
-      }
+      await api.logSupplement({
+        date,
+        supplementId: sup.id,
+        name: sup.name,
+        kind: sup.kind,
+        amount: sup.amount,
+        unit: sup.unit,
+      });
+      await load();
+    } catch {
+      await load();
+    } finally {
+      setItemBusy(sup.id, false);
+    }
+  }
+
+  // −1 užitie (odoberie posledný dnešný záznam daného suplementu/lieku)
+  async function dec(sup: Supplement) {
+    if (busy.has(sup.id)) return;
+    const existing = logsForCatalog(sup.id);
+    if (!existing.length) return;
+    setItemBusy(sup.id, true);
+    try {
+      await api.deleteSupplementLog(existing[existing.length - 1].id);
       await load();
     } catch {
       await load();
@@ -195,9 +210,10 @@ export default function SupplementCard({ date, reloadSignal }: { date: string; r
                     <CatalogRow
                       key={sup.id}
                       sup={sup}
-                      taken={logsForCatalog(sup.id).length > 0}
+                      count={logsForCatalog(sup.id).length}
                       busy={busy.has(sup.id)}
-                      onToggle={() => toggle(sup)}
+                      onInc={() => inc(sup)}
+                      onDec={() => dec(sup)}
                       onEdit={() => setEditingId(sup.id)}
                     />
                   )
@@ -235,41 +251,56 @@ export default function SupplementCard({ date, reloadSignal }: { date: string; r
 
 function CatalogRow({
   sup,
-  taken,
+  count,
   busy,
-  onToggle,
+  onInc,
+  onDec,
   onEdit,
 }: {
   sup: Supplement;
-  taken: boolean;
+  count: number;
   busy: boolean;
-  onToggle: () => void;
+  onInc: () => void;
+  onDec: () => void;
   onEdit: () => void;
 }) {
   const dose = doseText(sup.amount, sup.unit);
+  const taken = count > 0;
   return (
     <div
       className={`flex items-center gap-2 rounded-lg border px-2.5 py-1.5 transition ${
         taken ? "border-brand-200 bg-brand-50" : "border-slate-100 bg-white"
       }`}
     >
-      <button
-        onClick={onToggle}
-        disabled={busy}
-        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-xs transition ${
-          taken ? "border-brand-600 bg-brand-600 text-white" : "border-slate-300 text-transparent"
-        }`}
-        aria-label={taken ? "Zrušiť užitie" : "Označiť ako užité"}
-      >
-        ✓
-      </button>
-      <button onClick={onToggle} disabled={busy} className="min-w-0 flex-1 truncate text-left">
+      <div className="min-w-0 flex-1 truncate">
         <span className={`text-sm font-medium ${taken ? "text-brand-800" : "text-slate-700"}`}>{sup.name}</span>
         {dose && <span className="ml-1.5 text-[11px] font-normal text-slate-400">{dose}</span>}
-      </button>
+      </div>
       <button onClick={onEdit} className="px-0.5 text-slate-300 hover:text-brand-500" title="Upraviť">
         ✎
       </button>
+      {/* počet užití – meniteľný cez − / + */}
+      <div className="flex shrink-0 items-center gap-1.5">
+        <button
+          onClick={onDec}
+          disabled={busy || count === 0}
+          className="flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 text-base leading-none text-slate-500 active:scale-95 disabled:opacity-30"
+          aria-label="Ubrať"
+        >
+          −
+        </button>
+        <span className={`w-4 text-center text-sm font-semibold tabular-nums ${taken ? "text-brand-700" : "text-slate-300"}`}>
+          {count}
+        </span>
+        <button
+          onClick={onInc}
+          disabled={busy}
+          className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-600 text-base leading-none text-white active:scale-95 disabled:opacity-40"
+          aria-label="Pridať"
+        >
+          +
+        </button>
+      </div>
     </div>
   );
 }
@@ -303,20 +334,15 @@ function AddForm({
         placeholder={placeholder}
         className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
       />
-      <div className="flex gap-2">
+      <div className="flex items-start gap-2">
         <input
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
           inputMode="decimal"
-          placeholder="dávka (napr. 1, 1000)"
+          placeholder="dávka (napr. 1)"
           className="w-1/2 rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
         />
-        <input
-          value={unit}
-          onChange={(e) => setUnit(e.target.value)}
-          placeholder="jednotka (tableta, mg…)"
-          className="w-1/2 rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
-        />
+        <UnitSelect value={unit} onChange={setUnit} />
       </div>
       <button
         onClick={submit}
@@ -356,7 +382,7 @@ function EditForm({
         onChange={(e) => setName(e.target.value)}
         className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
       />
-      <div className="flex gap-2">
+      <div className="flex items-start gap-2">
         <input
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
@@ -364,12 +390,7 @@ function EditForm({
           placeholder="dávka"
           className="w-1/2 rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
         />
-        <input
-          value={unit}
-          onChange={(e) => setUnit(e.target.value)}
-          placeholder="jednotka"
-          className="w-1/2 rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
-        />
+        <UnitSelect value={unit} onChange={setUnit} />
       </div>
       <div className="flex items-center gap-2">
         <button onClick={save} disabled={busy || !name.trim()} className="btn-primary flex-1 py-1.5 text-sm disabled:opacity-50">
@@ -382,6 +403,42 @@ function EditForm({
           zmazať
         </button>
       </div>
+    </div>
+  );
+}
+
+// Výber jednotky/formy z ponuky (+ možnosť „Iné…" na vlastnú hodnotu).
+function UnitSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const known = value === "" || UNIT_OPTIONS.includes(value);
+  const [mode, setMode] = useState(known ? value : UNIT_CUSTOM);
+  return (
+    <div className="w-1/2 space-y-1">
+      <select
+        value={mode}
+        onChange={(e) => {
+          const v = e.target.value;
+          setMode(v);
+          onChange(v === UNIT_CUSTOM ? "" : v);
+        }}
+        className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm"
+      >
+        <option value="">forma / jednotka…</option>
+        {UNIT_OPTIONS.map((u) => (
+          <option key={u} value={u}>
+            {u}
+          </option>
+        ))}
+        <option value={UNIT_CUSTOM}>Iné…</option>
+      </select>
+      {mode === UNIT_CUSTOM && (
+        <input
+          autoFocus
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="vlastná jednotka"
+          className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+        />
+      )}
     </div>
   );
 }
