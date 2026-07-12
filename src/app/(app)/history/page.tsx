@@ -220,11 +220,13 @@ export default function HistoryPage() {
     valueByDate.set(date, v);
   }
 
-  // Chart series
-  const chartSeries: { label: string; value: number; incomplete?: boolean }[] = isDaily
+  // Chart series. Nekompletné MINULÉ dni v grafe vôbec nezobrazujeme (hodnota 0 =
+  // žiadny stĺpec). Dnešok v incompleteSet nie je, takže ho vidno vždy priebežne.
+  const chartSeries: { label: string; value: number }[] = isDaily
     ? allDates.map((date) => {
         const [, m, dd] = date.split("-");
-        return { label: `${parseInt(dd)}.${parseInt(m)}.`, value: valueByDate.get(date) ?? 0, incomplete: incompleteSet.has(date) };
+        const value = incompleteSet.has(date) ? 0 : valueByDate.get(date) ?? 0;
+        return { label: `${parseInt(dd)}.${parseInt(m)}.`, value };
       })
     : aggregateSeries(allDates, valueByDate, granularity, isHealthMetric, statsExcludeSet);
 
@@ -498,8 +500,9 @@ export default function HistoryPage() {
         </p>
       )}
       <p className="mt-1 px-1 text-xs text-slate-400">
-        Sivé „nekompletné" dni (bez jedla alebo pod {Math.round(INCOMPLETE_FRACTION * 100)} % cieľa) sa nezapočítavajú do
-        priemerov ani mediánu. Dnešok je v grafe vidno priebežne a do štatistík vstúpi po prekročení prahu.
+        „Nekompletné" dni (bez jedla alebo pod {Math.round(INCOMPLETE_FRACTION * 100)} % cieľa) sa v grafe nezobrazujú a
+        nezapočítavajú do priemerov ani mediánu; v zozname nižšie ostávajú označené. Dnešok je v grafe vždy vidno priebežne a
+        do štatistík vstúpi po prekročení prahu.
       </p>
     </div>
   );
@@ -515,7 +518,7 @@ function TimelineChart({
   unit,
   median,
 }: {
-  series: { label: string; value: number; incomplete?: boolean }[];
+  series: { label: string; value: number }[];
   max: number;
   goal: number | null;
   colorFor: (v: number) => string;
@@ -564,12 +567,12 @@ function TimelineChart({
         </g>
       ))}
 
-      {/* Bars – nekompletné dni sivé */}
+      {/* Bars */}
       {series.map((s, i) => {
         const h = Math.max(s.value > 0 ? 1.5 : 0, baseline - y(s.value));
         return (
           <rect key={i} x={cx(i) - barW / 2} y={baseline - h} width={barW} height={h}
-            rx={Math.min(3, barW / 2)} fill={s.incomplete ? "#cbd5e1" : colorFor(s.value)} />
+            rx={Math.min(3, barW / 2)} fill={colorFor(s.value)} />
         );
       })}
 
