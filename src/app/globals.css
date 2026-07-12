@@ -26,7 +26,7 @@ body {
 /* Skenovacia čiara čiarového kódu */
 @keyframes scanline {
   0% { transform: translateY(0); }
-  50% { transform: translateY(150px); }
+  50% { transform: translateY(var(--scan-travel, 150px)); }
   100% { transform: translateY(0); }
 }
 .scanline {

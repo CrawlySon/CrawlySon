@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 const ELEMENT_ID = "barcode-reader";
 
@@ -13,11 +13,42 @@ export default function BarcodeScanner({
 }) {
   const scannerRef = useRef<any>(null);
   const doneRef = useRef(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState("Spúšťam kameru…");
   const [scanning, setScanning] = useState(false);
   const [scanned, setScanned] = useState<string | null>(null);
   const [manual, setManual] = useState("");
+  // Rozmery skenovacieho rámu (rovnaký výpočet ako qrbox), aby zelená čiara
+  // behala presne vnútri bieleho obdĺžnika a nie mimo neho.
+  const [box, setBox] = useState<{ top: number; height: number; width: number } | null>(null);
+
+  const measureBox = useCallback(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const cw = el.clientWidth;
+    const ch = el.clientHeight;
+    if (!cw || !ch) return;
+    const width = Math.floor(Math.min(cw, 360) * 0.92);
+    const height = Math.floor(Math.min(ch * 0.5, width * 0.55));
+    setBox({ top: Math.round((ch - height) / 2), height, width });
+  }, []);
+
+  // Meraj rám po naštartovaní kamery a pri zmene veľkosti/otočení.
+  useEffect(() => {
+    measureBox();
+    const el = wrapRef.current;
+    window.addEventListener("resize", measureBox);
+    let ro: ResizeObserver | undefined;
+    if (el && typeof ResizeObserver !== "undefined") {
+      ro = new ResizeObserver(() => measureBox());
+      ro.observe(el);
+    }
+    return () => {
+      window.removeEventListener("resize", measureBox);
+      ro?.disconnect();
+    };
+  }, [measureBox]);
 
   useEffect(() => {
     let cancelled = false;
@@ -128,13 +159,19 @@ export default function BarcodeScanner({
         </button>
       </div>
 
-      <div className="relative overflow-hidden rounded-2xl bg-black">
+      <div ref={wrapRef} className="relative overflow-hidden rounded-2xl bg-black">
         <div id={ELEMENT_ID} className="w-full" />
 
-        {/* skenovacia čiara počas hľadania */}
-        {scanning && !scanned && (
-          <div className="pointer-events-none absolute inset-0 flex items-start justify-center">
-            <div className="scanline mt-6 h-0.5 w-4/5 rounded bg-brand-400 shadow-[0_0_12px_2px_rgba(34,197,94,0.7)]" />
+        {/* skenovacia čiara – behá presne vnútri skenovacieho rámu */}
+        {scanning && !scanned && box && (
+          <div
+            className="pointer-events-none absolute left-1/2 -translate-x-1/2"
+            style={{ top: box.top, height: box.height, width: box.width }}
+          >
+            <div
+              className="scanline h-0.5 w-full rounded bg-brand-400 shadow-[0_0_12px_2px_rgba(34,197,94,0.7)]"
+              style={{ ["--scan-travel" as any]: `${Math.max(0, box.height - 4)}px` }}
+            />
           </div>
         )}
 
