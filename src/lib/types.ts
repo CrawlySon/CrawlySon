@@ -119,3 +119,27 @@ export type Streak = {
   best: number;
   isRecord: boolean;
 };
+
+export type SupplementKind = "supplement" | "medication";
+
+// Položka v katalógu pravidelných suplementov/liekov (definícia).
+export type Supplement = {
+  id: string;
+  name: string;
+  kind: SupplementKind;
+  amount: number | null;
+  unit: string | null;
+  sort: number;
+};
+
+// Denný záznam užitia suplementu/lieku.
+export type SupplementLog = {
+  id: string;
+  supplementId: string | null;
+  date: string;
+  name: string;
+  kind: SupplementKind;
+  amount: number | null;
+  unit: string | null;
+  createdAt: string;
+};

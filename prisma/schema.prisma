@@ -46,6 +46,8 @@ model User {
   pushSubs     PushSubscription[]
   achievements Achievement[]
   streakRecords StreakRecord[]
+  supplements    Supplement[]
+  supplementLogs SupplementLog[]
 }
 
 // Odomknutý odznak (achievement). Kľúč zodpovedá katalógu v src/lib/badges.ts.
@@ -176,6 +178,42 @@ model Entry {
 
   @@index([userId, date])
   @@index([category])
+}
+
+// Katalóg pravidelných suplementov a liekov používateľa (definícia sa zadá raz,
+// potom sa každý deň rýchlo odškrtáva). kind = "supplement" | "medication".
+model Supplement {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  kind      String   @default("supplement") // supplement | medication
+  amount    Float? // predvolená dávka (napr. 1, 1000, 5)
+  unit      String? // napr. "tableta", "kapsula", "mg", "ml", "IU", "µg"
+  sort      Int      @default(0)
+  createdAt DateTime @default(now())
+
+  logs SupplementLog[]
+
+  @@index([userId])
+}
+
+// Denný záznam užitia suplementu/lieku (nezávislý od jedál, podobne ako WaterLog).
+// name/amount/unit sú snapshot, aby záznam prežil aj zmazanie z katalógu.
+model SupplementLog {
+  id           String      @id @default(cuid())
+  userId       String
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  supplementId String?
+  supplement   Supplement? @relation(fields: [supplementId], references: [id], onDelete: SetNull)
+  date         String // YYYY-MM-DD
+  name         String
+  kind         String      @default("supplement")
+  amount       Float?
+  unit         String?
+  createdAt    DateTime    @default(now())
+
+  @@index([userId, date])
 }
 
 // Referenčná databáza potravín (hodnoty na 100 g, ak nie je uvedené inak)

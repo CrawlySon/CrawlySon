@@ -11,7 +11,7 @@ async function req<T>(url: string, options?: RequestInit): Promise<T> {
   return res.json();
 }
 
-import type { Entry, ParsedItem, Profile, MealType, Favorite, FavoriteItem, Badge, Streak } from "./types";
+import type { Entry, ParsedItem, Profile, MealType, Favorite, FavoriteItem, Badge, Streak, Supplement, SupplementLog, SupplementKind } from "./types";
 
 export const api = {
   getEntries: (date: string) => req<{ entries: Entry[] }>(`/api/entries?date=${date}`),
@@ -91,6 +91,24 @@ export const api = {
   addWater: (date: string, ml: number) =>
     req<{ log: any }>(`/api/water`, { method: "POST", body: JSON.stringify({ date, ml }) }),
   deleteWater: (id: string) => req<{ ok: true }>(`/api/water/${id}`, { method: "DELETE" }),
+
+  // Suplementy a lieky – katalóg (definície) + denné záznamy užitia
+  getSupplements: (date: string) =>
+    req<{ supplements: Supplement[]; logs: SupplementLog[] }>(`/api/supplements?date=${date}`),
+  addSupplement: (data: { name: string; kind: SupplementKind; amount: number | null; unit: string | null }) =>
+    req<{ supplement: Supplement }>(`/api/supplements`, { method: "POST", body: JSON.stringify(data) }),
+  updateSupplement: (id: string, data: Partial<{ name: string; amount: number | null; unit: string | null; sort: number }>) =>
+    req<{ supplement: Supplement }>(`/api/supplements/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  deleteSupplement: (id: string) => req<{ ok: true }>(`/api/supplements/${id}`, { method: "DELETE" }),
+  logSupplement: (data: {
+    date: string;
+    supplementId?: string | null;
+    name: string;
+    kind: SupplementKind;
+    amount: number | null;
+    unit: string | null;
+  }) => req<{ log: SupplementLog }>(`/api/supplements/log`, { method: "POST", body: JSON.stringify(data) }),
+  deleteSupplementLog: (id: string) => req<{ ok: true }>(`/api/supplements/log/${id}`, { method: "DELETE" }),
 
   history: (from: string, to: string, category?: string) =>
     req<{
