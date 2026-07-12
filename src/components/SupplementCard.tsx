@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { getCache, setCache } from "@/lib/page-cache";
 import type { Supplement, SupplementLog, SupplementKind } from "@/lib/types";
@@ -32,6 +32,18 @@ export default function SupplementCard({ date, reloadSignal }: { date: string; r
   const [addingKind, setAddingKind] = useState<SupplementKind | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
 
+  // Nezosynchronizovaná zmena počtu na položku (±). Zobrazený počet = server + toto,
+  // takže −/+ reaguje okamžite a na server sa zapisuje dávkovo na pozadí.
+  const [pending, setPending] = useState<Record<string, number>>({});
+  const pendingRef = useRef(pending);
+  pendingRef.current = pending;
+  const logsRef = useRef(logs);
+  logsRef.current = logs;
+  const dateRef = useRef(date);
+  dateRef.current = date;
+  const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const flushing = useRef<Set<string>>(new Set());
+
   const load = useCallback(async () => {
     const c = getCache<State>(suppKey(date));
     if (c) {
@@ -48,6 +60,19 @@ export default function SupplementCard({ date, reloadSignal }: { date: string; r
     load();
   }, [load, reloadSignal]);
 
+  // Po odmountovaní zruš všetky bežiace časovače (nech nezapisujú „naprázdno").
+  useEffect(() => {
+    return () => {
+      Object.values(timers.current).forEach(clearTimeout);
+    };
+  }, []);
+  // Pri zmene dátumu zahoď nezosynchronizované delty a časovače (patria starému dňu).
+  useEffect(() => {
+    Object.values(timers.current).forEach(clearTimeout);
+    timers.current = {};
+    setPending({});
+  }, [date]);
+
   function setItemBusy(id: string, on: boolean) {
     setBusy((prev) => {
       const next = new Set(prev);
@@ -57,43 +82,74 @@ export default function SupplementCard({ date, reloadSignal }: { date: string; r
     });
   }
 
-  const logsForCatalog = (supId: string) => logs.filter((l) => l.supplementId === supId);
+  const serverCount = (supId: string) => logs.filter((l) => l.supplementId === supId).length;
+  const displayCount = (supId: string) => Math.max(0, serverCount(supId) + (pending[supId] || 0));
 
-  // +1 užitie daného suplementu/lieku v tento deň
-  async function inc(sup: Supplement) {
-    if (busy.has(sup.id)) return;
-    setItemBusy(sup.id, true);
+  // Zapíše nazbieranú deltu na server (dávkovo) a zosynchronizuje. Debounce cez scheduleFlush.
+  async function flush(supId: string, sup: Supplement) {
+    if (flushing.current.has(supId)) {
+      scheduleFlush(supId, sup); // ešte beží predchádzajúci zápis – skús opäť o chvíľu
+      return;
+    }
+    const delta = pendingRef.current[supId] || 0;
+    if (delta === 0) return;
+    flushing.current.add(supId);
     try {
-      await api.logSupplement({
-        date,
-        supplementId: sup.id,
-        name: sup.name,
-        kind: sup.kind,
-        amount: sup.amount,
-        unit: sup.unit,
+      if (delta > 0) {
+        await Promise.all(
+          Array.from({ length: delta }, () =>
+            api.logSupplement({
+              date: dateRef.current,
+              supplementId: sup.id,
+              name: sup.name,
+              kind: sup.kind,
+              amount: sup.amount,
+              unit: sup.unit,
+            })
+          )
+        );
+      } else {
+        const toDelete = logsRef.current.filter((l) => l.supplementId === supId).slice(delta); // slice(-N)
+        await Promise.all(toDelete.map((l) => api.deleteSupplementLog(l.id)));
+      }
+      // odpočítaj spracovanú deltu (medzičasom mohli pribudnúť ďalšie kliknutia)
+      setPending((p) => {
+        const next = (p[supId] || 0) - delta;
+        const copy = { ...p };
+        if (next === 0) delete copy[supId];
+        else copy[supId] = next;
+        return copy;
       });
       await load();
     } catch {
+      setPending((p) => {
+        const copy = { ...p };
+        delete copy[supId];
+        return copy;
+      });
       await load();
     } finally {
-      setItemBusy(sup.id, false);
+      flushing.current.delete(supId);
     }
   }
 
-  // −1 užitie (odoberie posledný dnešný záznam daného suplementu/lieku)
-  async function dec(sup: Supplement) {
-    if (busy.has(sup.id)) return;
-    const existing = logsForCatalog(sup.id);
-    if (!existing.length) return;
-    setItemBusy(sup.id, true);
-    try {
-      await api.deleteSupplementLog(existing[existing.length - 1].id);
-      await load();
-    } catch {
-      await load();
-    } finally {
-      setItemBusy(sup.id, false);
-    }
+  function scheduleFlush(supId: string, sup: Supplement) {
+    if (timers.current[supId]) clearTimeout(timers.current[supId]);
+    timers.current[supId] = setTimeout(() => flush(supId, sup), 350);
+  }
+
+  // +1 / −1 sa prejaví okamžite (optimisticky), server sa dobehne na pozadí.
+  function inc(sup: Supplement) {
+    setPending((p) => ({ ...p, [sup.id]: (p[sup.id] || 0) + 1 }));
+    scheduleFlush(sup.id, sup);
+  }
+  function dec(sup: Supplement) {
+    setPending((p) => {
+      const cur = serverCount(sup.id) + (p[sup.id] || 0);
+      if (cur <= 0) return p;
+      return { ...p, [sup.id]: (p[sup.id] || 0) - 1 };
+    });
+    scheduleFlush(sup.id, sup);
   }
 
   // Pridá novú položku do katalógu a rovno ju zaznamená ako užitú v tento deň.
@@ -154,7 +210,8 @@ export default function SupplementCard({ date, reloadSignal }: { date: string; r
   }
 
   const catalogIds = new Set(supplements.map((s) => s.id));
-  const takenCount = logs.length;
+  const pendingTotal = Object.values(pending).reduce((a, b) => a + b, 0);
+  const takenCount = Math.max(0, logs.length + pendingTotal);
 
   return (
     <div className="card mt-4 p-4">
@@ -210,8 +267,7 @@ export default function SupplementCard({ date, reloadSignal }: { date: string; r
                     <CatalogRow
                       key={sup.id}
                       sup={sup}
-                      count={logsForCatalog(sup.id).length}
-                      busy={busy.has(sup.id)}
+                      count={displayCount(sup.id)}
                       onInc={() => inc(sup)}
                       onDec={() => dec(sup)}
                       onEdit={() => setEditingId(sup.id)}
@@ -252,14 +308,12 @@ export default function SupplementCard({ date, reloadSignal }: { date: string; r
 function CatalogRow({
   sup,
   count,
-  busy,
   onInc,
   onDec,
   onEdit,
 }: {
   sup: Supplement;
   count: number;
-  busy: boolean;
   onInc: () => void;
   onDec: () => void;
   onEdit: () => void;
@@ -279,12 +333,12 @@ function CatalogRow({
       <button onClick={onEdit} className="px-0.5 text-slate-300 hover:text-brand-500" title="Upraviť">
         ✎
       </button>
-      {/* počet užití – meniteľný cez − / + */}
+      {/* počet užití – meniteľný cez − / + (reaguje okamžite) */}
       <div className="flex shrink-0 items-center gap-1.5">
         <button
           onClick={onDec}
-          disabled={busy || count === 0}
-          className="flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 text-base leading-none text-slate-500 active:scale-95 disabled:opacity-30"
+          disabled={count === 0}
+          className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 text-lg leading-none text-slate-500 active:scale-90 disabled:opacity-30"
           aria-label="Ubrať"
         >
           −
@@ -294,8 +348,7 @@ function CatalogRow({
         </span>
         <button
           onClick={onInc}
-          disabled={busy}
-          className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-600 text-base leading-none text-white active:scale-95 disabled:opacity-40"
+          className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-600 text-lg leading-none text-white active:scale-90"
           aria-label="Pridať"
         >
           +
