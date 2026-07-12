@@ -148,7 +148,7 @@ export default function SupplementCard({ date, reloadSignal }: { date: string; r
         {takenCount > 0 && <span className="text-sm text-slate-400">{takenCount} užité</span>}
       </div>
 
-      <div className="mt-2 space-y-4">
+      <div className="mt-2 space-y-3">
         {KINDS.map((kind) => {
           const meta = KIND_META[kind];
           const items = supplements.filter((s) => s.kind === kind);
@@ -177,7 +177,7 @@ export default function SupplementCard({ date, reloadSignal }: { date: string; r
               )}
 
               {items.length === 0 && adhoc.length === 0 && addingKind !== kind && (
-                <p className="py-1 text-xs text-slate-400">Zatiaľ nič. Ťukni na „+ pridať {meta.addLabel}".</p>
+                <p className="text-xs text-slate-400">Zatiaľ nič. Ťukni na „+ pridať {meta.addLabel}".</p>
               )}
 
               <div className="space-y-1">
@@ -206,13 +206,13 @@ export default function SupplementCard({ date, reloadSignal }: { date: string; r
                 {adhoc.map((l) => (
                   <div
                     key={l.id}
-                    className="flex items-center gap-2 rounded-xl border border-slate-100 bg-white px-3 py-2"
+                    className="flex items-center gap-2 rounded-lg border border-slate-100 bg-white px-2.5 py-1.5"
                   >
-                    <span className="text-brand-500">✓</span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm text-slate-700">{l.name}</span>
+                    <span className="text-sm text-brand-500">✓</span>
+                    <span className="min-w-0 flex-1 truncate text-sm text-slate-700">
+                      {l.name}
                       {doseText(l.amount, l.unit) && (
-                        <span className="block text-[11px] text-slate-400">{doseText(l.amount, l.unit)}</span>
+                        <span className="ml-1.5 text-[11px] text-slate-400">{doseText(l.amount, l.unit)}</span>
                       )}
                     </span>
                     <button
@@ -249,25 +249,23 @@ function CatalogRow({
   const dose = doseText(sup.amount, sup.unit);
   return (
     <div
-      className={`flex items-center gap-2 rounded-xl border px-3 py-2 transition ${
+      className={`flex items-center gap-2 rounded-lg border px-2.5 py-1.5 transition ${
         taken ? "border-brand-200 bg-brand-50" : "border-slate-100 bg-white"
       }`}
     >
       <button
         onClick={onToggle}
         disabled={busy}
-        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-sm transition ${
+        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-xs transition ${
           taken ? "border-brand-600 bg-brand-600 text-white" : "border-slate-300 text-transparent"
         }`}
         aria-label={taken ? "Zrušiť užitie" : "Označiť ako užité"}
       >
         ✓
       </button>
-      <button onClick={onToggle} disabled={busy} className="min-w-0 flex-1 text-left">
-        <span className={`block truncate text-sm font-medium ${taken ? "text-brand-800" : "text-slate-700"}`}>
-          {sup.name}
-        </span>
-        {dose && <span className="block text-[11px] text-slate-400">{dose}</span>}
+      <button onClick={onToggle} disabled={busy} className="min-w-0 flex-1 truncate text-left">
+        <span className={`text-sm font-medium ${taken ? "text-brand-800" : "text-slate-700"}`}>{sup.name}</span>
+        {dose && <span className="ml-1.5 text-[11px] font-normal text-slate-400">{dose}</span>}
       </button>
       <button onClick={onEdit} className="px-0.5 text-slate-300 hover:text-brand-500" title="Upraviť">
         ✎
