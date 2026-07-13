@@ -4,6 +4,39 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 const ELEMENT_ID = "barcode-reader";
 
+// Torch (svetlo) cez html5-qrcode. Novšie verzie majú torchFeature(),
+// staršie sa riešia cez applyVideoConstraints. Podpora závisí od zariadenia
+// (Android Chrome áno; iOS Safari zvyčajne nie).
+function torchFeature(scanner: any): any | null {
+  try {
+    const caps = scanner?.getRunningTrackCameraCapabilities?.();
+    const tf = caps?.torchFeature?.();
+    if (tf && (typeof tf.isSupported !== "function" || tf.isSupported())) return tf;
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+function torchIsSupported(scanner: any): boolean {
+  if (torchFeature(scanner)) return true;
+  try {
+    const caps = scanner?.getRunningTrackCapabilities?.();
+    return !!(caps && caps.torch);
+  } catch {
+    return false;
+  }
+}
+
+async function applyTorch(scanner: any, on: boolean): Promise<void> {
+  const tf = torchFeature(scanner);
+  if (tf?.apply) {
+    await tf.apply(on);
+    return;
+  }
+  await scanner.applyVideoConstraints({ advanced: [{ torch: on }] } as any);
+}
+
 export default function BarcodeScanner({
   onResult,
   onClose,
@@ -19,6 +52,10 @@ export default function BarcodeScanner({
   const [scanning, setScanning] = useState(false);
   const [scanned, setScanned] = useState<string | null>(null);
   const [manual, setManual] = useState("");
+  // Svetlo (baterka). Nemusí byť podporované (napr. iOS Safari) – tlačidlo sa
+  // ukáže len ak zariadenie/prehliadač torch vie.
+  const [torchSupported, setTorchSupported] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
   // Rozmery skenovacieho rámu (rovnaký výpočet ako qrbox), aby zelená čiara
   // behala presne vnútri bieleho obdĺžnika a nie mimo neho.
   const [box, setBox] = useState<{ top: number; height: number; width: number } | null>(null);
@@ -108,7 +145,15 @@ export default function BarcodeScanner({
             /* per-frame "not found" – ignoruj */
           }
         );
-        if (!cancelled) setScanning(true);
+        if (!cancelled) {
+          setScanning(true);
+          // Zisti, či zariadenie podporuje svetlo (torch).
+          try {
+            if (torchIsSupported(scanner)) setTorchSupported(true);
+          } catch {
+            /* ignore */
+          }
+        }
       } catch (e: any) {
         setError("Nepodarilo sa spustiť kameru. Povoľ prístup ku kamere alebo zadaj kód ručne nižšie.");
       }
@@ -124,6 +169,7 @@ export default function BarcodeScanner({
   async function stop() {
     const s = scannerRef.current;
     scannerRef.current = null;
+    setTorchOn(false); // svetlo zhasne so zastavením streamu
     if (s) {
       try {
         if (s.isScanning) await s.stop();
@@ -136,6 +182,20 @@ export default function BarcodeScanner({
 
   function close() {
     stop().then(onClose);
+  }
+
+  async function toggleTorch() {
+    const s = scannerRef.current;
+    if (!s) return;
+    const next = !torchOn;
+    try {
+      await applyTorch(s, next);
+      setTorchOn(next);
+    } catch {
+      // Ak sa nepodarí (nepodporované), tlačidlo skry a zhas.
+      setTorchSupported(false);
+      setTorchOn(false);
+    }
   }
 
   function submitManual() {
@@ -161,6 +221,20 @@ export default function BarcodeScanner({
 
       <div ref={wrapRef} className="relative overflow-hidden rounded-2xl bg-black">
         <div id={ELEMENT_ID} className="w-full" />
+
+        {/* svetlo (baterka) – ak to zariadenie podporuje */}
+        {torchSupported && scanning && !scanned && (
+          <button
+            onClick={toggleTorch}
+            className={`absolute right-3 top-3 z-10 flex h-11 w-11 items-center justify-center rounded-full text-xl shadow-lg transition ${
+              torchOn ? "bg-amber-400 text-white" : "bg-black/50 text-white active:bg-black/70"
+            }`}
+            aria-label={torchOn ? "Vypnúť svetlo" : "Zapnúť svetlo"}
+            title={torchOn ? "Vypnúť svetlo" : "Zapnúť svetlo"}
+          >
+            {torchOn ? "🔦" : "💡"}
+          </button>
+        )}
 
         {/* skenovacia čiara – behá presne vnútri skenovacieho rámu */}
         {scanning && !scanned && box && (
