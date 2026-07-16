@@ -81,6 +81,45 @@ export function longestStreak(ctx: BadgeContext, pred: (s: DailyStat) => boolean
   return best;
 }
 
+// Séria „bez javu" končiaca dnes: počíta po sebe idúce dni BEZ výskytu javu,
+// pričom nelogovaný/prázdny deň sa berie ako bez výskytu (absencia zápisu ≠
+// konzumácia). Ohraničené najstarším dňom v dátach, nech neráta pred začiatkom
+// sledovania. Odráža „koľko dní odvtedy, čo si mal naposledy ...".
+export function currentAbstinenceStreak(ctx: BadgeContext, has: (s: DailyStat) => boolean): number {
+  const keys = [...ctx.byDate.keys()];
+  if (keys.length === 0) return 0;
+  const earliest = keys.reduce((a, b) => (a < b ? a : b));
+  let d = ctx.today;
+  let n = 0;
+  while (d >= earliest) {
+    const s = ctx.byDate.get(d);
+    if (s && has(s)) break; // v tento deň bol jav → séria končí
+    n++;
+    d = shiftISO(d, -1);
+  }
+  return n;
+}
+
+// Najdlhšia séria „bez javu" v dostupných dátach (medzery = bez javu), po dnešok.
+export function longestAbstinenceStreak(ctx: BadgeContext, has: (s: DailyStat) => boolean): number {
+  const keys = [...ctx.byDate.keys()].sort();
+  if (keys.length === 0) return 0;
+  let d = keys[0];
+  const last = ctx.today;
+  let best = 0;
+  let run = 0;
+  while (d <= last) {
+    const s = ctx.byDate.get(d);
+    if (s && has(s)) run = 0;
+    else {
+      run++;
+      if (run > best) best = run;
+    }
+    d = shiftISO(d, 1);
+  }
+  return best;
+}
+
 // Existuje aspoň jeden deň spĺňajúci podmienku?
 function anyDay(ctx: BadgeContext, pred: (s: DailyStat) => boolean): boolean {
   for (const s of ctx.byDate.values()) if (pred(s)) return true;
@@ -98,10 +137,11 @@ const hadVegetable = (s: DailyStat) => s.hasVegetable;
 const hadProteinShake = (s: DailyStat) => s.hasProteinShake;
 const healthy = (s: DailyStat) => s.healthScore != null && s.healthScore >= 7;
 const metProtein = (ctx: BadgeContext) => (s: DailyStat) => ctx.goalProtein > 0 && s.protein >= ctx.goalProtein;
-// „Bez ..." sa počíta len pre dni, v ktorých si naozaj niečo zapísal (inak nevieme).
-const noSweets = (s: DailyStat) => s.entryCount > 0 && !s.hasSweets;
-const noAlcohol = (s: DailyStat) => s.entryCount > 0 && !s.hasAlcohol;
-const noHardAlcohol = (s: DailyStat) => s.entryCount > 0 && !s.hasHardAlcohol;
+// „Bez ..." série pracujú s VÝSKYTOM javu v daný deň (nie s absenciou zápisu).
+// Nelogovaný/prázdny deň = bez výskytu, takže séria = dni od posledného výskytu.
+const hasSweetsDay = (s: DailyStat) => s.hasSweets;
+const hasAlcoholDay = (s: DailyStat) => s.hasAlcohol;
+const hasHardAlcoholDay = (s: DailyStat) => s.hasHardAlcohol;
 const perfect = (ctx: BadgeContext) => (s: DailyStat) =>
   s.calories > 0 && ctx.goalCalories > 0 && Math.abs(s.calories - ctx.goalCalories) <= ctx.goalCalories * 0.1;
 
@@ -124,6 +164,29 @@ function streakBadge(
     group,
     evaluate: (ctx) => {
       const cur = currentStreak(ctx, pred(ctx));
+      return { earned: cur >= target, current: cur, target };
+    },
+  };
+}
+
+// Odznak pre sériu „bez ..." – nelogované dni sa berú ako bez výskytu.
+function abstinenceStreakBadge(
+  key: string,
+  emoji: string,
+  title: string,
+  desc: string,
+  group: BadgeGroup,
+  target: number,
+  has: (s: DailyStat) => boolean
+): BadgeDef {
+  return {
+    key,
+    emoji,
+    title,
+    desc,
+    group,
+    evaluate: (ctx) => {
+      const cur = currentAbstinenceStreak(ctx, has);
       return { earned: cur >= target, current: cur, target };
     },
   };
@@ -228,22 +291,22 @@ export const BADGES: BadgeDef[] = [
   inChallenge("protein", streakBadge("protein_30", "🥤", "Šejk mesiac", "30 dní po sebe proteínový šejk", "strava", 30, () => hadProteinShake)),
 
   // Bez sladkého
-  inChallenge("no_sweets", streakBadge("no_sweets_1",  "🚫🍭", "Odolný",               "1 deň bez sladkého",          "strava", 1,  () => noSweets)),
-  inChallenge("no_sweets", streakBadge("no_sweets_3",  "🚫🍭", "Silná vôľa",           "3 dni po sebe bez sladkého",  "strava", 3,  () => noSweets)),
-  inChallenge("no_sweets", streakBadge("no_sweets_7",  "🚫🍭", "Týždeň bez sladkého",  "7 dní po sebe bez sladkého",  "strava", 7,  () => noSweets)),
-  inChallenge("no_sweets", streakBadge("no_sweets_30", "🦷",   "Mesiac bez sladkého",  "30 dní po sebe bez sladkého", "strava", 30, () => noSweets)),
+  inChallenge("no_sweets", abstinenceStreakBadge("no_sweets_1",  "🚫🍭", "Odolný",               "1 deň bez sladkého",          "strava", 1,  hasSweetsDay)),
+  inChallenge("no_sweets", abstinenceStreakBadge("no_sweets_3",  "🚫🍭", "Silná vôľa",           "3 dni po sebe bez sladkého",  "strava", 3,  hasSweetsDay)),
+  inChallenge("no_sweets", abstinenceStreakBadge("no_sweets_7",  "🚫🍭", "Týždeň bez sladkého",  "7 dní po sebe bez sladkého",  "strava", 7,  hasSweetsDay)),
+  inChallenge("no_sweets", abstinenceStreakBadge("no_sweets_30", "🦷",   "Mesiac bez sladkého",  "30 dní po sebe bez sladkého", "strava", 30, hasSweetsDay)),
 
   // Bez alkoholu
-  inChallenge("no_alcohol", streakBadge("no_alcohol_1",  "🚱", "Striedmy",             "1 deň bez alkoholu",          "strava", 1,  () => noAlcohol)),
-  inChallenge("no_alcohol", streakBadge("no_alcohol_3",  "🚱", "Čistá myseľ",          "3 dni po sebe bez alkoholu",  "strava", 3,  () => noAlcohol)),
-  inChallenge("no_alcohol", streakBadge("no_alcohol_7",  "🚱", "Týždeň bez alkoholu",  "7 dní po sebe bez alkoholu",  "strava", 7,  () => noAlcohol)),
-  inChallenge("no_alcohol", streakBadge("no_alcohol_30", "🧘", "Mesiac bez alkoholu",  "30 dní po sebe bez alkoholu", "strava", 30, () => noAlcohol)),
+  inChallenge("no_alcohol", abstinenceStreakBadge("no_alcohol_1",  "🚱", "Striedmy",             "1 deň bez alkoholu",          "strava", 1,  hasAlcoholDay)),
+  inChallenge("no_alcohol", abstinenceStreakBadge("no_alcohol_3",  "🚱", "Čistá myseľ",          "3 dni po sebe bez alkoholu",  "strava", 3,  hasAlcoholDay)),
+  inChallenge("no_alcohol", abstinenceStreakBadge("no_alcohol_7",  "🚱", "Týždeň bez alkoholu",  "7 dní po sebe bez alkoholu",  "strava", 7,  hasAlcoholDay)),
+  inChallenge("no_alcohol", abstinenceStreakBadge("no_alcohol_30", "🧘", "Mesiac bez alkoholu",  "30 dní po sebe bez alkoholu", "strava", 30, hasAlcoholDay)),
 
   // Bez tvrdého alkoholu
-  inChallenge("no_hard_alc", streakBadge("no_hard_alc_1",  "🥃", "Bez pálenky",        "1 deň bez tvrdého alkoholu",          "strava", 1,  () => noHardAlcohol)),
-  inChallenge("no_hard_alc", streakBadge("no_hard_alc_3",  "🥃", "Čistý víkend",       "3 dni po sebe bez tvrdého alkoholu",  "strava", 3,  () => noHardAlcohol)),
-  inChallenge("no_hard_alc", streakBadge("no_hard_alc_7",  "🥃", "Týždeň bez tvrdého", "7 dní po sebe bez tvrdého alkoholu",  "strava", 7,  () => noHardAlcohol)),
-  inChallenge("no_hard_alc", streakBadge("no_hard_alc_30", "🏅", "Mesiac bez tvrdého", "30 dní po sebe bez tvrdého alkoholu", "strava", 30, () => noHardAlcohol)),
+  inChallenge("no_hard_alc", abstinenceStreakBadge("no_hard_alc_1",  "🥃", "Bez pálenky",        "1 deň bez tvrdého alkoholu",          "strava", 1,  hasHardAlcoholDay)),
+  inChallenge("no_hard_alc", abstinenceStreakBadge("no_hard_alc_3",  "🥃", "Čistý víkend",       "3 dni po sebe bez tvrdého alkoholu",  "strava", 3,  hasHardAlcoholDay)),
+  inChallenge("no_hard_alc", abstinenceStreakBadge("no_hard_alc_7",  "🥃", "Týždeň bez tvrdého", "7 dní po sebe bez tvrdého alkoholu",  "strava", 7,  hasHardAlcoholDay)),
+  inChallenge("no_hard_alc", abstinenceStreakBadge("no_hard_alc_30", "🏅", "Mesiac bez tvrdého", "30 dní po sebe bez tvrdého alkoholu", "strava", 30, hasHardAlcoholDay)),
 
   // Míľniky (bez challengeId)
   countBadge("entries_10",  "🌱",  "Začiatočník", "10 zapísaných jedál",  10),
@@ -259,6 +322,9 @@ export type StreakDef = {
   title: string;
   desc: string;
   pred: (ctx: BadgeContext) => (s: DailyStat) => boolean;
+  // Ak true, pred(ctx) vracia predikát VÝSKYTU javu a séria sa počíta ako
+  // „dni bez javu" (nelogované dni = bez javu) cez *AbstinenceStreak funkcie.
+  abstinence?: boolean;
 };
 
 export const STREAKS: StreakDef[] = [
@@ -269,9 +335,9 @@ export const STREAKS: StreakDef[] = [
   { type: "veg", emoji: "🥗", title: "Surová zelenina", desc: "dni po sebe so surovou zeleninou", pred: () => hadVegetable },
   { type: "healthy", emoji: "🥦", title: "Zdravé dni", desc: "dni po sebe so zdravosťou ≥ 7", pred: () => healthy },
   { type: "protein", emoji: "🥤", title: "Proteínový šejk", desc: "dni po sebe s proteínovým šejkom", pred: () => hadProteinShake },
-  { type: "no_sweets", emoji: "🚫🍭", title: "Bez sladkého", desc: "dni po sebe bez sladkého", pred: () => noSweets },
-  { type: "no_alcohol", emoji: "🚱", title: "Bez alkoholu", desc: "dni po sebe bez alkoholu", pred: () => noAlcohol },
-  { type: "no_hard_alcohol", emoji: "🥃", title: "Bez tvrdého alkoholu", desc: "dni po sebe bez tvrdého alkoholu", pred: () => noHardAlcohol },
+  { type: "no_sweets", emoji: "🚫🍭", title: "Bez sladkého", desc: "dni bez sladkého", pred: () => hasSweetsDay, abstinence: true },
+  { type: "no_alcohol", emoji: "🚱", title: "Bez alkoholu", desc: "dni bez alkoholu", pred: () => hasAlcoholDay, abstinence: true },
+  { type: "no_hard_alcohol", emoji: "🥃", title: "Bez tvrdého alkoholu", desc: "dni bez tvrdého alkoholu", pred: () => hasHardAlcoholDay, abstinence: true },
 ];
 
 export const BADGE_BY_KEY = new Map(BADGES.map((b) => [b.key, b]));

@@ -6,6 +6,8 @@ import {
   satisfiedBadgeKeys,
   currentStreak,
   longestStreak,
+  currentAbstinenceStreak,
+  longestAbstinenceStreak,
   STREAKS,
   type BadgeContext,
   type DailyStat,
@@ -165,8 +167,8 @@ export async function buildStreaks(userId: string, ctx: BadgeContext): Promise<S
 
   for (const def of STREAKS) {
     const pred = def.pred(ctx);
-    const current = currentStreak(ctx, pred);
-    const windowBest = longestStreak(ctx, pred);
+    const current = def.abstinence ? currentAbstinenceStreak(ctx, pred) : currentStreak(ctx, pred);
+    const windowBest = def.abstinence ? longestAbstinenceStreak(ctx, pred) : longestStreak(ctx, pred);
     const prevBest = storedMap.get(def.type) ?? 0;
     const best = Math.max(prevBest, windowBest, current);
     if (best > prevBest) updates.push({ type: def.type, best });
