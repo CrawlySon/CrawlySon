@@ -247,8 +247,6 @@ export default function TodayPage() {
 
       <WaterCard date={date} reloadSignal={reload} />
 
-      <SleepCard date={date} reloadSignal={reload} />
-
       <QuickFavorites date={date} reloadSignal={favReload} onLogged={refreshAll} />
 
       {/* Jedlá podľa typu (drag & drop medzi jedlami – podrž a presuň) */}
@@ -307,6 +305,8 @@ export default function TodayPage() {
       </DndContext>
 
       <SupplementCard date={date} reloadSignal={reload} />
+
+      <SleepCard date={date} reloadSignal={reload} />
 
       {!loading && entries.length === 0 && (
         <p className="mt-6 text-center text-sm text-slate-400">
