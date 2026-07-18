@@ -17,6 +17,7 @@ type Day = {
   catCalories: number;
   catCount: number;
   waterMl: number;
+  sleepScore: number | null;
 };
 type Category = { name: string; calories: number; count: number };
 type HistoryState = { days: Day[]; categories: Category[] };
@@ -120,6 +121,10 @@ function healthText(h: number): string {
   return "text-red-600";
 }
 
+function metricLabel(m: "kcal" | "health" | "water" | "sleep"): string {
+  return m === "kcal" ? "Kalórie" : m === "health" ? "Zdravosť" : m === "sleep" ? "Spánok" : "Voda";
+}
+
 const historyKey = (from: string, to: string, cat: string) => `history:${from}:${to}:${cat}`;
 
 // --- component --------------------------------------------------------------
@@ -139,7 +144,7 @@ export default function HistoryPage() {
 
   const [category, setCategory] = useState<string>("");
   const [catOpen, setCatOpen] = useState(false);
-  const [metric, setMetric] = useState<"kcal" | "health" | "water">("kcal");
+  const [metric, setMetric] = useState<"kcal" | "health" | "water" | "sleep">("kcal");
   const [showMedian, setShowMedian] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -197,6 +202,9 @@ export default function HistoryPage() {
     ? healthDays.reduce((s, d) => s + (d.healthScore || 0), 0) / healthDays.length
     : null;
   const avgWater = completeDays.length ? completeDays.reduce((s, d) => s + (d.waterMl || 0), 0) / completeDays.length : 0;
+  // Spánok je nezávislý od jedla → priemer zo všetkých dní, kde je hodnotenie.
+  const sleepDays = days.filter((d) => d.sleepScore != null);
+  const avgSleep = sleepDays.length ? sleepDays.reduce((s, d) => s + (d.sleepScore || 0), 0) / sleepDays.length : null;
 
   const max = Math.max(goal, ...days.map((d) => d.calories), 1);
   const catMax = Math.max(...days.map((d) => d.catCalories), 1);
@@ -207,6 +215,8 @@ export default function HistoryPage() {
   // Value per date for current metric
   const dayMap = new Map(days.map((d) => [d.date, d]));
   const isHealthMetric = metric === "health" && !category;
+  const isSleepMetric = metric === "sleep" && !category;
+  const isScoreMetric = isHealthMetric || isSleepMetric; // 0..10, 0 = žiadne dáta
   const valueByDate = new Map<string, number>();
   for (const date of allDates) {
     const d = dayMap.get(date);
@@ -215,6 +225,7 @@ export default function HistoryPage() {
       if (category) v = d.catCalories;
       else if (metric === "kcal") v = d.calories;
       else if (metric === "health") v = d.healthScore ?? 0;
+      else if (metric === "sleep") v = d.sleepScore ?? 0;
       else v = Math.round((d.waterMl / 1000) * 10) / 10;
     }
     valueByDate.set(date, v);
@@ -222,22 +233,26 @@ export default function HistoryPage() {
 
   // Chart series. Nekompletné MINULÉ dni v grafe vôbec nezobrazujeme (hodnota 0 =
   // žiadny stĺpec). Dnešok v incompleteSet nie je, takže ho vidno vždy priebežne.
+  // Spánok je nezávislý od jedla – nekompletnosť dňa ho neskrýva.
   const chartSeries: { label: string; value: number }[] = isDaily
     ? allDates.map((date) => {
         const [, m, dd] = date.split("-");
-        const value = incompleteSet.has(date) ? 0 : valueByDate.get(date) ?? 0;
+        const hide = incompleteSet.has(date) && metric !== "sleep";
+        const value = hide ? 0 : valueByDate.get(date) ?? 0;
         return { label: `${parseInt(dd)}.${parseInt(m)}.`, value };
       })
-    : aggregateSeries(allDates, valueByDate, granularity, isHealthMetric, statsExcludeSet);
+    : aggregateSeries(allDates, valueByDate, granularity, isScoreMetric, metric === "sleep" ? undefined : statsExcludeSet);
 
   // 7-day rolling median (only daily mode, only when toggled) – dni vylúčené zo
   // štatistík (vrátane rozrobeného dneška) nastavíme na 0, aby ich rollingMedian
-  // vynechal (filtruje hodnoty > 0).
-  const dailyValues = allDates.map((d) => (statsExcludeSet.has(d) ? 0 : valueByDate.get(d) ?? 0));
+  // vynechal (filtruje hodnoty > 0). Spánok pri jedle nevylučujeme.
+  const dailyValues = allDates.map((d) =>
+    metric !== "sleep" && statsExcludeSet.has(d) ? 0 : valueByDate.get(d) ?? 0
+  );
   const medianValues: (number | null)[] = isDaily && showMedian ? rollingMedian(dailyValues) : [];
 
   const chartGoal = category ? null : metric === "kcal" ? goal : metric === "water" ? (profile ? profile.goalWaterMl / 1000 : null) : null;
-  const chartMax = Math.max(...chartSeries.map((s) => s.value), chartGoal || 0, isHealthMetric ? 10 : 0, 1);
+  const chartMax = Math.max(...chartSeries.map((s) => s.value), chartGoal || 0, isScoreMetric ? 10 : 0, 1);
   const chartUnit = category || metric === "kcal" ? " kcal" : metric === "water" ? " l" : "";
 
   function colorFor(v: number): string {
@@ -250,6 +265,12 @@ export default function HistoryPage() {
       return RED;
     }
     if (metric === "water") return WATER;
+    if (metric === "sleep") {
+      // 1..10 → zlé (červená) · priemer (žltá) · dobré (indigo)
+      if (v >= 7) return "#6366f1";
+      if (v >= 4) return AMBER;
+      return RED;
+    }
     const hue = Math.round(Math.max(0, Math.min(10, v)) / 10 * 220);
     return `hsl(${hue}, 88%, 48%)`;
   }
@@ -363,7 +384,7 @@ export default function HistoryPage() {
       {/* Metric selector + median toggle */}
       {!category && (
         <div className="mb-2 flex flex-wrap items-center gap-2">
-          {([["kcal", "Kalórie"], ["health", "Zdravosť"], ["water", "Voda"]] as [typeof metric, string][]).map(([m, label]) => (
+          {([["kcal", "Kalórie"], ["health", "Zdravosť"], ["water", "Voda"], ["sleep", "Spánok"]] as [typeof metric, string][]).map(([m, label]) => (
             <button
               key={m}
               onClick={() => setMetric(m)}
@@ -389,14 +410,16 @@ export default function HistoryPage() {
           {category
             ? `Kategória „${category}" — kcal v čase`
             : granularity === "weekly"
-              ? `${metric === "kcal" ? "Kalórie" : metric === "health" ? "Zdravosť" : "Voda"} — týždenný priemer`
+              ? `${metricLabel(metric)} — týždenný priemer`
               : granularity === "monthly"
-                ? `${metric === "kcal" ? "Kalórie" : metric === "health" ? "Zdravosť" : "Voda"} — mesačný priemer`
+                ? `${metricLabel(metric)} — mesačný priemer`
                 : metric === "kcal"
                   ? "Kalórie v čase"
                   : metric === "health"
                     ? "Zdravosť v čase (0–10)"
-                    : "Pitný režim v čase (l)"}
+                    : metric === "sleep"
+                      ? "Spánok v čase (0–10)"
+                      : "Pitný režim v čase (l)"}
         </p>
         <TimelineChart
           series={chartSeries}
@@ -409,7 +432,7 @@ export default function HistoryPage() {
       </div>
 
       {/* Summary stats */}
-      <div className="mb-4 grid grid-cols-3 gap-3">
+      <div className="mb-4 grid grid-cols-2 gap-3">
         <div className="card p-3">
           <p className="text-xs text-slate-500">Priemer kcal</p>
           <p className="text-xl font-bold text-slate-800">{round(avg)}</p>
@@ -426,6 +449,13 @@ export default function HistoryPage() {
           <p className="text-xs text-slate-500">💧 Voda</p>
           <p className="text-xl font-bold text-sky-600">{(avgWater / 1000).toFixed(1)} l</p>
           <p className="text-[11px] text-slate-400">priemer/deň</p>
+        </div>
+        <div className="card p-3">
+          <p className="text-xs text-slate-500">😴 Spánok</p>
+          <p className={`text-xl font-bold ${avgSleep != null ? healthText(avgSleep) : "text-slate-300"}`}>
+            {avgSleep != null ? `${round(avgSleep, 1)}` : "—"}
+          </p>
+          <p className="text-[11px] text-slate-400">z 10</p>
         </div>
       </div>
 
@@ -463,6 +493,11 @@ export default function HistoryPage() {
                     )}
                   </span>
                   <span className="flex items-center gap-2">
+                    {!showCat && d.sleepScore != null && (
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${healthText(d.sleepScore)} bg-slate-100`} title="Hodnotenie spánku">
+                        😴 {d.sleepScore}
+                      </span>
+                    )}
                     {!showCat && d.healthScore != null && (
                       <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${healthText(d.healthScore)} bg-slate-100`}>
                         ♥ {d.healthScore}

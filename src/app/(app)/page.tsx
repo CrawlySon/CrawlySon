@@ -21,6 +21,7 @@ import { MEAL_LABELS, MEAL_ORDER, type Entry, type FavoriteItem, type MealType, 
 import MacroSummary from "@/components/MacroSummary";
 import AddFoodSheet from "@/components/AddFoodSheet";
 import WaterCard from "@/components/WaterCard";
+import SleepCard from "@/components/SleepCard";
 import SupplementCard from "@/components/SupplementCard";
 import QuickFavorites from "@/components/QuickFavorites";
 import CalendarPopup from "@/components/CalendarPopup";
@@ -245,6 +246,8 @@ export default function TodayPage() {
       {profile && <MacroSummary totals={totals} profile={profile} healthScore={dayHealth} />}
 
       <WaterCard date={date} reloadSignal={reload} />
+
+      <SleepCard date={date} reloadSignal={reload} />
 
       <QuickFavorites date={date} reloadSignal={favReload} onLogged={refreshAll} />
 

@@ -132,6 +132,12 @@ export type Supplement = {
   sort: number;
 };
 
+// Denné hodnotenie spánku (1..10) za danú noc.
+export type SleepLog = {
+  date: string;
+  score: number;
+};
+
 // Denný záznam užitia suplementu/lieku.
 export type SupplementLog = {
   id: string;

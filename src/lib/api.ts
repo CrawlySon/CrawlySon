@@ -110,6 +110,12 @@ export const api = {
   }) => req<{ log: SupplementLog }>(`/api/supplements/log`, { method: "POST", body: JSON.stringify(data) }),
   deleteSupplementLog: (id: string) => req<{ ok: true }>(`/api/supplements/log/${id}`, { method: "DELETE" }),
 
+  // Spánok – denné hodnotenie 1..10
+  getSleep: (date: string) => req<{ score: number | null }>(`/api/sleep?date=${date}`),
+  setSleep: (date: string, score: number) =>
+    req<{ score: number }>(`/api/sleep`, { method: "POST", body: JSON.stringify({ date, score }) }),
+  deleteSleep: (date: string) => req<{ ok: true }>(`/api/sleep?date=${date}`, { method: "DELETE" }),
+
   history: (from: string, to: string, category?: string) =>
     req<{
       days: {
@@ -123,6 +129,7 @@ export const api = {
         catCalories: number;
         catCount: number;
         waterMl: number;
+        sleepScore: number | null;
       }[];
       categories: { name: string; calories: number; count: number }[];
     }>(`/api/history?from=${from}&to=${to}${category ? `&category=${encodeURIComponent(category)}` : ""}`),

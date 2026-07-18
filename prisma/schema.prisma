@@ -48,6 +48,7 @@ model User {
   streakRecords StreakRecord[]
   supplements    Supplement[]
   supplementLogs SupplementLog[]
+  sleepLogs      SleepLog[]
 }
 
 // Odomknutý odznak (achievement). Kľúč zodpovedá katalógu v src/lib/badges.ts.
@@ -213,6 +214,20 @@ model SupplementLog {
   unit         String?
   createdAt    DateTime    @default(now())
 
+  @@index([userId, date])
+}
+
+// Denné hodnotenie kvality spánku (jedno na deň) – skóre 1..10 za danú noc.
+model SleepLog {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date      String // YYYY-MM-DD (noc, ktorá končí ráno tohto dňa)
+  score     Int // 1..10
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, date])
   @@index([userId, date])
 }
 

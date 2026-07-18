@@ -48,16 +48,20 @@ export async function GET(req: Request) {
     sinceISO = since.toISOString().slice(0, 10);
   }
 
-  const [entries, waterLogs] = await Promise.all([
+  const [entries, waterLogs, sleepLogs] = await Promise.all([
     prisma.entry.findMany({
       where: { userId, date: { gte: sinceISO, lte: untilISO } },
       select: { date: true, calories: true, protein: true, carbs: true, fat: true, quantityGrams: true, healthIndex: true, category: true },
     }),
     prisma.waterLog.findMany({ where: { userId, date: { gte: sinceISO, lte: untilISO } }, select: { date: true, ml: true } }),
+    prisma.sleepLog.findMany({ where: { userId, date: { gte: sinceISO, lte: untilISO } }, select: { date: true, score: true } }),
   ]);
 
   const waterByDate = new Map<string, number>();
   for (const w of waterLogs) waterByDate.set(w.date, (waterByDate.get(w.date) || 0) + w.ml);
+
+  const sleepByDate = new Map<string, number>();
+  for (const s of sleepLogs) sleepByDate.set(s.date, s.score);
 
   const byDate = new Map<string, DayAgg>();
   const catTotals = new Map<string, { calories: number; count: number }>();
@@ -89,8 +93,13 @@ export async function GET(req: Request) {
     catTotals.set(cat, ct);
   }
 
-  // Doplň dni, ktoré majú len vodu (žiadne jedlo)
+  // Doplň dni, ktoré majú len vodu alebo len spánok (žiadne jedlo)
   for (const date of waterByDate.keys()) {
+    if (!byDate.has(date)) {
+      byDate.set(date, { date, calories: 0, protein: 0, carbs: 0, fat: 0, count: 0, hSum: 0, hWeight: 0, catCalories: 0, catCount: 0 });
+    }
+  }
+  for (const date of sleepByDate.keys()) {
     if (!byDate.has(date)) {
       byDate.set(date, { date, calories: 0, protein: 0, carbs: 0, fat: 0, count: 0, hSum: 0, hWeight: 0, catCalories: 0, catCount: 0 });
     }
@@ -104,6 +113,7 @@ export async function GET(req: Request) {
       carbs: d.carbs,
       fat: d.fat,
       waterMl: waterByDate.get(d.date) || 0,
+      sleepScore: sleepByDate.get(d.date) ?? null,
       count: d.count,
       healthScore: d.hWeight > 0 ? Math.round((d.hSum / d.hWeight) * 10) / 10 : null,
       catCalories: d.catCalories,
