@@ -215,7 +215,7 @@ export default function TodayPage() {
     <div className="px-4 pb-36 pt-4">
       {/* Hlavička s dátumom */}
       <header className="mb-4 flex items-center justify-between">
-        <button onClick={() => setDate((d) => shiftDate(d, -1))} className="rounded-full bg-white p-2 shadow-sm">
+        <button onClick={() => setDate((d) => shiftDate(d, -1))} className="nm-raised-sm rounded-full p-2 text-slate-600 active:scale-95">
           ‹
         </button>
         <div className="text-center">
@@ -237,7 +237,7 @@ export default function TodayPage() {
         <button
           onClick={() => setDate((d) => shiftDate(d, 1))}
           disabled={date >= todayISO()}
-          className="rounded-full bg-white p-2 shadow-sm disabled:opacity-30"
+          className="nm-raised-sm rounded-full p-2 text-slate-600 active:scale-95 disabled:opacity-30"
         >
           ›
         </button>

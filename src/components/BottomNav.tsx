@@ -34,7 +34,10 @@ export default function BottomNav() {
   }
 
   return (
-    <nav className="fixed bottom-0 inset-x-0 z-30 border-t border-slate-200 bg-white/95 backdrop-blur safe-bottom">
+    <nav
+      className="fixed bottom-0 inset-x-0 z-30 safe-bottom"
+      style={{ background: "var(--nm-bg)", boxShadow: "0 -6px 16px var(--nm-dark)" }}
+    >
       <div className="mx-auto flex max-w-md">
         {items.map((it) => {
           const active = pathname === it.href;

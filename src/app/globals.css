@@ -4,6 +4,17 @@
 
 :root {
   color-scheme: light;
+
+  /* Neumorphism (soft UI) – povrchy majú rovnakú farbu ako pozadie a tvoria ich
+     dva mäkké tiene: svetlý zľava-hore, tmavší sprava-dole. Zapustené prvky
+     používajú rovnaké tiene, ale dovnútra (inset). */
+  --nm-bg: #e9ecf2;
+  --nm-light: #ffffff;
+  --nm-dark: #c6ccd9;
+  --nm-raise: 6px 6px 12px var(--nm-dark), -6px -6px 12px var(--nm-light);
+  --nm-raise-sm: 3px 3px 7px var(--nm-dark), -3px -3px 7px var(--nm-light);
+  --nm-inset: inset 3px 3px 6px var(--nm-dark), inset -3px -3px 6px var(--nm-light);
+  --nm-inset-sm: inset 2px 2px 4px var(--nm-dark), inset -2px -2px 4px var(--nm-light);
 }
 
 html,
@@ -12,7 +23,8 @@ body {
 }
 
 body {
-  @apply bg-slate-50 text-slate-800;
+  @apply text-slate-700;
+  background: var(--nm-bg);
 }
 
 /* Bezpečné zóny pre iPhone (notch / home indicator) */
@@ -43,21 +55,54 @@ body {
 
 @layer components {
   .card {
-    @apply rounded-2xl bg-white shadow-sm border border-slate-100;
+    @apply rounded-2xl border-0;
+    background: var(--nm-bg);
+    box-shadow: var(--nm-raise);
   }
   .btn {
     @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 font-medium transition active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100;
   }
   .btn-primary {
-    @apply btn bg-brand-600 text-white hover:bg-brand-700;
+    @apply btn text-white;
+    background: #16a34a;
+    box-shadow: 4px 4px 9px var(--nm-dark), -4px -4px 9px var(--nm-light);
+  }
+  .btn-primary:hover {
+    background: #15803d;
+  }
+  .btn-primary:active {
+    box-shadow: inset 3px 3px 6px rgba(0, 0, 0, 0.25);
   }
   .btn-ghost {
-    @apply btn bg-slate-100 text-slate-700 hover:bg-slate-200;
+    @apply btn text-slate-600;
+    background: var(--nm-bg);
+    box-shadow: var(--nm-raise-sm);
+  }
+  .btn-ghost:active {
+    box-shadow: var(--nm-inset-sm);
   }
   .input {
-    @apply w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200;
+    @apply w-full rounded-xl border-0 px-3 py-2.5 text-slate-700 outline-none;
+    background: var(--nm-bg);
+    box-shadow: var(--nm-inset);
+  }
+  .input:focus {
+    box-shadow: var(--nm-inset), 0 0 0 2px #86efac;
   }
   .label {
     @apply block text-sm font-medium text-slate-600 mb-1;
+  }
+  /* Pomocné triedy pre inline povrchy (nav, FAB, panely mimo .card) */
+  .nm-raised {
+    background: var(--nm-bg);
+    box-shadow: var(--nm-raise);
+  }
+  .nm-raised-sm {
+    background: var(--nm-bg);
+    box-shadow: var(--nm-raise-sm);
+  }
+  .nm-inset {
+    background: var(--nm-bg);
+    box-shadow: var(--nm-inset);
   }
 }
