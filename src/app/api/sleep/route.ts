@@ -28,8 +28,8 @@ export async function POST(req: Request) {
   const b = await req.json();
   const date: string = b.date || todayISO();
   const score = Math.round(Number(b.score));
-  if (!Number.isFinite(score) || score < 1 || score > 10) {
-    return NextResponse.json({ error: "Skóre musí byť 1 až 10." }, { status: 400 });
+  if (!Number.isFinite(score) || score < 0 || score > 10) {
+    return NextResponse.json({ error: "Skóre musí byť 0 až 10." }, { status: 400 });
   }
 
   await prisma.sleepLog.upsert({

@@ -68,15 +68,15 @@ export default function SleepCard({ date, reloadSignal }: { date: string; reload
 
       <p className="mt-0.5 text-xs text-slate-400">{labelFor(score)}</p>
 
-      <div className="mt-3 grid grid-cols-10 gap-1">
-        {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => {
+      <div className="mt-3 grid grid-cols-11 gap-1">
+        {Array.from({ length: 11 }, (_, i) => i).map((n) => {
           const active = score === n;
           return (
             <button
               key={n}
               onClick={() => pick(n)}
               disabled={busy}
-              className={`flex h-9 items-center justify-center rounded-lg text-sm font-semibold transition active:scale-90 ${
+              className={`flex h-9 items-center justify-center rounded-lg text-xs font-semibold transition active:scale-90 ${
                 active ? scoreColor(n) : "bg-slate-100 text-slate-500"
               }`}
               aria-label={`Spánok ${n} z 10`}
