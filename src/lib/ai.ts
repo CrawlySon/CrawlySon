@@ -1,136 +1,6 @@
-import { GoogleGenAI, Type } from "@google/genai";
+// Výživová AI logika appky – beží výhradne na OpenAI (žiadny Gemini).
 import type { ParsedItem } from "./types";
-import { isOpenAIConfigured, openAIChatJSON } from "./openai-fallback";
-
-// Reťaz modelov – ak primárny zlyhá (preťaženie/kvóta/timeout), skúsi sa ďalší.
-// Primárny sa berie z GEMINI_MODEL. Stav k 6/2026 (overené v Google docs):
-//  • gemini-3.1-flash-lite – lacný, nízka latencia, PRIMÁRNY (rýchly a stabilný)
-//  • gemini-3.5-flash      – silnejší GA Flash, fallback pri zlyhaní
-//  • gemini-2.5-flash      – beží do 16.10.2026, posledná záchrana
-// POZN.: zámerne NEpridávame "gemini-flash-latest" – je to alias na iný model
-// v reťazi, takže pri preťažení by sme dostali tú istú chybu druhýkrát a len
-// míňali čas. Rodiny 1.5 a 2.0 sú už vypnuté (404), preto v reťazi nie sú.
-const FALLBACK_MODELS = Array.from(
-  new Set(
-    [
-      process.env.GEMINI_MODEL || "gemini-3.1-flash-lite",
-      "gemini-3.5-flash",
-      "gemini-2.5-flash",
-    ].filter(Boolean)
-  )
-);
-
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-// Zistí HTTP status z chyby (rôzne SDK ho dávajú inak).
-function errStatus(e: any): number | null {
-  const s = e?.status ?? e?.statusCode ?? e?.code;
-  if (typeof s === "number") return s;
-  const m = String(e?.message || "");
-  const mm = m.match(/\b(4\d\d|5\d\d)\b/);
-  return mm ? Number(mm[1]) : null;
-}
-
-// Je to dočasné preťaženie/kvóta (oplatí sa krátko počkať a skúsiť znova)?
-function isOverloaded(e: any): boolean {
-  const s = errStatus(e);
-  if (s === 503 || s === 429) return true;
-  const m = String(e?.message || "").toUpperCase();
-  return (
-    m.includes("UNAVAILABLE") ||
-    m.includes("RESOURCE_EXHAUSTED") ||
-    m.includes("OVERLOAD") ||
-    m.includes("HIGH DEMAND")
-  );
-}
-
-// Zavolá generateContent s časovým limitom, retry pri preťažení a fallbackom na
-// ďalšie modely. Per-model limit rieši „visiace" requesty, GLOBÁLNY rozpočet
-// (budgetMs) rieši 504: zaručí, že celý reťazec skončí skôr, než Vercel zabije
-// funkciu, takže používateľ vždy dostane slušnú JSON hlášku namiesto 504.
-const PER_MODEL_TIMEOUT_MS = Number(process.env.GEMINI_MODEL_TIMEOUT_MS || 11000);
-// Nemá zmysel začínať volanie, ak do konca rozpočtu zostáva menej ako toto.
-const MIN_ATTEMPT_MS = 2500;
-
-function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const t = setTimeout(() => reject(new Error(`Model "${label}" neodpovedal do ${ms} ms (timeout).`)), ms);
-    p.then(
-      (v) => {
-        clearTimeout(t);
-        resolve(v);
-      },
-      (e) => {
-        clearTimeout(t);
-        reject(e);
-      }
-    );
-  });
-}
-
-async function generateWithFallback(
-  ai: GoogleGenAI,
-  request: Record<string, any>,
-  timeoutMs: number = PER_MODEL_TIMEOUT_MS,
-  budgetMs: number = 24000
-): Promise<{ response: any; model: string }> {
-  const start = Date.now();
-  const remaining = () => budgetMs - (Date.now() - start);
-  let lastErr: unknown;
-  let sawOverload = false;
-  let ranOutOfTime = false;
-
-  for (const model of FALLBACK_MODELS) {
-    const maxAttempts = 2; // 1 pokus + 1 rýchly retry pri preťažení
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      // Globálny strop: ak nezostáva dosť času na zmysluplný pokus, končíme.
-      const left = remaining();
-      if (left < MIN_ATTEMPT_MS) {
-        ranOutOfTime = true;
-        break;
-      }
-      // Timeout pokusu = menší z per-model limitu a zvyšného rozpočtu.
-      const attemptTimeout = Math.min(timeoutMs, left);
-      try {
-        const response = await withTimeout(
-          ai.models.generateContent({ ...request, model } as any),
-          attemptTimeout,
-          model
-        );
-        return { response, model };
-      } catch (e) {
-        lastErr = e;
-        const overloaded = isOverloaded(e);
-        if (overloaded) sawOverload = true;
-        console.error(
-          `Gemini model "${model}" pokus ${attempt}/${maxAttempts} zlyhal:`,
-          (e as any)?.message || e
-        );
-        // Retry toho istého modelu len pri preťažení a ak zostáva čas.
-        if (overloaded && attempt < maxAttempts && remaining() > MIN_ATTEMPT_MS + 700) {
-          await sleep(600 * attempt); // krátky backoff a skús ten istý model ešte raz
-          continue;
-        }
-        break; // skús ďalší model v reťazi
-      }
-    }
-    if (ranOutOfTime || remaining() < MIN_ATTEMPT_MS) {
-      ranOutOfTime = true;
-      break;
-    }
-  }
-
-  // Priateľské hlášky podľa príčiny.
-  if (ranOutOfTime) {
-    throw new Error("AI nestihla odpovedať včas. Skús to prosím o chvíľu znova.");
-  }
-  if (sawOverload) {
-    throw new Error("AI je práve preťažené (Google 503). Skús to prosím o chvíľu znova.");
-  }
-  throw lastErr instanceof Error
-    ? new Error(`Gemini nedostupný (skúšané: ${FALLBACK_MODELS.join(", ")}). ${lastErr.message}`)
-    : new Error("Všetky Gemini modely zlyhali.");
-}
+import { openAIChatJSON, openAIVisionJSON } from "./openai";
 
 export type ReferenceFood = {
   name: string;
@@ -211,45 +81,7 @@ PRAVIDLÁ:
   ju do "items". Sladené/kalorické nápoje (kola, džús, pivo, káva s mliekom) patria
   normálne do "items". Ak voda nie je spomenutá, "waterMl" = 0.`;
 
-const responseSchema = {
-  type: Type.OBJECT,
-  properties: {
-    mealType: {
-      type: Type.STRING,
-      description:
-        'Typ jedla z textu: "breakfast" | "snack" | "lunch" | "afternoon" | "dinner" | "supper" | "other"',
-    },
-    waterMl: { type: Type.NUMBER, description: "Vypitá čistá voda v ml (0 ak žiadna)" },
-    items: {
-      type: Type.ARRAY,
-      items: {
-        type: Type.OBJECT,
-        properties: {
-          name: { type: Type.STRING, description: "Názov potraviny/jedla" },
-          mealType: {
-            type: Type.STRING,
-            description: 'Typ jedla pre túto položku: "breakfast"|"snack"|"lunch"|"afternoon"|"dinner"|"supper"|"other"',
-          },
-          quantityGrams: { type: Type.NUMBER, description: "Odhadovaná gramáž porcie (g), 0 ak neznáma" },
-          calories: { type: Type.NUMBER, description: "Celkové kcal za porciu" },
-          protein: { type: Type.NUMBER, description: "Bielkoviny (g) za porciu" },
-          carbs: { type: Type.NUMBER, description: "Sacharidy (g) za porciu" },
-          fat: { type: Type.NUMBER, description: "Tuky (g) za porciu" },
-          fiber: { type: Type.NUMBER, description: "Vláknina (g) za porciu, 0 ak neznáma" },
-          category: { type: Type.STRING, description: "Hlavná kategória (napr. Mäso, Ovocie)" },
-          subcategory: { type: Type.STRING, description: "Podkategória (napr. Bravčové mäso)" },
-          healthIndex: { type: Type.NUMBER, description: "Index zdravosti 0..10" },
-          confidence: { type: Type.NUMBER, description: "Istota odhadu 0..1" },
-          assumption: { type: Type.STRING, description: "Aký predpoklad si urobil" },
-        },
-        required: ["name", "calories", "protein", "carbs", "fat", "category", "healthIndex", "confidence"],
-      },
-    },
-  },
-  required: ["items"],
-};
-
-// Pre OpenAI fallback (nedostane responseSchema) opíšeme presný tvar JSON textom.
+// Presný tvar JSON odpovede (OpenAI nedostane schému, opíšeme ho textom).
 const PARSE_JSON_SHAPE = `
 
 FORMÁT ODPOVEDE: Vráť IBA platný JSON objekt (bez markdownu, bez vysvetlení) presne v tomto tvare:
@@ -278,50 +110,17 @@ export type ParseResult = {
 export async function parseFood(text: string, reference: ReferenceFood[]): Promise<ParseResult> {
   const prompt = `Používateľ povedal/napísal čo zjedol:\n"""${text}"""${buildReferenceBlock(reference)}`;
 
-  let raw: string;
-  let usage: ParseResult["usage"];
-  try {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) throw new Error("Chýba GEMINI_API_KEY v prostredí.");
-    const ai = new GoogleGenAI({ apiKey });
-
-    const { response, model } = await generateWithFallback(ai, {
-      contents: prompt,
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
-        responseMimeType: "application/json",
-        responseSchema,
-        temperature: 0.3,
-      },
-    });
-
-    const text = response.text;
-    if (!text) throw new Error("Prázdna odpoveď z Gemini.");
-    raw = text;
-
-    const um: any = (response as any).usageMetadata || {};
-    usage = {
-      model,
-      promptTokens: Number(um.promptTokenCount ?? 0),
-      outputTokens: Number(um.candidatesTokenCount ?? 0),
-      totalTokens: Number(um.totalTokenCount ?? 0),
-    };
-  } catch (geminiErr) {
-    // Fallback na OpenAI engine (len ak je nakonfigurovaný tokenom).
-    if (!isOpenAIConfigured()) throw geminiErr;
-    console.error("Gemini zlyhal – skúšam OpenAI fallback:", (geminiErr as any)?.message || geminiErr);
-    const r = await openAIChatJSON({
-      system: SYSTEM_INSTRUCTION + PARSE_JSON_SHAPE,
-      user: prompt,
-      temperature: 0.3,
-    });
-    raw = r.text;
-    usage = r.usage;
-  }
+  const r = await openAIChatJSON({
+    system: SYSTEM_INSTRUCTION + PARSE_JSON_SHAPE,
+    user: prompt,
+    temperature: 0.3,
+    maxTokens: 2048,
+  });
+  const usage = r.usage;
 
   let parsed: { items?: any[]; mealType?: string; waterMl?: number };
   try {
-    parsed = JSON.parse(raw);
+    parsed = JSON.parse(r.text);
   } catch {
     throw new Error("Nepodarilo sa spracovať odpoveď AI (neplatný JSON).");
   }
@@ -336,9 +135,10 @@ export async function parseFood(text: string, reference: ReferenceFood[]): Promi
   const arr = Array.isArray(parsed.items) ? parsed.items : [];
   const items = arr.map((it): ParsedItem => {
     const rawItMeal = String(it.mealType ?? "");
-    const itMealType = (MEAL_TYPES as readonly string[]).includes(rawItMeal) && rawItMeal !== "other"
-      ? (rawItMeal as DetectedMeal)
-      : undefined;
+    const itMealType =
+      (MEAL_TYPES as readonly string[]).includes(rawItMeal) && rawItMeal !== "other"
+        ? (rawItMeal as DetectedMeal)
+        : undefined;
     return {
       name: String(it.name ?? "Neznáme jedlo"),
       quantityGrams: it.quantityGrams && it.quantityGrams > 0 ? Number(it.quantityGrams) : null,
@@ -363,8 +163,6 @@ export async function parseFood(text: string, reference: ReferenceFood[]): Promi
 }
 
 // ── Dávkové prehodnotenie zdravosti (re-scoring existujúcich záznamov) ──
-// Ohodnotí naraz zoznam položiek podľa rovnakej rubriky ako parseFood,
-// aby spätné prehodnotenie minulo minimum tokenov.
 const HEALTH_RUBRIC = `Rubrika zdravosti (healthIndex, celé číslo 0..10). Zohľadni pridaný cukor,
 nasýtené tuky, soľ, spracovanie a vlákninu.
 - 9–10: čerstvé ovocie a zelenina, strukoviny, ryby, neochutená voda.
@@ -384,43 +182,9 @@ export async function scoreHealthBatch(
 
   const prompt = `Ohodnoť zdravosť každej položky podľa pravidiel a vráť pre každú jej "index" (poradové číslo zo zoznamu) a "healthIndex" (0..10).\n\n${HEALTH_RUBRIC}\n\nPOLOŽKY:\n${list}`;
 
-  const schema = {
-    type: Type.OBJECT,
-    properties: {
-      scores: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            index: { type: Type.NUMBER, description: "Poradové číslo položky zo zoznamu (1-based)" },
-            healthIndex: { type: Type.NUMBER, description: "Zdravosť 0..10" },
-          },
-          required: ["index", "healthIndex"],
-        },
-      },
-    },
-    required: ["scores"],
-  };
-
+  const out = new Map<number, number>();
   let raw: string | undefined;
   try {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) throw new Error("Chýba GEMINI_API_KEY v prostredí.");
-    const ai = new GoogleGenAI({ apiKey });
-
-    const { response } = await generateWithFallback(ai, {
-      contents: prompt,
-      config: {
-        systemInstruction: "Si výživový asistent. Hodnoť striktne podľa zadanej rubriky a vráť iba JSON.",
-        responseMimeType: "application/json",
-        responseSchema: schema,
-        temperature: 0.1,
-      },
-    });
-    raw = response.text;
-  } catch (geminiErr) {
-    if (!isOpenAIConfigured()) throw geminiErr;
-    console.error("Gemini zlyhal (scoreHealthBatch) – skúšam OpenAI fallback:", (geminiErr as any)?.message || geminiErr);
     const r = await openAIChatJSON({
       system:
         'Si výživový asistent. Hodnoť striktne podľa zadanej rubriky a vráť IBA JSON objekt v tvare {"scores":[{"index":1,"healthIndex":0}]}.',
@@ -428,9 +192,11 @@ export async function scoreHealthBatch(
       temperature: 0.1,
     });
     raw = r.text;
+  } catch (e) {
+    console.error("scoreHealthBatch zlyhal:", (e as any)?.message || e);
+    return out;
   }
 
-  const out = new Map<number, number>();
   if (!raw) return out;
   let parsed: { scores?: { index?: number; healthIndex?: number }[] };
   try {
@@ -447,6 +213,7 @@ export async function scoreHealthBatch(
   }
   return out;
 }
+
 export type WebFood = {
   name: string;
   calories: number; // na 100 g
@@ -457,7 +224,7 @@ export type WebFood = {
   category: string | null;
   healthIndex: number | null;
   found: boolean;
-  source?: string; // odkiaľ (doména), ak dostupné
+  source?: string;
 };
 
 export type WebLookupResult = {
@@ -465,43 +232,27 @@ export type WebLookupResult = {
   usage: { model: string; promptTokens: number; outputTokens: number; totalTokens: number };
 };
 
+// Dohľadanie produktu podľa názvu/čiarového kódu z vedomostí modelu (bez reálneho
+// prehľadávania webu). Ak model produkt nepozná spoľahlivo, vráti found:false.
 export async function lookupProductByWeb(query: string): Promise<WebLookupResult> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error("Chýba GEMINI_API_KEY v prostredí.");
-  const ai = new GoogleGenAI({ apiKey });
-
-  const prompt = `Pomôž identifikovať a nájsť nutričné hodnoty produktu: "${query}".
-Ak je v zadaní čiarový kód (EAN/GTIN), najprv podľa neho na webe zisti, o aký produkt ide
-(názov a značku), potom nájdi jeho nutričné hodnoty. Pozri stránky výrobcu/e-shopov.
-Potrebujem hodnoty NA 100 g (alebo 100 ml).
-Ak produkt nevieš spoľahlivo nájsť, vráť "found": false.
+  const prompt = `Pomôž identifikovať a určiť nutričné hodnoty produktu: "${query}".
+Ak je v zadaní čiarový kód (EAN/GTIN), skús podľa neho a/alebo názvu určiť, o aký produkt ide.
+Použi svoje znalosti o bežných potravinách a značkách. Potrebujem hodnoty NA 100 g (alebo 100 ml).
+Ak produkt nevieš spoľahlivo určiť, vráť "found": false (nehádaj naslepo).
 Odpovedz IBA platným JSON objektom (bez markdownu) v tvare:
 {"found": true/false, "name": "presný názov produktu", "calories": kcal_na_100g,
  "protein": g, "carbs": g, "fat": g, "fiber": g_alebo_null,
  "category": "kategória (napr. Sladké, Nápoje, Mäso)", "healthIndex": 0-10}`;
 
-  const { response, model } = await generateWithFallback(
-    ai,
-    {
-      contents: prompt,
-      config: {
-        tools: [{ googleSearch: {} }],
-        temperature: 0.2,
-      },
-    },
-    16000, // web grounding býva pomalšie – dlhší limit na model
-    45000 // väčší rozpočet (route má maxDuration 60)
-  );
+  const r = await openAIChatJSON({
+    system: "Si výživový asistent. Odpovedaj IBA platným JSON objektom.",
+    user: prompt,
+    temperature: 0.2,
+    timeoutMs: 45000,
+  });
+  const usage = r.usage;
 
-  const um: any = (response as any).usageMetadata || {};
-  const usage = {
-    model,
-    promptTokens: Number(um.promptTokenCount ?? 0),
-    outputTokens: Number(um.candidatesTokenCount ?? 0),
-    totalTokens: Number(um.totalTokenCount ?? 0),
-  };
-
-  const raw = (response.text || "").trim();
+  const raw = (r.text || "").trim();
   const match = raw.match(/\{[\s\S]*\}/);
   if (!match) return { food: null, usage };
 
@@ -511,7 +262,6 @@ Odpovedz IBA platným JSON objektom (bez markdownu) v tvare:
   } catch {
     return { food: null, usage };
   }
-
   if (!parsed || parsed.found === false || parsed.calories == null) {
     return { food: null, usage };
   }
@@ -534,13 +284,8 @@ Odpovedz IBA platným JSON objektom (bez markdownu) v tvare:
   return { food, usage };
 }
 
-// Prečíta tabuľku nutričných hodnôt z fotky obalu (vision) a vráti hodnoty na 100 g.
-// Názov produktu na tabuľke zvyčajne nie je – ten dopĺňa používateľ.
+// Prečíta tabuľku nutričných hodnôt z fotky obalu (OpenAI vision) → hodnoty na 100 g.
 export async function parseNutritionLabel(imageBase64: string, mimeType: string): Promise<WebLookupResult> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error("Chýba GEMINI_API_KEY v prostredí.");
-  const ai = new GoogleGenAI({ apiKey });
-
   const prompt = `Na obrázku je tabuľka nutričných hodnôt z obalu potravinového výrobku.
 Prečítaj z nej hodnoty NA 100 g (alebo 100 ml) – ak je v tabuľke aj stĺpec na porciu,
 použi stĺpec na 100 g. Energiu ber v kcal (nie v kJ; ak je len kJ, preveď: kcal = kJ / 4,184).
@@ -552,31 +297,18 @@ Odpovedz IBA platným JSON objektom (bez markdownu) v tvare:
  "category": "kategória (napr. Sladké, Nápoje, Mäso)", "healthIndex": 0-10}
 Ak tabuľku nevieš spoľahlivo prečítať, vráť {"found": false}.`;
 
-  const { response, model } = await generateWithFallback(
-    ai,
-    {
-      contents: [
-        { inlineData: { mimeType, data: imageBase64 } },
-        { text: prompt },
-      ],
-      config: {
-        responseMimeType: "application/json",
-        temperature: 0.1,
-      },
-    },
-    16000, // čítanie obrázka býva pomalšie
-    45000 // väčší rozpočet (route má maxDuration 60)
-  );
+  const r = await openAIVisionJSON({
+    system: "Si výživový asistent. Odpovedaj IBA platným JSON objektom.",
+    prompt,
+    imageBase64,
+    mimeType,
+    temperature: 0.1,
+    maxTokens: 700,
+    timeoutMs: 45000,
+  });
+  const usage = r.usage;
 
-  const um: any = (response as any).usageMetadata || {};
-  const usage = {
-    model,
-    promptTokens: Number(um.promptTokenCount ?? 0),
-    outputTokens: Number(um.candidatesTokenCount ?? 0),
-    totalTokens: Number(um.totalTokenCount ?? 0),
-  };
-
-  const raw = (response.text || "").trim();
+  const raw = (r.text || "").trim();
   const match = raw.match(/\{[\s\S]*\}/);
   if (!match) return { food: null, usage };
 
@@ -586,7 +318,6 @@ Ak tabuľku nevieš spoľahlivo prečítať, vráť {"found": false}.`;
   } catch {
     return { food: null, usage };
   }
-
   if (!parsed || parsed.found === false || parsed.calories == null) {
     return { food: null, usage };
   }

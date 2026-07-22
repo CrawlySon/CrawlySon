@@ -330,7 +330,7 @@ export default function ProfilePage() {
               ))}
             </div>
           )}
-          <p className="text-[11px] text-slate-400">Prepis reči je zadarmo (zariadenie); tokeny míňa len spracovanie textu cez Gemini.</p>
+          <p className="text-[11px] text-slate-400">Prepis reči je zadarmo (zariadenie); tokeny míňa len spracovanie textu cez OpenAI.</p>
         </section>
       )}
 

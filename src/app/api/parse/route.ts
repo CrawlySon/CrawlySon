@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { parseFood, type ReferenceFood } from "@/lib/gemini";
+import { parseFood, type ReferenceFood } from "@/lib/ai";
 import { getUserId } from "@/lib/server-auth";
 
 export const runtime = "nodejs";
-// 90s: Gemini môže minúť ~24s, potom OpenAI fallback ~30s → spolu ~55s.
+// 90s: dostatočná rezerva na volanie OpenAI (strop ~30s) aj pri pomalšej odpovedi.
 export const maxDuration = 90;
 
 // Vyberie z DB potraviny, ktoré sa aspoň trochu zhodujú s textom (slová >= 3 znaky),

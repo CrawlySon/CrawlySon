@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getUserId } from "@/lib/server-auth";
-import { scoreHealthBatch } from "@/lib/gemini";
+import { scoreHealthBatch } from "@/lib/ai";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;

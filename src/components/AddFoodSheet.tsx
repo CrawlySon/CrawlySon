@@ -171,12 +171,8 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
     setError(null);
     setNotice(null);
     try {
-      const { items, mealType, waterMl, usage } = await api.parse(text);
+      const { items, mealType, waterMl } = await api.parse(text);
       if (!items.length && !waterMl) setError("AI nerozpoznala žiadne jedlo ani vodu. Skús to upresniť.");
-      // Daj vedieť, keď Gemini zlyhalo a odpovedal záložný OpenAI engine.
-      if (usage?.model?.startsWith("openai:")) {
-        setNotice("ℹ️ Gemini bolo nedostupné – spracované záložným enginom (OpenAI).");
-      }
       setItems(items);
       setWater(waterMl || 0);
       // Ak AI z textu rozpoznala typ jedla a používateľ ho ručne nezmenil,
@@ -258,7 +254,7 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
     }
   }
 
-  // Agentické dohľadanie cez Gemini (web search)
+  // Dohľadanie produktu cez AI (OpenAI – z vedomostí modelu)
   async function aiLookupUnknown() {
     if (!unknownCode && !unknownForm.name.trim()) return;
     setEstimating(true);

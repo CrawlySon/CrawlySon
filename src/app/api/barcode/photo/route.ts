@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getUserId } from "@/lib/server-auth";
-import { parseNutritionLabel } from "@/lib/gemini";
+import { parseNutritionLabel } from "@/lib/ai";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
