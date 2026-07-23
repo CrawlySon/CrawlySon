@@ -16,6 +16,7 @@ import {
 import { api } from "@/lib/api";
 import { getCache, setCache } from "@/lib/page-cache";
 import { checkBadges } from "@/lib/badge-check";
+import { showToast } from "@/lib/toast";
 import { round, sumTotals, todayISO } from "@/lib/nutrition";
 import { MEAL_LABELS, MEAL_ORDER, type Entry, type FavoriteItem, type MealType, type Profile } from "@/lib/types";
 import MacroSummary from "@/components/MacroSummary";
@@ -76,6 +77,10 @@ export default function TodayPage() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [hideFab, setHideFab] = useState(false);
   const [showCal, setShowCal] = useState(false);
+  // Režim výberu položiek (kopírovanie do dnes / uloženie ako jedlo)
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [actionBusy, setActionBusy] = useState(false);
 
   // Plávajúce tlačidlo sa schová pri scrollovaní dole a zobrazí pri scrollovaní hore
   useEffect(() => {
@@ -177,6 +182,110 @@ export default function TodayPage() {
     saveFavorite(name, meal, list.map(entryToFavItem));
   }
 
+  // ── Výber položiek ────────────────────────────────────────────────────────
+  function toggleSelect(id: string) {
+    setSelected((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  }
+  function exitSelect() {
+    setSelectMode(false);
+    setSelected(new Set());
+  }
+
+  // Skopíruje vybrané záznamy na DNEŠNÝ deň (každý si nechá svoj typ jedla).
+  async function copySelectedToToday() {
+    const picked = entries.filter((e) => selected.has(e.id));
+    if (!picked.length) return;
+    setActionBusy(true);
+    try {
+      const today = todayISO();
+      const items = picked.map((e) => ({
+        name: e.name,
+        quantityGrams: e.quantityGrams,
+        calories: e.calories,
+        protein: e.protein,
+        carbs: e.carbs,
+        fat: e.fat,
+        fiber: e.fiber,
+        category: e.category,
+        subcategory: e.subcategory,
+        healthIndex: e.healthIndex,
+        confidence: 1,
+        mealType: e.mealType,
+      }));
+      await api.addEntries({ date: today, mealType: "other", source: "copy", items });
+      showToast({ emoji: "📋", title: "Skopírované do dnes", body: `${items.length} ${items.length === 1 ? "položka" : "položky/iek"}` });
+      exitSelect();
+      if (date === today) refreshAll();
+    } catch (e: any) {
+      showToast({ emoji: "⚠️", title: "Kopírovanie zlyhalo", body: e?.message });
+    } finally {
+      setActionBusy(false);
+    }
+  }
+
+  // Uloží vybrané záznamy ako JEDNU potravinu do databázy. Hodnoty sa spočítajú
+  // a baseGrams = súčet gramáží → per-gram (aj per-100 g) sedí podľa gramáží.
+  async function saveSelectedAsFood() {
+    const picked = entries.filter((e) => selected.has(e.id));
+    if (!picked.length) return;
+    const defName = picked.length === 1 ? picked[0].name : "Kombinované jedlo";
+    const name = window.prompt("Názov jedla do databázy:", defName);
+    if (name == null || !name.trim()) return;
+    setActionBusy(true);
+    try {
+      const sum = picked.reduce(
+        (a, e) => ({
+          calories: a.calories + e.calories,
+          protein: a.protein + e.protein,
+          carbs: a.carbs + e.carbs,
+          fat: a.fat + e.fat,
+          fiber: a.fiber + (e.fiber ?? 0),
+          grams: a.grams + (e.quantityGrams ?? 0),
+        }),
+        { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, grams: 0 }
+      );
+      // vážený index zdravosti podľa hmotnosti (fallback z kalórií)
+      let hSum = 0;
+      let hW = 0;
+      for (const e of picked) {
+        if (e.healthIndex == null) continue;
+        const w = e.quantityGrams && e.quantityGrams > 0 ? e.quantityGrams : e.calories > 0 ? e.calories / 2 : 100;
+        hSum += e.healthIndex * w;
+        hW += w;
+      }
+      const healthIndex = hW > 0 ? Math.round(hSum / hW) : null;
+      // najčastejšia kategória
+      const catCount = new Map<string, number>();
+      for (const e of picked) if (e.category) catCount.set(e.category, (catCount.get(e.category) || 0) + 1);
+      let category: string | null = null;
+      let best = 0;
+      for (const [c, n] of catCount) if (n > best) { best = n; category = c; }
+      const baseGrams = sum.grams > 0 ? Math.round(sum.grams) : 100;
+      await api.addFood({
+        name: name.trim(),
+        baseGrams,
+        calories: round(sum.calories),
+        protein: round(sum.protein, 1),
+        carbs: round(sum.carbs, 1),
+        fat: round(sum.fat, 1),
+        fiber: sum.fiber > 0 ? round(sum.fiber, 1) : null,
+        category,
+        healthIndex,
+      });
+      showToast({ emoji: "💾", title: "Uložené do databázy", body: `${name.trim()} · ${baseGrams} g` });
+      exitSelect();
+    } catch (e: any) {
+      showToast({ emoji: "⚠️", title: "Uloženie zlyhalo", body: e?.message });
+    } finally {
+      setActionBusy(false);
+    }
+  }
+
   async function moveEntry(id: string, target: MealType) {
     applyEntries((prev) => prev.map((e) => (e.id === id ? { ...e, mealType: target } : e)));
     try {
@@ -249,6 +358,19 @@ export default function TodayPage() {
 
       <QuickFavorites date={date} reloadSignal={favReload} onLogged={refreshAll} />
 
+      {/* Prepínač výberu položiek (kopírovať do dnes / uložiť ako jedlo) */}
+      {entries.length > 0 && (
+        <div className="mb-1 mt-4 flex items-center justify-between px-1">
+          <span className="text-xs font-medium uppercase tracking-wide text-slate-400">Jedlá</span>
+          <button
+            onClick={() => (selectMode ? exitSelect() : setSelectMode(true))}
+            className="text-xs font-medium text-brand-600"
+          >
+            {selectMode ? "Zrušiť výber" : "✓ Vybrať položky"}
+          </button>
+        </div>
+      )}
+
       {/* Jedlá podľa typu (drag & drop medzi jedlami – podrž a presuň) */}
       <DndContext
         sensors={sensors}
@@ -256,7 +378,7 @@ export default function TodayPage() {
         onDragEnd={onDragEnd}
         onDragCancel={() => setActiveId(null)}
       >
-        <div className="mt-4 space-y-2">
+        <div className="mt-2 space-y-2">
           {MEAL_ORDER.map((meal) => {
             const list = entries.filter((e) => e.mealType === meal);
             const mealCals = sumTotals(list).calories;
@@ -276,6 +398,9 @@ export default function TodayPage() {
                     key={e.id}
                     entry={e}
                     dimmed={activeId === e.id}
+                    selectMode={selectMode}
+                    selected={selected.has(e.id)}
+                    onToggleSelect={() => toggleSelect(e.id)}
                     onDelete={() => handleDelete(e.id)}
                     onFavorite={() => saveEntryAsFavorite(e)}
                     onEdit={(patch) => editEntry(e.id, patch)}
@@ -314,15 +439,40 @@ export default function TodayPage() {
         </p>
       )}
 
-      {/* Plávajúce tlačidlo – schová sa pri scrollovaní dole */}
+      {/* Plávajúce tlačidlo – schová sa pri scrollovaní dole aj v režime výberu */}
       <button
         onClick={() => setSheet("other")}
         className={`fixed bottom-24 left-1/2 z-20 -translate-x-1/2 rounded-full bg-brand-600 px-6 py-3.5 font-semibold text-white shadow-lg shadow-brand-600/30 transition-all duration-300 active:scale-95 ${
-          hideFab ? "pointer-events-none translate-y-28 opacity-0" : "opacity-100"
+          hideFab || selectMode ? "pointer-events-none translate-y-28 opacity-0" : "opacity-100"
         }`}
       >
         ✨ Pridať jedlo
       </button>
+
+      {/* Lišta akcií výberu */}
+      {selectMode && (
+        <div className="fixed inset-x-3 bottom-24 z-30 flex items-center gap-2 rounded-2xl bg-white px-3 py-2.5 shadow-lg ring-1 ring-black/5">
+          <span className="text-sm font-medium text-slate-600">
+            {selected.size} {selected.size === 1 ? "vybraté" : "vybraté"}
+          </span>
+          <div className="ml-auto flex gap-2">
+            <button
+              onClick={saveSelectedAsFood}
+              disabled={selected.size === 0 || actionBusy}
+              className="rounded-xl bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700 active:scale-95 disabled:opacity-40"
+            >
+              💾 Uložiť
+            </button>
+            <button
+              onClick={copySelectedToToday}
+              disabled={selected.size === 0 || actionBusy}
+              className="rounded-xl bg-brand-600 px-3 py-2 text-sm font-medium text-white active:scale-95 disabled:opacity-40"
+            >
+              📋 Do dnes
+            </button>
+          </div>
+        </div>
+      )}
 
       {sheet && (
         <AddFoodSheet date={date} defaultMeal={sheet} onClose={() => setSheet(null)} onSaved={refreshAll} />
@@ -397,12 +547,18 @@ function entryHealthColor(h: number): string {
 function EntryRow({
   entry,
   dimmed,
+  selectMode,
+  selected,
+  onToggleSelect,
   onDelete,
   onFavorite,
   onEdit,
 }: {
   entry: Entry;
   dimmed: boolean;
+  selectMode: boolean;
+  selected: boolean;
+  onToggleSelect: () => void;
   onDelete: () => void;
   onFavorite: () => void;
   onEdit: (patch: Partial<Entry>) => void;
@@ -437,20 +593,37 @@ function EntryRow({
   }
 
   return (
-    <li className={`px-3 py-1.5 ${dimmed ? "opacity-30" : ""}`}>
+    <li className={`px-3 py-1.5 ${dimmed ? "opacity-30" : ""} ${selectMode && selected ? "bg-brand-50" : ""}`}>
       <div className="flex items-center gap-1.5">
-        {/* Úchyt na presun – podrž a ťahaj */}
+        {selectMode ? (
+          /* Zaškrtávacie políčko výberu */
+          <button
+            onClick={onToggleSelect}
+            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border text-xs transition ${
+              selected ? "border-brand-600 bg-brand-600 text-white" : "border-slate-300 text-transparent"
+            }`}
+            aria-label={selected ? "Zrušiť výber" : "Vybrať"}
+          >
+            ✓
+          </button>
+        ) : (
+          /* Úchyt na presun – podrž a ťahaj */
+          <button
+            ref={setNodeRef}
+            {...listeners}
+            {...attributes}
+            className="cursor-grab touch-none select-none px-0.5 text-slate-300 active:cursor-grabbing"
+            title="Podrž a presuň do iného jedla"
+            aria-label="Presunúť"
+          >
+            ⠿
+          </button>
+        )}
         <button
-          ref={setNodeRef}
-          {...listeners}
-          {...attributes}
-          className="cursor-grab touch-none select-none px-0.5 text-slate-300 active:cursor-grabbing"
-          title="Podrž a presuň do iného jedla"
-          aria-label="Presunúť"
+          onClick={selectMode ? onToggleSelect : openEditor}
+          className="min-w-0 flex-1 text-left leading-tight"
+          title={selectMode ? "Vybrať" : "Upraviť gramáž"}
         >
-          ⠿
-        </button>
-        <button onClick={openEditor} className="min-w-0 flex-1 text-left leading-tight" title="Upraviť gramáž">
           <p className="truncate text-sm font-medium text-slate-800">
             {entry.name}
             {entry.source === "ai" && <span className="ml-1 text-[10px] text-brand-500">✨</span>}
@@ -464,6 +637,8 @@ function EntryRow({
           </p>
         </button>
         <span className="text-sm font-semibold text-slate-600">{round(entry.calories)}</span>
+        {!selectMode && (
+          <>
         <button onClick={openEditor} className="px-0.5 text-slate-300 hover:text-brand-500" title="Upraviť gramáž">
           ✎
         </button>
@@ -473,9 +648,11 @@ function EntryRow({
         <button onClick={onDelete} className="px-0.5 text-slate-300 hover:text-red-400">
           ✕
         </button>
+          </>
+        )}
       </div>
 
-      {editing && (
+      {editing && !selectMode && (
         <div className="mt-1.5 flex flex-wrap items-center gap-2 rounded-lg bg-brand-50 p-2">
           <span className="text-xs font-medium text-brand-700">Gramáž (g):</span>
           <input
