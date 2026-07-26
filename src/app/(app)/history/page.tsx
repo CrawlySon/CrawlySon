@@ -201,7 +201,10 @@ export default function HistoryPage() {
   const avgHealth = healthDays.length
     ? healthDays.reduce((s, d) => s + (d.healthScore || 0), 0) / healthDays.length
     : null;
-  const avgWater = completeDays.length ? completeDays.reduce((s, d) => s + (d.waterMl || 0), 0) / completeDays.length : 0;
+  // Voda je nezávislá od jedla → priemer IBA z dní, kde je voda zapísaná
+  // (prázdne/nevyplnené dni by inak priemer skresľovali nadol).
+  const waterDays = days.filter((d) => (d.waterMl || 0) > 0);
+  const avgWater = waterDays.length ? waterDays.reduce((s, d) => s + (d.waterMl || 0), 0) / waterDays.length : 0;
   // Spánok je nezávislý od jedla → priemer zo všetkých dní, kde je hodnotenie.
   const sleepDays = days.filter((d) => d.sleepScore != null);
   const avgSleep = sleepDays.length ? sleepDays.reduce((s, d) => s + (d.sleepScore || 0), 0) / sleepDays.length : null;
