@@ -89,14 +89,17 @@ function aggregateSeries(
   granularity: "weekly" | "monthly",
   skipZero: boolean,
   skipDates?: Set<string>
-): { label: string; value: number }[] {
-  const groups = new Map<string, { sum: number; count: number }>();
+): { label: string; value: number; partial?: boolean }[] {
+  const groups = new Map<string, { sum: number; count: number; partial: boolean }>();
   const order: string[] = [];
   for (const date of allDates) {
     const key = granularity === "weekly" ? weekStartISO(date) : date.slice(0, 7);
-    if (!groups.has(key)) { groups.set(key, { sum: 0, count: 0 }); order.push(key); }
-    if (skipDates?.has(date)) continue; // nekompletné dni nezapočítavame do priemeru
+    if (!groups.has(key)) { groups.set(key, { sum: 0, count: 0, partial: false }); order.push(key); }
     const g = groups.get(key)!;
+    if (skipDates?.has(date)) {
+      g.partial = true; // agregát obsahuje neúplný deň → označíme bodkou
+      continue; // nekompletné dni nezapočítavame do priemeru
+    }
     const v = valueByDate.get(date) ?? 0;
     if (!skipZero || v > 0) { g.sum += v; g.count++; }
   }
@@ -109,7 +112,7 @@ function aggregateSeries(
     } else {
       label = new Date(key + "-01T00:00:00").toLocaleDateString("sk-SK", { month: "short" });
     }
-    return { label, value: g.count > 0 ? g.sum / g.count : 0 };
+    return { label, value: g.count > 0 ? g.sum / g.count : 0, partial: g.partial };
   });
 }
 
@@ -237,7 +240,7 @@ export default function HistoryPage() {
   // Chart series. Nekompletné MINULÉ dni v grafe vôbec nezobrazujeme (hodnota 0 =
   // žiadny stĺpec). Dnešok v incompleteSet nie je, takže ho vidno vždy priebežne.
   // Spánok je nezávislý od jedla – nekompletnosť dňa ho neskrýva.
-  const chartSeries: { label: string; value: number }[] = isDaily
+  const chartSeries: { label: string; value: number; partial?: boolean }[] = isDaily
     ? allDates.map((date) => {
         const [, m, dd] = date.split("-");
         const hide = incompleteSet.has(date) && metric !== "sleep";
@@ -542,6 +545,12 @@ export default function HistoryPage() {
         nezapočítavajú do priemerov ani mediánu; v zozname nižšie ostávajú označené. Dnešok je v grafe vždy vidno priebežne a
         do štatistík vstúpi po prekročení prahu.
       </p>
+      {!isDaily && chartSeries.some((s) => s.partial) && (
+        <p className="mt-1 flex items-center gap-1.5 px-1 text-xs text-slate-400">
+          <span className="inline-block h-2 w-2 rounded-full bg-amber-500 ring-1 ring-white" />
+          Bodka nad stĺpcom = agregát obsahuje aj neúplný deň (priemer nie je z kompletných dát).
+        </p>
+      )}
     </div>
   );
 }
@@ -556,7 +565,7 @@ function TimelineChart({
   unit,
   median,
 }: {
-  series: { label: string; value: number }[];
+  series: { label: string; value: number; partial?: boolean }[];
   max: number;
   goal: number | null;
   colorFor: (v: number) => string;
@@ -605,12 +614,18 @@ function TimelineChart({
         </g>
       ))}
 
-      {/* Bars */}
+      {/* Bars (bodka nad stĺpcom = agregát obsahuje neúplný deň) */}
       {series.map((s, i) => {
         const h = Math.max(s.value > 0 ? 1.5 : 0, baseline - y(s.value));
+        const dotY = Math.max(padT + 3, baseline - h - 5);
         return (
-          <rect key={i} x={cx(i) - barW / 2} y={baseline - h} width={barW} height={h}
-            rx={Math.min(3, barW / 2)} fill={colorFor(s.value)} />
+          <g key={i}>
+            <rect x={cx(i) - barW / 2} y={baseline - h} width={barW} height={h}
+              rx={Math.min(3, barW / 2)} fill={colorFor(s.value)} />
+            {s.partial && s.value > 0 && (
+              <circle cx={cx(i)} cy={dotY} r="2.6" fill="#f59e0b" stroke="#fff" strokeWidth="1" />
+            )}
+          </g>
         );
       })}
 
