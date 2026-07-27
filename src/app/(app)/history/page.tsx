@@ -237,23 +237,27 @@ export default function HistoryPage() {
     valueByDate.set(date, v);
   }
 
+  // Voda a spánok sú nezávislé od jedla – neriadia sa kalorickou „nekompletnosťou".
+  const independentMetric = !category && (metric === "sleep" || metric === "water");
+
   // Chart series. Nekompletné MINULÉ dni v grafe vôbec nezobrazujeme (hodnota 0 =
   // žiadny stĺpec). Dnešok v incompleteSet nie je, takže ho vidno vždy priebežne.
-  // Spánok je nezávislý od jedla – nekompletnosť dňa ho neskrýva.
+  // V agregácii (týždeň/mesiac) sa priemeruje LEN z vyplnených dní: skipZero=true
+  // vynechá prázdne dni (hodnota 0), aby nezrážali priemer nadol.
   const chartSeries: { label: string; value: number; partial?: boolean }[] = isDaily
     ? allDates.map((date) => {
         const [, m, dd] = date.split("-");
-        const hide = incompleteSet.has(date) && metric !== "sleep";
+        const hide = incompleteSet.has(date) && !independentMetric;
         const value = hide ? 0 : valueByDate.get(date) ?? 0;
         return { label: `${parseInt(dd)}.${parseInt(m)}.`, value };
       })
-    : aggregateSeries(allDates, valueByDate, granularity, isScoreMetric, metric === "sleep" ? undefined : statsExcludeSet);
+    : aggregateSeries(allDates, valueByDate, granularity, true, independentMetric ? undefined : statsExcludeSet);
 
   // 7-day rolling median (only daily mode, only when toggled) – dni vylúčené zo
   // štatistík (vrátane rozrobeného dneška) nastavíme na 0, aby ich rollingMedian
-  // vynechal (filtruje hodnoty > 0). Spánok pri jedle nevylučujeme.
+  // vynechal (filtruje hodnoty > 0). Vodu a spánok pri jedle nevylučujeme.
   const dailyValues = allDates.map((d) =>
-    metric !== "sleep" && statsExcludeSet.has(d) ? 0 : valueByDate.get(d) ?? 0
+    !independentMetric && statsExcludeSet.has(d) ? 0 : valueByDate.get(d) ?? 0
   );
   const medianValues: (number | null)[] = isDaily && showMedian ? rollingMedian(dailyValues) : [];
 
