@@ -130,7 +130,16 @@ function anyDay(ctx: BadgeContext, pred: (s: DailyStat) => boolean): boolean {
 
 const inCalorieGoal = (ctx: BadgeContext) => (s: DailyStat) =>
   s.calories > 0 && ctx.goalCalories > 0 && s.calories <= ctx.goalCalories;
-const logged = (s: DailyStat) => s.entryCount > 0;
+// „Zápis jedál" počíta iba ÚPLNÉ dni: musí mať zápis a aspoň polovicu
+// kalorického cieľa (rovnaký prah ako „nekompletný deň" v Analytike).
+// Dnešok je výnimka – kým je rozrobený, stačí akýkoľvek zápis, aby séria
+// nezhasla predčasne (naplní sa po prekročení prahu).
+const INCOMPLETE_FRACTION = 0.5;
+const completeLog = (ctx: BadgeContext) => (s: DailyStat) => {
+  if (s.entryCount === 0) return false;
+  if (s.date === ctx.today) return true;
+  return ctx.goalCalories <= 0 || s.calories >= ctx.goalCalories * INCOMPLETE_FRACTION;
+};
 const metWater = (ctx: BadgeContext) => (s: DailyStat) => ctx.goalWaterMl > 0 && s.waterMl >= ctx.goalWaterMl;
 const hadFruit = (s: DailyStat) => s.hasFruit;
 const hadVegetable = (s: DailyStat) => s.hasVegetable;
@@ -255,10 +264,10 @@ export const BADGES: BadgeDef[] = [
   inChallenge("cal", streakBadge("cal_30", "🥇", "Mesiac v cieli",      "30 dní po sebe v cieli",      "kalórie", 30, inCalorieGoal)),
 
   // Pravidelnosť zápisu
-  inChallenge("log", streakBadge("log_1",  "📝", "Zapisovač",     "1 deň so zapísaným jedlom",   "zápis", 1,  () => logged)),
-  inChallenge("log", streakBadge("log_3",  "📝", "Pravidelný",    "3 dni po sebe zapísané",      "zápis", 3,  () => logged)),
-  inChallenge("log", streakBadge("log_7",  "📅", "Fooddiarista",  "7 dní po sebe zapísané",      "zápis", 7,  () => logged)),
-  inChallenge("log", streakBadge("log_30", "📅", "Mesiac v kuse", "30 dní po sebe zapísané",     "zápis", 30, () => logged)),
+  inChallenge("log", streakBadge("log_1",  "📝", "Zapisovač",     "1 úplný deň so zápisom",      "zápis", 1,  completeLog)),
+  inChallenge("log", streakBadge("log_3",  "📝", "Pravidelný",    "3 úplné dni po sebe",         "zápis", 3,  completeLog)),
+  inChallenge("log", streakBadge("log_7",  "📅", "Fooddiarista",  "7 úplných dní po sebe",       "zápis", 7,  completeLog)),
+  inChallenge("log", streakBadge("log_30", "📅", "Mesiac v kuse", "30 úplných dní po sebe",      "zápis", 30, completeLog)),
 
   // Hydratácia
   inChallenge("water", streakBadge("water_1",  "💧", "Hydratovaný",    "1 deň splnený cieľ vody",    "voda", 1,  metWater)),
@@ -329,7 +338,7 @@ export type StreakDef = {
 
 export const STREAKS: StreakDef[] = [
   { type: "cal", emoji: "🎯", title: "Kalorický cieľ", desc: "dni po sebe v kalorickom cieli", pred: inCalorieGoal },
-  { type: "log", emoji: "📝", title: "Zápis jedál", desc: "dni po sebe so zapísaným jedlom", pred: () => logged },
+  { type: "log", emoji: "📝", title: "Zápis jedál", desc: "úplné dni po sebe so zápisom", pred: completeLog },
   { type: "water", emoji: "💧", title: "Pitný režim", desc: "dni po sebe splnený cieľ vody", pred: metWater },
   { type: "fruit", emoji: "🍎", title: "Surové ovocie", desc: "dni po sebe so surovým ovocím", pred: () => hadFruit },
   { type: "veg", emoji: "🥗", title: "Surová zelenina", desc: "dni po sebe so surovou zeleninou", pred: () => hadVegetable },

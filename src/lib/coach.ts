@@ -15,7 +15,11 @@ import {
 
 const FRUIT_RX = /ovoc/i;
 const VEG_RX = /zelenin/i;
-const SHAKE_RX = /proteín|protein|šejk|shake|whey|srvátkový|srvátkov|izolát|izolat|koncentrát|koncentrat|gainer/i;
+// Proteínový ŠEJK/nápoj – nie čokoľvek s „proteín" v názve (tyčinka, jogurt,
+// mlieko, puding to NIE sú). Vyžadujeme jednoznačné šejkové/práškové signály,
+// alebo „proteín" v spojení s nápoj/drink/shake/smoothie/izolát/koncentrát.
+const SHAKE_RX =
+  /shake|šejk|\bwhey\b|srvátkov|gainer|proteín(ov[ýáé])?\s*(nápoj|drink|kokteil|koktail|smoothie)|(proteín(ov[ýá])?|whey|srvátkov)\s*(izolát|izolat|koncentrát|koncentrat)/i;
 // Sladké: spoľahlivá je AI kategória „Sladké".
 const SWEETS_RX = /slad/i;
 // Akýkoľvek alkohol (pivo, víno, tvrdý).
