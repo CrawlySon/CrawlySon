@@ -17,6 +17,8 @@ type DayAgg = {
   catCount: number;
 };
 
+const MEAL_TYPES = ["breakfast", "snack", "lunch", "afternoon", "dinner", "supper", "other"];
+
 // Váha položky pre výpočet zdravosti = hmotnosť; ak chýba, odhad z kalórií.
 function weightOf(grams: number | null, calories: number): number {
   if (grams && grams > 0) return grams;
@@ -24,13 +26,16 @@ function weightOf(grams: number | null, calories: number): number {
   return 100;
 }
 
-// GET /api/history?days=14&category=Mäso
+// GET /api/history?days=14&category=Mäso&meal=breakfast
 export async function GET(req: Request) {
   const userId = await getUserId();
   if (!userId) return NextResponse.json({ error: "Neprihlásený" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
   const category = (searchParams.get("category") || "").trim();
+  // Voliteľný filter na typ jedla (raňajky, obed, …). Neplatná hodnota = bez filtra.
+  const mealParam = (searchParams.get("meal") || "").trim();
+  const meal = MEAL_TYPES.includes(mealParam) ? mealParam : "";
 
   const fromParam = searchParams.get("from");
   const toParam = searchParams.get("to");
@@ -51,7 +56,7 @@ export async function GET(req: Request) {
   const [entries, waterLogs, sleepLogs] = await Promise.all([
     prisma.entry.findMany({
       where: { userId, date: { gte: sinceISO, lte: untilISO } },
-      select: { date: true, calories: true, protein: true, carbs: true, fat: true, quantityGrams: true, healthIndex: true, category: true },
+      select: { date: true, calories: true, protein: true, carbs: true, fat: true, quantityGrams: true, healthIndex: true, category: true, mealType: true },
     }),
     prisma.waterLog.findMany({ where: { userId, date: { gte: sinceISO, lte: untilISO } }, select: { date: true, ml: true } }),
     prisma.sleepLog.findMany({ where: { userId, date: { gte: sinceISO, lte: untilISO } }, select: { date: true, score: true } }),
@@ -66,7 +71,16 @@ export async function GET(req: Request) {
   const byDate = new Map<string, DayAgg>();
   const catTotals = new Map<string, { calories: number; count: number }>();
 
-  for (const e of entries) {
+  // Celkové kcal dňa zo VŠETKÝCH jedál – aj keď je zapnutý filter typu jedla.
+  // Vďaka tomu vieme v UI ukázať podiel daného jedla na celom dni.
+  const dayCaloriesAll = new Map<string, number>();
+  for (const e of entries) dayCaloriesAll.set(e.date, (dayCaloriesAll.get(e.date) || 0) + e.calories);
+
+  // Pri filtri na typ jedla agregujeme len záznamy daného jedla (kcal, makrá,
+  // zdravosť aj kategórie sa tak vzťahujú výhradne naň).
+  const scoped = meal ? entries.filter((e) => e.mealType === meal) : entries;
+
+  for (const e of scoped) {
     const d =
       byDate.get(e.date) ||
       { date: e.date, calories: 0, protein: 0, carbs: 0, fat: 0, count: 0, hSum: 0, hWeight: 0, catCalories: 0, catCount: 0 };
@@ -118,6 +132,7 @@ export async function GET(req: Request) {
       healthScore: d.hWeight > 0 ? Math.round((d.hSum / d.hWeight) * 10) / 10 : null,
       catCalories: d.catCalories,
       catCount: d.catCount,
+      dayCalories: dayCaloriesAll.get(d.date) || 0,
     }))
     .sort((a, b) => (a.date < b.date ? 1 : -1));
 

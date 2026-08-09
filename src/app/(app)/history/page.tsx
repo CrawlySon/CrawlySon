@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { getCache, setCache } from "@/lib/page-cache";
 import { round } from "@/lib/nutrition";
-import type { Profile } from "@/lib/types";
+import { MEAL_LABELS, MEAL_ORDER, type MealType, type Profile } from "@/lib/types";
 
 type Day = {
   date: string;
@@ -16,6 +16,7 @@ type Day = {
   healthScore: number | null;
   catCalories: number;
   catCount: number;
+  dayCalories: number;
   waterMl: number;
   sleepScore: number | null;
 };
@@ -128,7 +129,8 @@ function metricLabel(m: "kcal" | "health" | "water" | "sleep"): string {
   return m === "kcal" ? "Kalórie" : m === "health" ? "Zdravosť" : m === "sleep" ? "Spánok" : "Voda";
 }
 
-const historyKey = (from: string, to: string, cat: string) => `history:${from}:${to}:${cat}`;
+const historyKey = (from: string, to: string, cat: string, meal: string) =>
+  `history:${from}:${to}:${cat}:${meal}`;
 
 // --- component --------------------------------------------------------------
 
@@ -147,6 +149,8 @@ export default function HistoryPage() {
 
   const [category, setCategory] = useState<string>("");
   const [catOpen, setCatOpen] = useState(false);
+  // Filter na typ jedla („" = celý deň). Metriky sa potom vzťahujú len naň.
+  const [meal, setMeal] = useState<"" | MealType>("");
   const [metric, setMetric] = useState<"kcal" | "health" | "water" | "sleep">("kcal");
   const [showMedian, setShowMedian] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -161,20 +165,25 @@ export default function HistoryPage() {
   const isDaily = granularity === "daily";
 
   useEffect(() => {
-    const key = historyKey(fromDate, toDate, category);
+    const key = historyKey(fromDate, toDate, category, meal);
     const cached = getCache<HistoryState>(key);
     if (cached) {
       setDays(cached.days);
       if (!category) setCategories(cached.categories);
     }
     setLoading(cached === undefined);
-    api.history(fromDate, toDate, category || undefined).then((d) => {
+    api.history(fromDate, toDate, category || undefined, meal || undefined).then((d) => {
       setDays(d.days);
       if (!category) setCategories(d.categories);
       setCache(key, { days: d.days, categories: d.categories });
       setLoading(false);
     });
-  }, [fromDate, toDate, category]);
+  }, [fromDate, toDate, category, meal]);
+
+  // Voda a spánok sa merajú za celý deň – pri filtri na jedlo nedávajú zmysel.
+  useEffect(() => {
+    if (meal && (metric === "water" || metric === "sleep")) setMetric("kcal");
+  }, [meal, metric]);
 
   useEffect(() => {
     api.getProfile().then((p) => {
@@ -187,8 +196,11 @@ export default function HistoryPage() {
 
   // Deň je „nekompletný", ak nemá žiadne jedlo alebo má menej než polovicu
   // denného kalorického cieľa (napr. pri cieli 2000 = pod 1000 kcal).
+  // Pri filtri na typ jedla kalorický prah neplatí (raňajky ho nikdy nedosiahnu) –
+  // rozhoduje len to, či v daný deň dané jedlo vôbec je zapísané.
   const INCOMPLETE_FRACTION = 0.5;
-  const isBelowThreshold = (d: Day) => d.count === 0 || d.calories < goal * INCOMPLETE_FRACTION;
+  const isBelowThreshold = (d: Day) =>
+    meal ? d.count === 0 : d.count === 0 || d.calories < goal * INCOMPLETE_FRACTION;
   // Zo štatistík (priemery, medián, agregácie) vylúčime všetky neúplné dni –
   // vrátane DNEŠNÉHO, kým je rozrobený, aby priebežný stav neťahal čísla dole.
   const statsExcludeSet = new Set(days.filter(isBelowThreshold).map((d) => d.date));
@@ -212,7 +224,18 @@ export default function HistoryPage() {
   const sleepDays = days.filter((d) => d.sleepScore != null);
   const avgSleep = sleepDays.length ? sleepDays.reduce((s, d) => s + (d.sleepScore || 0), 0) / sleepDays.length : null;
 
-  const max = Math.max(goal, ...days.map((d) => d.calories), 1);
+  // Podiel jedla na celom dni + koľko dní ho vôbec obsahuje (len pri filtri jedla).
+  const mealShare = meal
+    ? (() => {
+        const withDay = completeDays.filter((d) => d.dayCalories > 0);
+        if (!withDay.length) return null;
+        return (withDay.reduce((s, d) => s + d.calories / d.dayCalories, 0) / withDay.length) * 100;
+      })()
+    : null;
+
+  const max = meal
+    ? Math.max(...days.map((d) => d.calories), 1)
+    : Math.max(goal, ...days.map((d) => d.calories), 1);
   const catMax = Math.max(...days.map((d) => d.catCalories), 1);
 
   // Build allDates list (fromDate → toDate inclusive)
@@ -261,7 +284,9 @@ export default function HistoryPage() {
   );
   const medianValues: (number | null)[] = isDaily && showMedian ? rollingMedian(dailyValues) : [];
 
-  const chartGoal = category ? null : metric === "kcal" ? goal : metric === "water" ? (profile ? profile.goalWaterMl / 1000 : null) : null;
+  // Pri filtri na jedlo neukazujeme denný kalorický cieľ – raňajky sa s ním neporovnávajú.
+  const chartGoal =
+    category || meal ? null : metric === "kcal" ? goal : metric === "water" ? (profile ? profile.goalWaterMl / 1000 : null) : null;
   const chartMax = Math.max(...chartSeries.map((s) => s.value), chartGoal || 0, isScoreMetric ? 10 : 0, 1);
   const chartUnit = category || metric === "kcal" ? " kcal" : metric === "water" ? " l" : "";
 
@@ -270,6 +295,7 @@ export default function HistoryPage() {
     if (v <= 0) return "#e2e8f0";
     if (category) return BLUE;
     if (metric === "kcal") {
+      if (meal) return BLUE; // jedlo sa neporovnáva s denným cieľom
       if (v <= goal) return BLUE;
       if (v <= goal * 1.5) return AMBER;
       return RED;
@@ -391,18 +417,48 @@ export default function HistoryPage() {
         </div>
       )}
 
+      {/* Meal type filter – metriky sa potom vzťahujú len na zvolené jedlo */}
+      <div className="mb-3 -mx-4 overflow-x-auto px-4">
+        <div className="flex w-max gap-2">
+          <button
+            onClick={() => setMeal("")}
+            className={`whitespace-nowrap rounded-full px-3 py-1.5 text-sm ${
+              meal === "" ? "bg-slate-800 text-white" : "bg-white text-slate-600 border border-slate-200"
+            }`}
+          >
+            Celý deň
+          </button>
+          {MEAL_ORDER.map((m) => (
+            <button
+              key={m}
+              onClick={() => setMeal(m)}
+              className={`whitespace-nowrap rounded-full px-3 py-1.5 text-sm ${
+                meal === m ? "bg-slate-800 text-white" : "bg-white text-slate-600 border border-slate-200"
+              }`}
+            >
+              {MEAL_LABELS[m]}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Metric selector + median toggle */}
       {!category && (
         <div className="mb-2 flex flex-wrap items-center gap-2">
-          {([["kcal", "Kalórie"], ["health", "Zdravosť"], ["water", "Voda"], ["sleep", "Spánok"]] as [typeof metric, string][]).map(([m, label]) => (
-            <button
-              key={m}
-              onClick={() => setMetric(m)}
-              className={`rounded-full px-3 py-1 text-xs ${metric === m ? "bg-slate-800 text-white" : "bg-white text-slate-500 border border-slate-200"}`}
-            >
-              {label}
-            </button>
-          ))}
+          {(
+            [["kcal", "Kalórie"], ["health", "Zdravosť"], ["water", "Voda"], ["sleep", "Spánok"]] as [typeof metric, string][]
+          )
+            // Voda a spánok sú denné veličiny – pri filtri na jedlo ich neponúkame.
+            .filter(([m]) => !meal || (m !== "water" && m !== "sleep"))
+            .map(([m, label]) => (
+              <button
+                key={m}
+                onClick={() => setMetric(m)}
+                className={`rounded-full px-3 py-1 text-xs ${metric === m ? "bg-slate-800 text-white" : "bg-white text-slate-500 border border-slate-200"}`}
+              >
+                {label}
+              </button>
+            ))}
           {isDaily && rangeDays >= 7 && (
             <button
               onClick={() => setShowMedian((v) => !v)}
@@ -417,6 +473,7 @@ export default function HistoryPage() {
       {/* Chart */}
       <div className="card mb-4 p-3">
         <p className="mb-1 text-xs font-medium text-slate-500">
+          {meal && <span className="text-brand-600">{MEAL_LABELS[meal]} · </span>}
           {category
             ? `Kategória „${category}" — kcal v čase`
             : granularity === "weekly"
@@ -446,7 +503,9 @@ export default function HistoryPage() {
         <div className="card p-3">
           <p className="text-xs text-slate-500">Priemer kcal</p>
           <p className="text-xl font-bold text-slate-800">{round(avg)}</p>
-          <p className="text-[11px] text-slate-400">cieľ {goal}</p>
+          <p className="text-[11px] text-slate-400">
+            {meal ? `${MEAL_LABELS[meal].toLowerCase()} / deň` : `cieľ ${goal}`}
+          </p>
         </div>
         <div className="card p-3">
           <p className="text-xs text-slate-500">Zdravosť</p>
@@ -455,18 +514,35 @@ export default function HistoryPage() {
           </p>
           <p className="text-[11px] text-slate-400">z 10</p>
         </div>
-        <div className="card p-3">
-          <p className="text-xs text-slate-500">💧 Voda</p>
-          <p className="text-xl font-bold text-sky-600">{(avgWater / 1000).toFixed(1)} l</p>
-          <p className="text-[11px] text-slate-400">priemer/deň</p>
-        </div>
-        <div className="card p-3">
-          <p className="text-xs text-slate-500">😴 Spánok</p>
-          <p className={`text-xl font-bold ${avgSleep != null ? healthText(avgSleep) : "text-slate-300"}`}>
-            {avgSleep != null ? `${round(avgSleep, 1)}` : "—"}
-          </p>
-          <p className="text-[11px] text-slate-400">z 10</p>
-        </div>
+        {meal ? (
+          <>
+            <div className="card p-3">
+              <p className="text-xs text-slate-500">Podiel z dňa</p>
+              <p className="text-xl font-bold text-slate-800">{mealShare != null ? `${Math.round(mealShare)} %` : "—"}</p>
+              <p className="text-[11px] text-slate-400">z denných kcal</p>
+            </div>
+            <div className="card p-3">
+              <p className="text-xs text-slate-500">Dni so záznamom</p>
+              <p className="text-xl font-bold text-slate-800">{completeDays.length}</p>
+              <p className="text-[11px] text-slate-400">z {rangeDays} dní</p>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="card p-3">
+              <p className="text-xs text-slate-500">💧 Voda</p>
+              <p className="text-xl font-bold text-sky-600">{(avgWater / 1000).toFixed(1)} l</p>
+              <p className="text-[11px] text-slate-400">priemer/deň</p>
+            </div>
+            <div className="card p-3">
+              <p className="text-xs text-slate-500">😴 Spánok</p>
+              <p className={`text-xl font-bold ${avgSleep != null ? healthText(avgSleep) : "text-slate-300"}`}>
+                {avgSleep != null ? `${round(avgSleep, 1)}` : "—"}
+              </p>
+              <p className="text-[11px] text-slate-400">z 10</p>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Day list */}
@@ -483,7 +559,7 @@ export default function HistoryPage() {
             const pct = showCat
               ? Math.min(100, (d.catCalories / catMax) * 100)
               : Math.min(100, (d.calories / max) * 100);
-            const over = !showCat && d.calories > goal;
+            const over = !showCat && !meal && d.calories > goal;
             return (
               <div key={d.date} className={`px-4 py-3 ${incomplete ? "bg-slate-50/60" : ""}`}>
                 <div className="flex items-center justify-between text-sm">
@@ -496,14 +572,18 @@ export default function HistoryPage() {
                     {incomplete && (
                       <span
                         className="rounded-full bg-slate-200 px-1.5 py-0.5 text-[10px] font-medium normal-case text-slate-500"
-                        title="Nekompletný deň – nezapočítava sa do priemerov ani mediánu"
+                        title={
+                          meal
+                            ? `Bez záznamu (${MEAL_LABELS[meal].toLowerCase()}) – nezapočítava sa do priemerov`
+                            : "Nekompletný deň – nezapočítava sa do priemerov ani mediánu"
+                        }
                       >
-                        nekompletné
+                        {meal ? "bez záznamu" : "nekompletné"}
                       </span>
                     )}
                   </span>
                   <span className="flex items-center gap-2">
-                    {!showCat && d.sleepScore != null && (
+                    {!showCat && !meal && d.sleepScore != null && (
                       <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${healthText(d.sleepScore)} bg-slate-100`} title="Hodnotenie spánku">
                         😴 {d.sleepScore}
                       </span>
@@ -531,7 +611,15 @@ export default function HistoryPage() {
                 <p className="mt-1 text-xs text-slate-400">
                   {showCat
                     ? `${d.catCount}× v kategórii „${category}"`
-                    : `B ${round(d.protein)} g · S ${round(d.carbs)} g · T ${round(d.fat)} g${d.waterMl ? ` · 💧 ${(d.waterMl / 1000).toFixed(1)} l` : ""}`}
+                    : `B ${round(d.protein)} g · S ${round(d.carbs)} g · T ${round(d.fat)} g${
+                        meal
+                          ? d.dayCalories > 0 && d.count > 0
+                            ? ` · ${Math.round((d.calories / d.dayCalories) * 100)} % dňa`
+                            : ""
+                          : d.waterMl
+                            ? ` · 💧 ${(d.waterMl / 1000).toFixed(1)} l`
+                            : ""
+                      }`}
                 </p>
               </div>
             );
@@ -539,16 +627,23 @@ export default function HistoryPage() {
         </div>
       )}
 
-      {!category && (
+      {!category && !meal && (
         <p className="mt-3 px-1 text-xs text-slate-400">
           Farba pruhu: modrá = v rámci cieľa, žltá = do +50 %, červená = nad +50 %.
         </p>
       )}
-      <p className="mt-1 px-1 text-xs text-slate-400">
-        „Nekompletné" dni (bez jedla alebo pod {Math.round(INCOMPLETE_FRACTION * 100)} % cieľa) sa v grafe nezobrazujú a
-        nezapočítavajú do priemerov ani mediánu; v zozname nižšie ostávajú označené. Dnešok je v grafe vždy vidno priebežne a
-        do štatistík vstúpi po prekročení prahu.
-      </p>
+      {meal ? (
+        <p className="mt-3 px-1 text-xs text-slate-400">
+          Zobrazujú sa iba <b>{MEAL_LABELS[meal].toLowerCase()}</b> – kalórie, makrá aj zdravosť sa počítajú výhradne z nich.
+          Dni bez tohto jedla sa do priemerov nezapočítavajú (denný kalorický cieľ sa tu neporovnáva).
+        </p>
+      ) : (
+        <p className="mt-1 px-1 text-xs text-slate-400">
+          „Nekompletné" dni (bez jedla alebo pod {Math.round(INCOMPLETE_FRACTION * 100)} % cieľa) sa v grafe nezobrazujú a
+          nezapočítavajú do priemerov ani mediánu; v zozname nižšie ostávajú označené. Dnešok je v grafe vždy vidno priebežne a
+          do štatistík vstúpi po prekročení prahu.
+        </p>
+      )}
       {!isDaily && chartSeries.some((s) => s.partial) && (
         <p className="mt-1 flex items-center gap-1.5 px-1 text-xs text-slate-400">
           <span className="inline-block h-2 w-2 rounded-full bg-amber-500 ring-1 ring-white" />
