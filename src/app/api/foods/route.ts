@@ -12,15 +12,43 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const q = (searchParams.get("q") || "").trim();
   const scope = searchParams.get("scope") || "all"; // mine | global | all
+  // Voliteľný typ jedla – posunie hore to, čo si doň naposledy pridával.
+  const meal = (searchParams.get("meal") || "").trim();
 
   const visibility =
     scope === "mine" ? { userId } : scope === "global" ? { userId: null } : { OR: [{ userId: null }, { userId }] };
+  const matchQ = (where: any) => (q ? { AND: [where, { name: { contains: q, mode: "insensitive" as const } }] } : where);
 
   const foods = await prisma.food.findMany({
-    where: q ? { AND: [visibility, { name: { contains: q, mode: "insensitive" } }] } : visibility,
+    where: matchQ(visibility),
     orderBy: { name: "asc" },
     take: 200,
   });
+
+  // Naposledy pridané položky v rámci daného jedla dňa (najnovšie prvé).
+  // Doťahujeme ich zvlášť, aby sa dostali hore aj vtedy, keď by sa do
+  // abecedného výrezu 200 potravín vôbec nezmestili.
+  const recentRank = new Map<string, number>();
+  if (meal) {
+    const recent = await prisma.entry.groupBy({
+      by: ["name"],
+      where: { userId, mealType: meal },
+      _max: { createdAt: true },
+      orderBy: { _max: { createdAt: "desc" } },
+      take: 25,
+    });
+    recent.forEach((r, i) => recentRank.set(r.name.toLowerCase(), i));
+
+    const recentNames = recent.map((r) => r.name);
+    if (recentNames.length) {
+      const recentFoods = await prisma.food.findMany({
+        where: matchQ({ AND: [visibility, { name: { in: recentNames } }] }),
+        take: 50,
+      });
+      const seen = new Set(foods.map((f) => f.id));
+      for (const f of recentFoods) if (!seen.has(f.id)) foods.push(f);
+    }
+  }
 
   // Koľkokrát používateľ daný názov použil vo svojich záznamoch.
   // Zoskupujeme len cez názvy práve nájdených potravín (max 200), nie cez
@@ -37,15 +65,27 @@ export async function GET(req: Request) {
   const useMap = new Map<string, number>();
   for (const u of usage) useMap.set(u.name.toLowerCase(), u._count._all);
 
-  // Zoradenie: najpoužívanejšie (u mňa) hore, potom abecedne
+  // Zoradenie: najprv naposledy pridané do tohto jedla dňa (najnovšie hore),
+  // potom najpoužívanejšie (u mňa) a nakoniec abecedne.
   foods.sort((a, b) => {
+    const ra = recentRank.get(a.name.toLowerCase());
+    const rb = recentRank.get(b.name.toLowerCase());
+    if (ra !== rb) {
+      if (ra == null) return 1;
+      if (rb == null) return -1;
+      return ra - rb;
+    }
     const ua = useMap.get(a.name.toLowerCase()) || 0;
     const ub = useMap.get(b.name.toLowerCase()) || 0;
     if (ub !== ua) return ub - ua;
     return a.name.localeCompare(b.name, "sk");
   });
 
-  const withUse = foods.map((f) => ({ ...f, useCount: useMap.get(f.name.toLowerCase()) || 0 }));
+  const withUse = foods.map((f) => ({
+    ...f,
+    useCount: useMap.get(f.name.toLowerCase()) || 0,
+    recentForMeal: recentRank.has(f.name.toLowerCase()),
+  }));
   return NextResponse.json({ foods: withUse });
 }
 

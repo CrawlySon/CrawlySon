@@ -52,8 +52,10 @@ export const api = {
   calendarDays: (from: string, to: string) =>
     req<{ dates: string[] }>(`/api/calendar?from=${from}&to=${to}`),
 
-  searchFoods: (q: string, scope: "mine" | "global" | "all" = "all") =>
-    req<{ foods: any[] }>(`/api/foods?q=${encodeURIComponent(q)}&scope=${scope}`),
+  searchFoods: (q: string, scope: "mine" | "global" | "all" = "all", meal?: string) =>
+    req<{ foods: any[] }>(
+      `/api/foods?q=${encodeURIComponent(q)}&scope=${scope}${meal ? `&meal=${encodeURIComponent(meal)}` : ""}`
+    ),
   addFood: (data: any) => req<{ food: any }>(`/api/foods`, { method: "POST", body: JSON.stringify(data) }),
   updateFood: (id: string, data: any) =>
     req<{ food: any }>(`/api/foods/${id}`, { method: "PATCH", body: JSON.stringify(data) }),

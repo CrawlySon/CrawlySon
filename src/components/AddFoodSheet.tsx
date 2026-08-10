@@ -80,14 +80,15 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
     if (trimmed.length === 1) return;
     const t = setTimeout(async () => {
       try {
-        const { foods } = await api.searchFoods(trimmed);
+        // `meal` posunie hore to, čo si do daného jedla dňa pridával naposledy
+        const { foods } = await api.searchFoods(trimmed, "all", meal);
         setResults(foods);
       } catch {
         /* ignore */
       }
     }, 250);
     return () => clearTimeout(t);
-  }, [query, tab]);
+  }, [query, tab, meal]);
 
   // Načítaj obľúbené raz (pre tab „Obľúbené")
   useEffect(() => {
@@ -717,7 +718,17 @@ function ManualRow({ food, onAdd }: { food: any; onAdd: (food: any, grams: numbe
   return (
     <div className="flex items-center gap-2 rounded-lg border border-slate-100 bg-white p-2">
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-slate-700">{food.name}</p>
+        <p className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
+          <span className="truncate">{food.name}</span>
+          {food.recentForMeal && (
+            <span
+              className="shrink-0 rounded-full bg-brand-50 px-1.5 py-0.5 text-[10px] font-medium text-brand-700"
+              title="Naposledy pridané do tohto jedla"
+            >
+              naposledy
+            </span>
+          )}
+        </p>
         <p className="text-xs text-slate-400">
           {food.calories} kcal / {food.baseGrams} g
           {food.healthIndex != null && (
