@@ -56,6 +56,11 @@ export const api = {
     req<{ foods: any[] }>(
       `/api/foods?q=${encodeURIComponent(q)}&scope=${scope}${meal ? `&meal=${encodeURIComponent(meal)}` : ""}`
     ),
+  moveEntries: (from: string, to: string, mode: "move" | "copy") =>
+    req<{ moved: number; mode: string }>(`/api/entries/move`, {
+      method: "POST",
+      body: JSON.stringify({ from, to, mode }),
+    }),
   addFood: (data: any) => req<{ food: any }>(`/api/foods`, { method: "POST", body: JSON.stringify(data) }),
   updateFood: (id: string, data: any) =>
     req<{ food: any }>(`/api/foods/${id}`, { method: "PATCH", body: JSON.stringify(data) }),

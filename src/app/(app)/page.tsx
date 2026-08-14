@@ -14,7 +14,7 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { api } from "@/lib/api";
-import { getCache, setCache } from "@/lib/page-cache";
+import { clearCache, getCache, setCache } from "@/lib/page-cache";
 import { checkBadges } from "@/lib/badge-check";
 import { showToast } from "@/lib/toast";
 import { round, sumTotals, todayISO } from "@/lib/nutrition";
@@ -26,6 +26,7 @@ import SleepCard from "@/components/SleepCard";
 import SupplementCard from "@/components/SupplementCard";
 import QuickFavorites from "@/components/QuickFavorites";
 import CalendarPopup from "@/components/CalendarPopup";
+import MoveDaySheet from "@/components/MoveDaySheet";
 
 function entryToFavItem(e: Entry): FavoriteItem {
   return {
@@ -77,6 +78,7 @@ export default function TodayPage() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [hideFab, setHideFab] = useState(false);
   const [showCal, setShowCal] = useState(false);
+  const [showMove, setShowMove] = useState(false);
   // Režim výberu položiek (kopírovanie do dnes / uloženie ako jedlo)
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -429,6 +431,16 @@ export default function TodayPage() {
         </DragOverlay>
       </DndContext>
 
+      {/* Oprava omylom zapísaného dňa – presunie/skopíruje jedlá na iný dátum */}
+      {entries.length > 0 && (
+        <button
+          onClick={() => setShowMove(true)}
+          className="mt-2 w-full py-2 text-center text-xs text-slate-400 hover:text-brand-600"
+        >
+          ⇄ Presunúť záznamy dňa na iný dátum
+        </button>
+      )}
+
       <SupplementCard date={date} reloadSignal={reload} />
 
       <SleepCard date={date} reloadSignal={reload} />
@@ -480,6 +492,22 @@ export default function TodayPage() {
 
       {showCal && (
         <CalendarPopup value={date} max={todayISO()} onSelect={setDate} onClose={() => setShowCal(false)} />
+      )}
+
+      {showMove && (
+        <MoveDaySheet
+          date={date}
+          count={entries.length}
+          onClose={() => setShowMove(false)}
+          onDone={(target) => {
+            setShowMove(false);
+            // Zmenil sa zdrojový aj cieľový deň – zahoď cache záznamov aj histórie
+            clearCache("entries:");
+            clearCache("history:");
+            setDate(target);
+            refreshAll();
+          }}
+        />
       )}
     </div>
   );
