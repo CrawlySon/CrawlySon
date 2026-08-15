@@ -8,6 +8,8 @@ export function isOpenAIConfigured(): boolean {
 
 export type OpenAIResult = {
   text: string;
+  // "length" = odpoveď narazila na strop max_tokens a je odseknutá (nekompletný JSON)
+  finishReason: string;
   usage: { model: string; promptTokens: number; outputTokens: number; totalTokens: number };
 };
 
@@ -54,6 +56,7 @@ async function chat(opts: {
     const u = data?.usage || {};
     return {
       text,
+      finishReason: String(data?.choices?.[0]?.finish_reason ?? ""),
       usage: {
         model: `openai:${data?.model || OPENAI_MODEL}`,
         promptTokens: Number(u.prompt_tokens ?? 0),

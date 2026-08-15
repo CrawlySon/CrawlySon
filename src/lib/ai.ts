@@ -19,6 +19,18 @@ const SYSTEM_INSTRUCTION = `Si výživový asistent pre slovenskú aplikáciu na
 Tvojou úlohou je z voľného textu (alebo prepisu reči) používateľa rozpoznať
 jednotlivé zjedené potraviny/jedlá a odhadnúť ich nutričné hodnoty.
 
+ÚPLNOSŤ (NAJDÔLEŽITEJŠIE PRAVIDLO):
+- Vráť KAŽDÚ potravinu spomenutú v texte. Nikdy žiadnu nevynechaj, nezhrň viac
+  potravín do jednej položky a nezastav sa po prvých pár položkách.
+- Text môže obsahovať VIAC jedál dňa naraz – aj vo viacerých riadkoch alebo
+  sekciách s nadpisom, napr.:
+    "Raňajky: kura v obale, waffle, majonéza, cappuccino
+     Obed: hranolky, chickenburger, lungo s mliekom"
+  Spracuj VŠETKY sekcie a všetky riadky, nie iba prvý. V tomto príklade musíš
+  vrátiť 7 položiek – 4 s mealType "breakfast" a 3 s "lunch".
+- Pred odpoveďou si v duchu spočítaj potraviny v texte a over, že "items"
+  obsahuje rovnaký počet.
+
 PRAVIDLÁ:
 - Rozlož jedlo na zmysluplné jednotlivé položky (napr. "sviečková s knedľou"
   rozdeľ na omáčku/mäso a knedľu, ak to dáva zmysel; ak ide o jedno jedlo, nechaj
@@ -40,10 +52,12 @@ PRAVIDLÁ:
   olovrant (popoludňajší) = "afternoon", večera = "dinner",
   druhá večera / večerné maškrtenie / nočné jedenie = "supper".
   Ak typ jedla pre danú položku NEuvedie, vráť "other".
-  Keď používateľ spomína viac jedál z rôznych častí dňa naraz (napr. „ráno
-  som jedol banán, na obed sviečkovú, na večeru kurací steak"), každá položka
-  dostane správny mealType. Na úrovni top-level "mealType" vráť typ prvého /
-  dominantného jedla.
+  Keď používateľ spomína viac jedál z rôznych častí dňa naraz – či už v jednej
+  vete („ráno som jedol banán, na obed sviečkovú, na večeru kurací steak"),
+  alebo v samostatných riadkoch s nadpisom („Raňajky: …" / „Obed: …") – vráť
+  položky zo VŠETKÝCH týchto jedál a každej daj jej správny mealType.
+  Top-level "mealType" je len orientačný (typ prvého jedla) a NIE JE dôvod
+  vynechať položky z ostatných jedál – tie musia byť v "items" tiež.
 
 - Ku každej položke urči "category" (hlavná kategória) a "subcategory"
   (podkategória) v slovenčine. Príklady kategórií: Ovocie, Zelenina, Mäso, Ryby,
@@ -114,9 +128,16 @@ export async function parseFood(text: string, reference: ReferenceFood[]): Promi
     system: SYSTEM_INSTRUCTION + PARSE_JSON_SHAPE,
     user: prompt,
     temperature: 0.3,
-    maxTokens: 2048,
+    // Jedna položka zaberie ~100–130 tokenov, takže strop musí uniesť aj dlhý
+    // zoznam (celý deň naraz). Pri prekročení by prišiel odseknutý JSON.
+    maxTokens: 6000,
   });
   const usage = r.usage;
+
+  // Odseknutá odpoveď = neúplný zoznam. Radšej zrozumiteľná hláška než „neplatný JSON".
+  if (r.finishReason === "length") {
+    throw new Error("Zoznam jedál je príliš dlhý na jedno spracovanie. Rozdeľ ho prosím na dve časti.");
+  }
 
   let parsed: { items?: any[]; mealType?: string; waterMl?: number };
   try {
