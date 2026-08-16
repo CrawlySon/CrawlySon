@@ -36,6 +36,12 @@ export async function GET(req: Request) {
   // Voliteľný filter na typ jedla (raňajky, obed, …). Neplatná hodnota = bez filtra.
   const mealParam = (searchParams.get("meal") || "").trim();
   const meal = MEAL_TYPES.includes(mealParam) ? mealParam : "";
+  // Kategórie, ktoré sa majú z výpočtov vynechať (napr. "Nápoje,Alkohol").
+  const excludeCats = (searchParams.get("exclude") || "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  const isExcluded = (cat: string | null) => !!cat && excludeCats.includes(cat.toLowerCase());
 
   const fromParam = searchParams.get("from");
   const toParam = searchParams.get("to");
@@ -71,14 +77,23 @@ export async function GET(req: Request) {
   const byDate = new Map<string, DayAgg>();
   const catTotals = new Map<string, { calories: number; count: number }>();
 
+  // Kalórie dňa úplne bez filtrov – slúžia len na posúdenie, či bol deň
+  // poriadne zapísaný. Vďaka tomu vypnutie nápojov neoznačí deň za nekompletný.
+  const fullByDate = new Map<string, number>();
+  for (const e of entries) fullByDate.set(e.date, (fullByDate.get(e.date) || 0) + e.calories);
+
+  // Vynechanie zvolených kategórií (napr. nápoje a alkohol) sa premietne do
+  // všetkých výpočtov – kalórií, makier aj zdravosti.
+  const kept = excludeCats.length ? entries.filter((e) => !isExcluded(e.category)) : entries;
+
   // Celkové kcal dňa zo VŠETKÝCH jedál – aj keď je zapnutý filter typu jedla.
   // Vďaka tomu vieme v UI ukázať podiel daného jedla na celom dni.
   const dayCaloriesAll = new Map<string, number>();
-  for (const e of entries) dayCaloriesAll.set(e.date, (dayCaloriesAll.get(e.date) || 0) + e.calories);
+  for (const e of kept) dayCaloriesAll.set(e.date, (dayCaloriesAll.get(e.date) || 0) + e.calories);
 
   // Pri filtri na typ jedla agregujeme len záznamy daného jedla (kcal, makrá,
   // zdravosť aj kategórie sa tak vzťahujú výhradne naň).
-  const scoped = meal ? entries.filter((e) => e.mealType === meal) : entries;
+  const scoped = meal ? kept.filter((e) => e.mealType === meal) : kept;
 
   for (const e of scoped) {
     const d =
@@ -107,6 +122,14 @@ export async function GET(req: Request) {
     catTotals.set(cat, ct);
   }
 
+  // Deň, z ktorého po odfiltrovaní kategórií nič neostalo (napr. len nápoje),
+  // musí v prehľade ostať – inak by zo zoznamu nečakane zmizol.
+  for (const date of fullByDate.keys()) {
+    if (!byDate.has(date)) {
+      byDate.set(date, { date, calories: 0, protein: 0, carbs: 0, fat: 0, count: 0, hSum: 0, hWeight: 0, catCalories: 0, catCount: 0 });
+    }
+  }
+
   // Doplň dni, ktoré majú len vodu alebo len spánok (žiadne jedlo)
   for (const date of waterByDate.keys()) {
     if (!byDate.has(date)) {
@@ -133,6 +156,7 @@ export async function GET(req: Request) {
       catCalories: d.catCalories,
       catCount: d.catCount,
       dayCalories: dayCaloriesAll.get(d.date) || 0,
+      fullCalories: fullByDate.get(d.date) || 0,
     }))
     .sort((a, b) => (a.date < b.date ? 1 : -1));
 

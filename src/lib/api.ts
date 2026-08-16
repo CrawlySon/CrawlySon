@@ -123,7 +123,7 @@ export const api = {
     req<{ score: number }>(`/api/sleep`, { method: "POST", body: JSON.stringify({ date, score }) }),
   deleteSleep: (date: string) => req<{ ok: true }>(`/api/sleep?date=${date}`, { method: "DELETE" }),
 
-  history: (from: string, to: string, category?: string, meal?: string) =>
+  history: (from: string, to: string, category?: string, meal?: string, exclude?: string[]) =>
     req<{
       days: {
         date: string;
@@ -136,6 +136,7 @@ export const api = {
         catCalories: number;
         catCount: number;
         dayCalories: number;
+        fullCalories: number;
         waterMl: number;
         sleepScore: number | null;
       }[];
@@ -143,7 +144,7 @@ export const api = {
     }>(
       `/api/history?from=${from}&to=${to}${category ? `&category=${encodeURIComponent(category)}` : ""}${
         meal ? `&meal=${encodeURIComponent(meal)}` : ""
-      }`
+      }${exclude?.length ? `&exclude=${encodeURIComponent(exclude.join(","))}` : ""}`
     ),
 
   login: (username: string, password: string) =>

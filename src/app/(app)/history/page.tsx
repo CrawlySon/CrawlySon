@@ -17,9 +17,15 @@ type Day = {
   catCalories: number;
   catCount: number;
   dayCalories: number;
+  fullCalories: number;
   waterMl: number;
   sleepScore: number | null;
 };
+
+// Kategórie, ktoré sa dajú z výpočtov vypnúť (názvy musia sedieť s tými, ktoré
+// prideľuje AI pri zápise jedla).
+const CAT_DRINKS = "Nápoje";
+const CAT_ALCOHOL = "Alkohol";
 type Category = { name: string; calories: number; count: number };
 type HistoryState = { days: Day[]; categories: Category[] };
 
@@ -129,8 +135,8 @@ function metricLabel(m: "kcal" | "health" | "water" | "sleep"): string {
   return m === "kcal" ? "Kalórie" : m === "health" ? "Zdravosť" : m === "sleep" ? "Spánok" : "Voda";
 }
 
-const historyKey = (from: string, to: string, cat: string, meal: string) =>
-  `history:${from}:${to}:${cat}:${meal}`;
+const historyKey = (from: string, to: string, cat: string, meal: string, exclude: string[]) =>
+  `history:${from}:${to}:${cat}:${meal}:${exclude.join("+")}`;
 
 // --- component --------------------------------------------------------------
 
@@ -151,6 +157,9 @@ export default function HistoryPage() {
   const [catOpen, setCatOpen] = useState(false);
   // Filter na typ jedla („" = celý deň). Metriky sa potom vzťahujú len naň.
   const [meal, setMeal] = useState<"" | MealType>("");
+  // Nápoje a alkohol sú štandardne započítané; dajú sa vypnúť pre pohľad na jedlo.
+  const [noDrinks, setNoDrinks] = useState(false);
+  const [noAlcohol, setNoAlcohol] = useState(false);
   const [metric, setMetric] = useState<"kcal" | "health" | "water" | "sleep">("kcal");
   const [showMedian, setShowMedian] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -164,21 +173,25 @@ export default function HistoryPage() {
   const granularity = preset === "custom" ? computeGranularity(rangeDays) : "daily";
   const isDaily = granularity === "daily";
 
+  const exclude = [...(noDrinks ? [CAT_DRINKS] : []), ...(noAlcohol ? [CAT_ALCOHOL] : [])];
+  const excludeKey = exclude.join("+");
+
   useEffect(() => {
-    const key = historyKey(fromDate, toDate, category, meal);
+    const list = excludeKey ? excludeKey.split("+") : [];
+    const key = historyKey(fromDate, toDate, category, meal, list);
     const cached = getCache<HistoryState>(key);
     if (cached) {
       setDays(cached.days);
       if (!category) setCategories(cached.categories);
     }
     setLoading(cached === undefined);
-    api.history(fromDate, toDate, category || undefined, meal || undefined).then((d) => {
+    api.history(fromDate, toDate, category || undefined, meal || undefined, list).then((d) => {
       setDays(d.days);
       if (!category) setCategories(d.categories);
       setCache(key, { days: d.days, categories: d.categories });
       setLoading(false);
     });
-  }, [fromDate, toDate, category, meal]);
+  }, [fromDate, toDate, category, meal, excludeKey]);
 
   // Voda a spánok sa merajú za celý deň – pri filtri na jedlo nedávajú zmysel.
   useEffect(() => {
@@ -198,9 +211,11 @@ export default function HistoryPage() {
   // denného kalorického cieľa (napr. pri cieli 2000 = pod 1000 kcal).
   // Pri filtri na typ jedla kalorický prah neplatí (raňajky ho nikdy nedosiahnu) –
   // rozhoduje len to, či v daný deň dané jedlo vôbec je zapísané.
+  // Posudzuje sa podľa kalórií CELÉHO dňa (fullCalories), takže vypnutie nápojov
+  // či alkoholu neoznačí inak poriadne zapísaný deň za nekompletný.
   const INCOMPLETE_FRACTION = 0.5;
   const isBelowThreshold = (d: Day) =>
-    meal ? d.count === 0 : d.count === 0 || d.calories < goal * INCOMPLETE_FRACTION;
+    meal ? d.count === 0 : d.fullCalories < goal * INCOMPLETE_FRACTION;
   // Zo štatistík (priemery, medián, agregácie) vylúčime všetky neúplné dni –
   // vrátane DNEŠNÉHO, kým je rozrobený, aby priebežný stav neťahal čísla dole.
   const statsExcludeSet = new Set(days.filter(isBelowThreshold).map((d) => d.date));
@@ -442,6 +457,30 @@ export default function HistoryPage() {
         </div>
       </div>
 
+      {/* Vypnutie nápojov / alkoholu – štandardne sú započítané */}
+      {!category && (
+        <div className="mb-3 flex flex-wrap gap-2">
+          <button
+            onClick={() => setNoDrinks((v) => !v)}
+            className={`rounded-full px-3 py-1.5 text-sm ${
+              noDrinks ? "bg-slate-800 text-white" : "bg-white text-slate-600 border border-slate-200"
+            }`}
+            title={`Nezapočítavať kategóriu „${CAT_DRINKS}"`}
+          >
+            {noDrinks ? "✓ " : ""}bez nápojov
+          </button>
+          <button
+            onClick={() => setNoAlcohol((v) => !v)}
+            className={`rounded-full px-3 py-1.5 text-sm ${
+              noAlcohol ? "bg-slate-800 text-white" : "bg-white text-slate-600 border border-slate-200"
+            }`}
+            title={`Nezapočítavať kategóriu „${CAT_ALCOHOL}"`}
+          >
+            {noAlcohol ? "✓ " : ""}bez alkoholu
+          </button>
+        </div>
+      )}
+
       {/* Metric selector + median toggle */}
       {!category && (
         <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -474,6 +513,11 @@ export default function HistoryPage() {
       <div className="card mb-4 p-3">
         <p className="mb-1 text-xs font-medium text-slate-500">
           {meal && <span className="text-brand-600">{MEAL_LABELS[meal]} · </span>}
+          {exclude.length > 0 && (
+            <span className="text-slate-400">
+              {noDrinks && noAlcohol ? "bez nápojov a alkoholu" : noDrinks ? "bez nápojov" : "bez alkoholu"} ·{" "}
+            </span>
+          )}
           {category
             ? `Kategória „${category}" — kcal v čase`
             : granularity === "weekly"
@@ -630,6 +674,12 @@ export default function HistoryPage() {
       {!category && !meal && (
         <p className="mt-3 px-1 text-xs text-slate-400">
           Farba pruhu: modrá = v rámci cieľa, žltá = do +50 %, červená = nad +50 %.
+        </p>
+      )}
+      {exclude.length > 0 && (
+        <p className="mt-1 px-1 text-xs text-slate-400">
+          Kalórie, makrá aj zdravosť sú počítané <b>bez kategórie {exclude.map((c) => `„${c}"`).join(" a ")}</b>. Voda a
+          spánok sa tým nemenia a či je deň kompletný sa stále posudzuje z celého dňa.
         </p>
       )}
       {meal ? (
