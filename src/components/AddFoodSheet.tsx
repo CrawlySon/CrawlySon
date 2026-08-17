@@ -264,9 +264,11 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
       const r = await api.aiBarcodeLookup(unknownForm.name.trim(), unknownCode);
       if (r.found && r.food) {
         setUnknownCode(null);
+        setShowForm(false); // produkt je nájdený – panel na nový produkt už netreba
         setResults([r.food]);
         setScanMsg(`Dohľadané cez AI: ${r.food.name} (${r.food.calories} kcal/100 g) — zvoľ gramáž a pridaj.`);
       } else {
+        setShowForm(true);
         setScanMsg("AI to spoľahlivo nenašlo. Zadaj hodnoty ručne (na 100 g).");
       }
     } catch (e: any) {
@@ -341,8 +343,10 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
     }
   }
 
+  // Uloží produkt do vlastnej databázy. Čiarový kód je voliteľný – tabuľku
+  // hodnôt sa dá odfotiť aj bez skenovania kódu.
   async function saveUnknown() {
-    if (!unknownCode || !unknownForm.name.trim()) return;
+    if (!unknownForm.name.trim()) return;
     const { food } = await api.addFood({
       name: unknownForm.name.trim(),
       barcode: unknownCode,
@@ -355,6 +359,8 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
       healthIndex: unknownForm.healthIndex,
     });
     setUnknownCode(null);
+    setShowForm(false);
+    setUnknownForm({ name: "", calories: 0, protein: 0, carbs: 0, fat: 0, category: "", healthIndex: null });
     setResults([food]);
     setScanMsg(`Uložené: ${food.name} — zvoľ gramáž a pridaj.`);
   }
@@ -487,30 +493,73 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
 
         {tab === "manual" && (
           <div className="card p-3">
-            <div className="mb-2 flex gap-2">
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Hľadaj potravinu…"
-                className="input flex-1"
-              />
-              <button onClick={() => setScanning(true)} className="btn-ghost shrink-0" title="Skenovať čiarový kód">
-                📷
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Hľadaj potravinu…"
+              className="input"
+            />
+
+            {/* Rovnocenné spôsoby pridania: kód aj fotka tabuľky sú dostupné hneď */}
+            <div className="mb-2 mt-2 flex gap-2">
+              <button
+                onClick={() => setScanning(true)}
+                disabled={photoBusy}
+                className="btn-ghost flex-1 py-2 text-sm"
+                title="Skenovať čiarový kód"
+              >
+                ▮▮ Čiarový kód
               </button>
+              <label
+                className={`btn flex-1 cursor-pointer bg-slate-100 py-2 text-sm font-medium text-slate-700 ${
+                  photoBusy ? "opacity-60" : "hover:bg-slate-200"
+                }`}
+                title="Odfotiť tabuľku nutričných hodnôt"
+              >
+                {photoBusy ? "Čítam fotku…" : "📸 Odfotiť tabuľku"}
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  disabled={photoBusy}
+                  onChange={onLabelPhoto}
+                />
+              </label>
             </div>
 
             {scanMsg && <p className="mb-2 rounded-xl bg-sky-50 p-2 text-xs text-sky-700">{scanMsg}</p>}
 
-            {/* Neznámy kód → dohľadať cez web, odfotiť tabuľku, alebo zadať ručne */}
-            {unknownCode && (
+            {/* Nový produkt – po skene neznámeho kódu ALEBO po odfotení tabuľky */}
+            {(unknownCode || showForm) && (
               <div className="mb-2 space-y-2 rounded-xl border border-amber-100 bg-amber-50 p-2">
-                <p className="text-sm text-amber-800">
-                  Produkt s kódom <b>{unknownCode}</b> nie je v databáze.
-                </p>
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-sm text-amber-800">
+                    {unknownCode ? (
+                      <>
+                        Produkt s kódom <b>{unknownCode}</b> nie je v databáze.
+                      </>
+                    ) : (
+                      <>Nový produkt – doplň názov a ulož ho do svojej databázy.</>
+                    )}
+                  </p>
+                  <button
+                    onClick={() => {
+                      setUnknownCode(null);
+                      setShowForm(false);
+                      setScanMsg(null);
+                      setUnknownForm({ name: "", calories: 0, protein: 0, carbs: 0, fat: 0, category: "", healthIndex: null });
+                    }}
+                    className="shrink-0 text-sm text-amber-700"
+                    title="Zavrieť"
+                  >
+                    ✕
+                  </button>
+                </div>
                 <button
                   onClick={aiLookupUnknown}
-                  disabled={estimating || photoBusy}
-                  className="btn-primary w-full py-2 text-sm"
+                  disabled={estimating || photoBusy || (!unknownCode && !unknownForm.name.trim())}
+                  className="btn-primary w-full py-2 text-sm disabled:opacity-50"
                 >
                   {estimating ? "Dohľadávam na webe…" : "🔎 Dohľadať produkt cez web (AI)"}
                 </button>
@@ -567,7 +616,7 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
                       disabled={!unknownForm.name.trim() || unknownForm.calories <= 0}
                       className="btn-primary w-full py-2 text-sm"
                     >
-                      Uložiť ku kódu {unknownCode}
+                      {unknownCode ? `Uložiť ku kódu ${unknownCode}` : "Uložiť do mojej databázy"}
                     </button>
                   </div>
                 )}
