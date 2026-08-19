@@ -123,6 +123,13 @@ export const api = {
     req<{ score: number }>(`/api/sleep`, { method: "POST", body: JSON.stringify({ date, score }) }),
   deleteSleep: (date: string) => req<{ ok: true }>(`/api/sleep?date=${date}`, { method: "DELETE" }),
 
+  // Telesná hmotnosť – jeden záznam na deň
+  getWeight: (date: string) =>
+    req<{ kg: number | null; previous: { kg: number; date: string } | null }>(`/api/weight?date=${date}`),
+  setWeight: (date: string, kg: number) =>
+    req<{ kg: number }>(`/api/weight`, { method: "POST", body: JSON.stringify({ date, kg }) }),
+  deleteWeight: (date: string) => req<{ ok: true }>(`/api/weight?date=${date}`, { method: "DELETE" }),
+
   history: (from: string, to: string, category?: string, meal?: string, exclude?: string[]) =>
     req<{
       days: {

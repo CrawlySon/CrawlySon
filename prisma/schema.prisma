@@ -49,6 +49,7 @@ model User {
   supplements    Supplement[]
   supplementLogs SupplementLog[]
   sleepLogs      SleepLog[]
+  weightLogs     WeightLog[]
 }
 
 // Odomknutý odznak (achievement). Kľúč zodpovedá katalógu v src/lib/badges.ts.
@@ -224,6 +225,20 @@ model SleepLog {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   date      String // YYYY-MM-DD (noc, ktorá končí ráno tohto dňa)
   score     Int // 1..10
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, date])
+  @@index([userId, date])
+}
+
+// Denný záznam telesnej hmotnosti (jeden na deň) – drží históriu vývoja.
+model WeightLog {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date      String // YYYY-MM-DD
+  kg        Float
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

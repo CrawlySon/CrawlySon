@@ -23,6 +23,7 @@ import MacroSummary from "@/components/MacroSummary";
 import AddFoodSheet from "@/components/AddFoodSheet";
 import WaterCard from "@/components/WaterCard";
 import SleepCard from "@/components/SleepCard";
+import WeightCard from "@/components/WeightCard";
 import SupplementCard from "@/components/SupplementCard";
 import QuickFavorites from "@/components/QuickFavorites";
 import CalendarPopup from "@/components/CalendarPopup";
@@ -444,6 +445,8 @@ export default function TodayPage() {
       <SupplementCard date={date} reloadSignal={reload} />
 
       <SleepCard date={date} reloadSignal={reload} />
+
+      <WeightCard date={date} reloadSignal={reload} />
 
       {!loading && entries.length === 0 && (
         <p className="mt-6 text-center text-sm text-slate-400">
