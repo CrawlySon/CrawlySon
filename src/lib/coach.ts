@@ -53,12 +53,11 @@ export type UserGoals = {
   goalWaterMl: number;
 };
 
-// Koľko dní dozadu prepočítavame série. V tomto okne sú dáta autoritatívne –
-// rekord z neho sa smie prepočítať aj smerom nadol (po zmazaní/presune záznamov
-// alebo zmene cieľa). Staršie rekordy sa držia z uloženej hodnoty.
-export const STREAK_WINDOW_DAYS = 60;
+// Koľko dní dozadu načítavame dáta pre série a odznaky. Okno je zámerne dlhé,
+// aby doň spadla celá bežná história – vtedy vieme rekordy počítať presne.
+export const STREAK_WINDOW_DAYS = 400;
 
-// Poskladá kontext pre vyhodnotenie odznakov za posledných ~60 dní.
+// Poskladá kontext pre vyhodnotenie odznakov za posledných ~400 dní.
 export async function buildBadgeContext(userId: string, goals: UserGoals): Promise<BadgeContext> {
   const today = skToday();
   const since = shiftISO(today, -STREAK_WINDOW_DAYS);
@@ -166,17 +165,21 @@ export type StreakState = {
 
 // Spočíta aktuálnu sériu a osobný rekord pre každý typ; zmenené rekordy uloží.
 //
-// Rekord sa NEberie ako trvalé maximum: ak vznikol v rámci prepočítavaného okna,
-// sú dáta autoritatívne a rekord sa smie aj znížiť – inak by po zmazaní/presune
-// záznamov alebo po zmene kalorického cieľa navždy ostala hodnota, ktorú už
-// dáta nepodporujú. Rekord starší než okno sa zachová (dáta k nemu už nemáme).
+// Rekord sa NEberie ako trvalé maximum. Ak máme načítanú celú históriu
+// používateľa, je výpočet z dát autoritatívny a rekord smie aj klesnúť – inak by
+// po zmazaní/presune záznamov alebo po zmene kalorického cieľa navždy ostala
+// hodnota, ktorú dáta nepodporujú. Len ak história siaha až na okraj okna (a teda
+// môžu existovať staršie dni, ktoré nevidíme), držíme uloženú hodnotu ako spodnú
+// hranicu, nech sa dávny rekord nestratí.
 export async function buildStreaks(userId: string, ctx: BadgeContext): Promise<StreakState[]> {
-  const stored = await prisma.streakRecord.findMany({
-    where: { userId },
-    select: { type: true, best: true, bestAt: true },
-  });
-  const storedMap = new Map(stored.map((r) => [r.type, r]));
+  const stored = await prisma.streakRecord.findMany({ where: { userId }, select: { type: true, best: true } });
+  const storedMap = new Map(stored.map((r) => [r.type, r.best]));
+
+  // Máme všetko? Áno, ak najstarší načítaný deň leží až za začiatkom okna –
+  // vtedy pred ním nemôže byť žiadny nenačítaný záznam.
   const windowStart = shiftISO(ctx.today, -STREAK_WINDOW_DAYS);
+  const dates = [...ctx.byDate.keys()].sort();
+  const haveFullHistory = dates.length === 0 || dates[0] > windowStart;
 
   const out: StreakState[] = [];
   const updates: { type: string; best: number }[] = [];
@@ -185,11 +188,8 @@ export async function buildStreaks(userId: string, ctx: BadgeContext): Promise<S
     const pred = def.pred(ctx);
     const current = def.abstinence ? currentAbstinenceStreak(ctx, pred) : currentStreak(ctx, pred);
     const windowBest = def.abstinence ? longestAbstinenceStreak(ctx, pred) : longestStreak(ctx, pred);
-    const rec = storedMap.get(def.type);
-    const prevBest = rec?.best ?? 0;
-    // Rekord dosiahnutý v okne (alebo bez dátumu) prepočítame z dát – smie klesnúť.
-    const fromWindow = !rec?.bestAt || skToday(rec.bestAt) >= windowStart;
-    const best = fromWindow
+    const prevBest = storedMap.get(def.type) ?? 0;
+    const best = haveFullHistory
       ? Math.max(windowBest, current)
       : Math.max(prevBest, windowBest, current);
     if (best !== prevBest) updates.push({ type: def.type, best });
