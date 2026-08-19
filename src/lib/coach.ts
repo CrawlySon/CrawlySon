@@ -22,6 +22,12 @@ const SHAKE_RX =
   /shake|šejk|\bwhey\b|srvátkov|gainer|proteín(ov[ýáé])?\s*(nápoj|drink|kokteil|koktail|smoothie)|(proteín(ov[ýá])?|whey|srvátkov)\s*(izolát|izolat|koncentrát|koncentrat)/i;
 // Sladké: spoľahlivá je AI kategória „Sladké".
 const SWEETS_RX = /slad/i;
+// Pečivo: hlavný signál je AI kategória „Pečivo". Názvy sú poistka pre záznamy
+// zaradené inam (napr. pod „Obilniny") – radšej zachytiť aj tie, než tvrdiť
+// sériu bez pečiva v deň, keď si si dal rožok.
+const BREAD_CAT_RX = /pečiv|peciv/i;
+const BREAD_NAME_RX =
+  /chlieb|chlebík|chlebik|chlebov|rožok|rozok|rožky|rozky|žemľ|zeml|baget|croissant|kroasan|toust|toast|briošk|briosk|praclík|praclik|\bpita\b|tortill|lavaš|lavas|bulk|veka\b|pagáč|pagac|langoš|langos/i;
 // Akýkoľvek alkohol (pivo, víno, tvrdý).
 const ALCOHOL_RX =
   /alkohol|\bpiv(o|a|om|e)\b|ležiak|lezia|radler|\bvín(o|a|om|e)\b|\bvin(o|a)\b|prosecco|šampan|sampan|\bsekt\b|vodk|whisk|\brum\b|\bgin\b|tequil|likér|liker|borovičk|borovick|slivovic|hruškovic|hruskovic|brandy|koňak|konak|cognac|aperol|spritz|mojito|jäger|jager|absint|metax|becher|fernet|\bcider\b|martini|campari|baileys|\bpálenk|palenk/i;
@@ -76,7 +82,7 @@ export async function buildBadgeContext(userId: string, goals: UserGoals): Promi
   const ensure = (date: string): Acc => {
     let d = byDate.get(date);
     if (!d) {
-      d = { date, calories: 0, protein: 0, healthScore: null, hasFruit: false, hasVegetable: false, hasProteinShake: false, hasSweets: false, hasAlcohol: false, hasHardAlcohol: false, waterMl: 0, entryCount: 0, hSum: 0, hWeight: 0 };
+      d = { date, calories: 0, protein: 0, healthScore: null, hasFruit: false, hasVegetable: false, hasProteinShake: false, hasSweets: false, hasBread: false, hasAlcohol: false, hasHardAlcohol: false, waterMl: 0, entryCount: 0, hSum: 0, hWeight: 0 };
       byDate.set(date, d);
     }
     return d;
@@ -92,6 +98,7 @@ export async function buildBadgeContext(userId: string, goals: UserGoals): Promi
     if (e.category && VEG_RX.test(e.category) && isRaw) d.hasVegetable = true;
     if (e.category && SWEETS_RX.test(e.category)) d.hasSweets = true;
     const blob = `${e.category || ""} ${e.subcategory || ""} ${e.name || ""}`;
+    if ((e.category && BREAD_CAT_RX.test(e.category)) || BREAD_NAME_RX.test(blob)) d.hasBread = true;
     if (ALCOHOL_RX.test(blob)) d.hasAlcohol = true;
     if (HARD_ALCOHOL_RX.test(blob)) d.hasHardAlcohol = true;
     if (SHAKE_RX.test(blob)) d.hasProteinShake = true;
@@ -145,6 +152,7 @@ export function dayStat(ctx: BadgeContext, date: string): DailyStat {
       hasVegetable: false,
       hasProteinShake: false,
       hasSweets: false,
+      hasBread: false,
       hasAlcohol: false,
       hasHardAlcohol: false,
       waterMl: 0,

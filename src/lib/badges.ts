@@ -10,6 +10,7 @@ export type DailyStat = {
   hasVegetable: boolean;  // surová/čerstvá zelenina (healthIndex ≥ 8, kat. Zelenina)
   hasProteinShake: boolean; // proteínový šejk podľa názvu/podkategórie
   hasSweets: boolean;
+  hasBread: boolean;       // pečivo (chlieb, rožky, bagety…)
   hasAlcohol: boolean;
   hasHardAlcohol: boolean; // tvrdý alkohol (destiláty – bez piva/vína)
   waterMl: number;
@@ -149,6 +150,7 @@ const metProtein = (ctx: BadgeContext) => (s: DailyStat) => ctx.goalProtein > 0 
 // „Bez ..." série pracujú s VÝSKYTOM javu v daný deň (nie s absenciou zápisu).
 // Nelogovaný/prázdny deň = bez výskytu, takže séria = dni od posledného výskytu.
 const hasSweetsDay = (s: DailyStat) => s.hasSweets;
+const hasBreadDay = (s: DailyStat) => s.hasBread;
 const hasAlcoholDay = (s: DailyStat) => s.hasAlcohol;
 const hasHardAlcoholDay = (s: DailyStat) => s.hasHardAlcohol;
 const perfect = (ctx: BadgeContext) => (s: DailyStat) =>
@@ -345,6 +347,7 @@ export const STREAKS: StreakDef[] = [
   { type: "healthy", emoji: "🥦", title: "Zdravé dni", desc: "dni po sebe so zdravosťou ≥ 7", pred: () => healthy },
   { type: "protein", emoji: "🥤", title: "Proteínový šejk", desc: "dni po sebe s proteínovým šejkom", pred: () => hadProteinShake },
   { type: "no_sweets", emoji: "🚫🍭", title: "Bez sladkého", desc: "dni bez sladkého", pred: () => hasSweetsDay, abstinence: true },
+  { type: "no_bread", emoji: "🚫🥐", title: "Bez pečiva", desc: "dni bez pečiva", pred: () => hasBreadDay, abstinence: true },
   { type: "no_alcohol", emoji: "🚱", title: "Bez alkoholu", desc: "dni bez alkoholu", pred: () => hasAlcoholDay, abstinence: true },
   { type: "no_hard_alcohol", emoji: "🥃", title: "Bez tvrdého alkoholu", desc: "dni bez tvrdého alkoholu", pred: () => hasHardAlcoholDay, abstinence: true },
 ];
