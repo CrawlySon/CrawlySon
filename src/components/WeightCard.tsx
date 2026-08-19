@@ -18,6 +18,7 @@ export default function WeightCard({ date, reloadSignal }: { date: string; reloa
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const c = getCache<State>(weightKey(date));
@@ -25,10 +26,16 @@ export default function WeightCard({ date, reloadSignal }: { date: string; reloa
       setKg(c.kg);
       setPrevious(c.previous);
     }
-    const d = await api.getWeight(date);
-    setKg(d.kg);
-    setPrevious(d.previous);
-    setCache(weightKey(date), { kg: d.kg, previous: d.previous });
+    try {
+      const d = await api.getWeight(date);
+      setKg(d.kg);
+      setPrevious(d.previous);
+      setCache(weightKey(date), { kg: d.kg, previous: d.previous });
+      setError(null);
+    } catch (e: any) {
+      // Nech zlyhanie nie je tiché – inak karta len ticho ostane prázdna.
+      setError(e?.message || "Hmotnosť sa nepodarilo načítať.");
+    }
   }, [date]);
 
   useEffect(() => {
@@ -50,7 +57,8 @@ export default function WeightCard({ date, reloadSignal }: { date: string; reloa
     try {
       await api.setWeight(date, rounded);
       await load();
-    } catch {
+    } catch (e: any) {
+      setError(e?.message || "Hmotnosť sa nepodarilo uložiť.");
       await load();
     } finally {
       setBusy(false);
@@ -154,6 +162,8 @@ export default function WeightCard({ date, reloadSignal }: { date: string; reloa
           Naposledy {previous.kg.toFixed(1)} kg ({prettyDate(previous.date)})
         </p>
       )}
+
+      {error && <p className="mt-1.5 rounded-lg bg-red-50 p-2 text-xs text-red-600">{error}</p>}
     </div>
   );
 }
