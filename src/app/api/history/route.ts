@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getUserId } from "@/lib/server-auth";
+import { isAlcohol, isDrink } from "@/lib/food-tags";
 
 export const runtime = "nodejs";
 
@@ -36,12 +37,18 @@ export async function GET(req: Request) {
   // Voliteľný filter na typ jedla (raňajky, obed, …). Neplatná hodnota = bez filtra.
   const mealParam = (searchParams.get("meal") || "").trim();
   const meal = MEAL_TYPES.includes(mealParam) ? mealParam : "";
-  // Kategórie, ktoré sa majú z výpočtov vynechať (napr. "Nápoje,Alkohol").
+  // Skupiny, ktoré sa majú z výpočtov vynechať (napr. "Nápoje,Alkohol").
+  // Alkohol a nápoje sa nedajú spoľahlivo poznať len podľa kategórie (pivo býva
+  // zaradené pod „Nápoje", káva hocikde), preto ich rozpoznávame rovnakou
+  // logikou ako série odznakov. Ostatné hodnoty padnú na zhodu kategórie.
   const excludeCats = (searchParams.get("exclude") || "")
     .split(",")
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean);
-  const isExcluded = (cat: string | null) => !!cat && excludeCats.includes(cat.toLowerCase());
+  const isExcluded = (e: { category: string | null; subcategory: string | null; name: string }) =>
+    excludeCats.some((c) =>
+      c === "alkohol" ? isAlcohol(e) : c === "nápoje" || c === "napoje" ? isDrink(e) : e.category?.toLowerCase() === c
+    );
 
   const fromParam = searchParams.get("from");
   const toParam = searchParams.get("to");
@@ -62,7 +69,9 @@ export async function GET(req: Request) {
   const [entries, waterLogs, sleepLogs] = await Promise.all([
     prisma.entry.findMany({
       where: { userId, date: { gte: sinceISO, lte: untilISO } },
-      select: { date: true, calories: true, protein: true, carbs: true, fat: true, quantityGrams: true, healthIndex: true, category: true, mealType: true },
+      // name/subcategory sú potrebné na rozpoznanie alkoholu a nápojov –
+      // tie sa nedajú spoľahlivo určiť len z kategórie.
+      select: { date: true, calories: true, protein: true, carbs: true, fat: true, quantityGrams: true, healthIndex: true, category: true, subcategory: true, name: true, mealType: true },
     }),
     prisma.waterLog.findMany({ where: { userId, date: { gte: sinceISO, lte: untilISO } }, select: { date: true, ml: true } }),
     prisma.sleepLog.findMany({ where: { userId, date: { gte: sinceISO, lte: untilISO } }, select: { date: true, score: true } }),
@@ -84,7 +93,7 @@ export async function GET(req: Request) {
 
   // Vynechanie zvolených kategórií (napr. nápoje a alkohol) sa premietne do
   // všetkých výpočtov – kalórií, makier aj zdravosti.
-  const kept = excludeCats.length ? entries.filter((e) => !isExcluded(e.category)) : entries;
+  const kept = excludeCats.length ? entries.filter((e) => !isExcluded(e)) : entries;
 
   // Celkové kcal dňa zo VŠETKÝCH jedál – aj keď je zapnutý filter typu jedla.
   // Vďaka tomu vieme v UI ukázať podiel daného jedla na celom dni.

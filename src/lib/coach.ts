@@ -12,6 +12,8 @@ import {
   type BadgeContext,
   type DailyStat,
 } from "./badges";
+// Alkohol rozpoznávame zdieľanou logikou – rovnako ako filtre v analytike.
+import { ALCOHOL_RX, HARD_ALCOHOL_RX } from "./food-tags";
 
 const FRUIT_RX = /ovoc/i;
 const VEG_RX = /zelenin/i;
@@ -28,12 +30,6 @@ const SWEETS_RX = /slad/i;
 const BREAD_CAT_RX = /pečiv|peciv/i;
 const BREAD_NAME_RX =
   /chlieb|chlebík|chlebik|chlebov|rožok|rozok|rožky|rozky|žemľ|zeml|baget|croissant|kroasan|toust|toast|briošk|briosk|praclík|praclik|\bpita\b|tortill|lavaš|lavas|bulk|veka\b|pagáč|pagac|langoš|langos/i;
-// Akýkoľvek alkohol (pivo, víno, tvrdý).
-const ALCOHOL_RX =
-  /alkohol|\bpiv(o|a|om|e)\b|ležiak|lezia|radler|\bvín(o|a|om|e)\b|\bvin(o|a)\b|prosecco|šampan|sampan|\bsekt\b|vodk|whisk|\brum\b|\bgin\b|tequil|likér|liker|borovičk|borovick|slivovic|hruškovic|hruskovic|brandy|koňak|konak|cognac|aperol|spritz|mojito|jäger|jager|absint|metax|becher|fernet|\bcider\b|martini|campari|baileys|\bpálenk|palenk/i;
-// Tvrdý alkohol (destiláty) – pivo a víno tu NIE SÚ.
-const HARD_ALCOHOL_RX =
-  /vodk|whisk|\brum\b|\bgin\b|tequil|likér|liker|borovičk|borovick|slivovic|hruškovic|hruskovic|brandy|koňak|konak|cognac|aperol|spritz|mojito|jäger|jager|absint|metax|becher|fernet|martini|campari|baileys|\bpálenk|palenk/i;
 
 // Lokálny dátum (Europe/Bratislava) vo formáte YYYY-MM-DD.
 export function skToday(d = new Date()): string {
