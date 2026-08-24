@@ -350,6 +350,10 @@ function dni(n: number): string {
   return "dní";
 }
 
+function shortDate(iso: string): string {
+  return new Date(iso + "T00:00:00").toLocaleDateString("sk-SK", { day: "numeric", month: "numeric" });
+}
+
 function StreaksSection({ streaks }: { streaks: Streak[] }) {
   if (!streaks || streaks.length === 0) return null;
   // Najprv aktívne/rekordné série, potom podľa rekordu.
@@ -385,12 +389,24 @@ function StreaksSection({ streaks }: { streaks: Streak[] }) {
                 ) : s.best > 0 ? (
                   <>
                     Rekord: <b className="text-slate-700">{s.best}</b> {dni(s.best)}
-                    {s.current > 0 ? ` · ešte ${toBeat} ${dni(toBeat)} k vyrovnaniu` : " · séria prerušená"}
+                    {s.current > 0
+                      ? ` · ešte ${toBeat} ${dni(toBeat)} k vyrovnaniu`
+                      : s.stop?.reason === "missing"
+                        ? ""
+                        : " · séria prerušená"}
                   </>
                 ) : (
                   "Zatiaľ žiadna séria – začni dnes!"
                 )}
               </p>
+              {/* Chýbajúci záznam nie je porušenie – povedzme to rovno, nech to
+                  nevyzerá, že si v ten deň zlyhal vo všetkom naraz. */}
+              {s.stop?.reason === "missing" && (
+                <p className="mt-0.5 text-[11px] text-amber-600">
+                  ⚠︎ {s.current > 0 ? "Predtým chýba" : "Chýba"} úplný záznam za {shortDate(s.stop.date)} – deň sa nedá
+                  započítať.
+                </p>
+              )}
             </div>
           );
         })}

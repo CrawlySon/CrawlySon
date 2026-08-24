@@ -118,6 +118,9 @@ export type Streak = {
   current: number;
   best: number;
   isRecord: boolean;
+  // Čo sériu zastavilo: „missing" = v ten deň chýba úplný záznam,
+  // „unmet" = deň bol zapísaný, ale podmienku nesplnil.
+  stop?: { date: string; reason: "missing" | "unmet" } | null;
 };
 
 export type SupplementKind = "supplement" | "medication";

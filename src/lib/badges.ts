@@ -124,6 +124,48 @@ export function longestAbstinenceStreak(ctx: BadgeContext, has: (s: DailyStat) =
   return best;
 }
 
+// Prečo sa aktuálna séria zastavila:
+//  "missing" – ten deň nemá úplný záznam, takže sa nedá započítať
+//  "unmet"   – deň je zapísaný, ale podmienku nesplnil (pil si / prekročil cieľ)
+// null = séria siaha až k začiatku sledovania, nič ju neprerušilo.
+export type StreakStop = { date: string; reason: "missing" | "unmet" } | null;
+
+function earliestDate(ctx: BadgeContext): string | null {
+  const keys = [...ctx.byDate.keys()];
+  if (keys.length === 0) return null;
+  return keys.reduce((a, b) => (a < b ? a : b));
+}
+
+export function streakStop(ctx: BadgeContext, pred: (s: DailyStat) => boolean): StreakStop {
+  const earliest = earliestDate(ctx);
+  if (!earliest) return null;
+  const complete = completeLog(ctx);
+  let d = ctx.byDate.has(ctx.today) ? ctx.today : shiftISO(ctx.today, -1);
+  while (d >= earliest) {
+    const s = ctx.byDate.get(d);
+    if (!s) return { date: d, reason: "missing" };
+    if (!pred(s)) return { date: d, reason: complete(s) ? "unmet" : "missing" };
+    d = shiftISO(d, -1);
+  }
+  return null;
+}
+
+export function abstinenceStreakStop(ctx: BadgeContext, has: (s: DailyStat) => boolean): StreakStop {
+  const earliest = earliestDate(ctx);
+  if (!earliest) return null;
+  const complete = completeLog(ctx);
+  let d = ctx.today;
+  const t = ctx.byDate.get(d);
+  if (!t || !complete(t)) d = shiftISO(d, -1); // rozrobený dnešok sériu nezastavuje
+  while (d >= earliest) {
+    const s = ctx.byDate.get(d);
+    if (!s || !complete(s)) return { date: d, reason: "missing" };
+    if (has(s)) return { date: d, reason: "unmet" };
+    d = shiftISO(d, -1);
+  }
+  return null;
+}
+
 // Existuje aspoň jeden deň spĺňajúci podmienku?
 function anyDay(ctx: BadgeContext, pred: (s: DailyStat) => boolean): boolean {
   for (const s of ctx.byDate.values()) if (pred(s)) return true;

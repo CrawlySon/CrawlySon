@@ -8,6 +8,9 @@ import {
   longestStreak,
   currentAbstinenceStreak,
   longestAbstinenceStreak,
+  streakStop,
+  abstinenceStreakStop,
+  type StreakStop,
   STREAKS,
   type BadgeContext,
   type DailyStat,
@@ -165,6 +168,7 @@ export type StreakState = {
   current: number; // aktuálna séria (končiaca dnes/včera)
   best: number; // osobný rekord (všetky časy)
   isRecord: boolean; // aktuálna séria je (alebo vyrovnáva) rekord
+  stop: StreakStop; // čo sériu zastavilo (chýbajúci záznam vs. porušenie)
 };
 
 // Spočíta aktuálnu sériu a osobný rekord pre každý typ; zmenené rekordy uloží.
@@ -192,6 +196,7 @@ export async function buildStreaks(userId: string, ctx: BadgeContext): Promise<S
     const pred = def.pred(ctx);
     const current = def.abstinence ? currentAbstinenceStreak(ctx, pred) : currentStreak(ctx, pred);
     const windowBest = def.abstinence ? longestAbstinenceStreak(ctx, pred) : longestStreak(ctx, pred);
+    const stop = def.abstinence ? abstinenceStreakStop(ctx, pred) : streakStop(ctx, pred);
     const prevBest = storedMap.get(def.type) ?? 0;
     const best = haveFullHistory
       ? Math.max(windowBest, current)
@@ -205,6 +210,7 @@ export async function buildStreaks(userId: string, ctx: BadgeContext): Promise<S
       current,
       best,
       isRecord: current > 0 && current >= best,
+      stop,
     });
   }
 
