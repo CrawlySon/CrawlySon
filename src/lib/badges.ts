@@ -82,27 +82,29 @@ export function longestStreak(ctx: BadgeContext, pred: (s: DailyStat) => boolean
   return best;
 }
 
-// Séria „bez javu" končiaca dnes: počíta po sebe idúce dni BEZ výskytu javu,
-// pričom nelogovaný/prázdny deň sa berie ako bez výskytu (absencia zápisu ≠
-// konzumácia). Ohraničené najstarším dňom v dátach, nech neráta pred začiatkom
-// sledovania. Odráža „koľko dní odvtedy, čo si mal naposledy ...".
+// Séria „bez javu" končiaca dnes. Do série sa počíta iba deň s PORIADNYM
+// zápisom (completeLog) – bez neho nevieme, čo sa v ten deň jedlo, takže tvrdiť
+// „bez alkoholu" by bola len domnienka. Nezapísaný deň preto sériu prerušuje.
+// Výnimka je rozrobený dnešok: ten sériu nezhadzuje, len sa (zatiaľ) nepočíta.
 export function currentAbstinenceStreak(ctx: BadgeContext, has: (s: DailyStat) => boolean): number {
-  const keys = [...ctx.byDate.keys()];
-  if (keys.length === 0) return 0;
-  const earliest = keys.reduce((a, b) => (a < b ? a : b));
+  const complete = completeLog(ctx);
   let d = ctx.today;
+  const t = ctx.byDate.get(d);
+  if (!t || !complete(t)) d = shiftISO(d, -1);
   let n = 0;
-  while (d >= earliest) {
+  while (true) {
     const s = ctx.byDate.get(d);
-    if (s && has(s)) break; // v tento deň bol jav → séria končí
+    if (!s || !complete(s) || has(s)) break;
     n++;
     d = shiftISO(d, -1);
   }
   return n;
 }
 
-// Najdlhšia séria „bez javu" v dostupných dátach (medzery = bez javu), po dnešok.
+// Najdlhšia séria „bez javu" – rovnaké pravidlo: deň bez poriadneho zápisu
+// sériu prerušuje.
 export function longestAbstinenceStreak(ctx: BadgeContext, has: (s: DailyStat) => boolean): number {
+  const complete = completeLog(ctx);
   const keys = [...ctx.byDate.keys()].sort();
   if (keys.length === 0) return 0;
   let d = keys[0];
@@ -111,10 +113,11 @@ export function longestAbstinenceStreak(ctx: BadgeContext, has: (s: DailyStat) =
   let run = 0;
   while (d <= last) {
     const s = ctx.byDate.get(d);
-    if (s && has(s)) run = 0;
-    else {
+    if (s && complete(s) && !has(s)) {
       run++;
       if (run > best) best = run;
+    } else {
+      run = 0;
     }
     d = shiftISO(d, 1);
   }
@@ -129,26 +132,30 @@ function anyDay(ctx: BadgeContext, pred: (s: DailyStat) => boolean): boolean {
 
 // --- predikáty dňa ---------------------------------------------------------
 
-const inCalorieGoal = (ctx: BadgeContext) => (s: DailyStat) =>
-  s.calories > 0 && ctx.goalCalories > 0 && s.calories <= ctx.goalCalories;
-// „Zápis jedál" počíta iba ÚPLNÉ dni: musí mať zápis a aspoň polovicu
-// kalorického cieľa (rovnaký prah ako „nekompletný deň" v Analytike).
-// Dnešok je výnimka – kým je rozrobený, stačí akýkoľvek zápis, aby séria
-// nezhasla predčasne (naplní sa po prekročení prahu).
+// „Poriadny zápis" dňa: musí mať zápis a aspoň polovicu kalorického cieľa
+// (rovnaký prah ako „nekompletný deň" v Analytike). Dnešok je výnimka – kým je
+// rozrobený, stačí akýkoľvek zápis, aby séria nezhasla predčasne.
+// Používajú ho všetky série, ktoré tvrdia niečo o CELOM dni – bez úplného
+// zápisu by šlo len o domnienku (deň s 300 kcal nie je „v kalorickom cieli").
 const INCOMPLETE_FRACTION = 0.5;
 const completeLog = (ctx: BadgeContext) => (s: DailyStat) => {
   if (s.entryCount === 0) return false;
   if (s.date === ctx.today) return true;
   return ctx.goalCalories <= 0 || s.calories >= ctx.goalCalories * INCOMPLETE_FRACTION;
 };
+const inCalorieGoal = (ctx: BadgeContext) => (s: DailyStat) =>
+  completeLog(ctx)(s) && ctx.goalCalories > 0 && s.calories <= ctx.goalCalories;
 const metWater = (ctx: BadgeContext) => (s: DailyStat) => ctx.goalWaterMl > 0 && s.waterMl >= ctx.goalWaterMl;
 const hadFruit = (s: DailyStat) => s.hasFruit;
 const hadVegetable = (s: DailyStat) => s.hasVegetable;
 const hadProteinShake = (s: DailyStat) => s.hasProteinShake;
-const healthy = (s: DailyStat) => s.healthScore != null && s.healthScore >= 7;
+// Zdravosť je priemer za celý deň – pri neúplnom zápise (napr. len jablko)
+// by vyšla falošne vysoká, preto vyžadujeme poriadny zápis.
+const healthy = (ctx: BadgeContext) => (s: DailyStat) =>
+  completeLog(ctx)(s) && s.healthScore != null && s.healthScore >= 7;
 const metProtein = (ctx: BadgeContext) => (s: DailyStat) => ctx.goalProtein > 0 && s.protein >= ctx.goalProtein;
-// „Bez ..." série pracujú s VÝSKYTOM javu v daný deň (nie s absenciou zápisu).
-// Nelogovaný/prázdny deň = bez výskytu, takže séria = dni od posledného výskytu.
+// „Bez ..." série pracujú s VÝSKYTOM javu v daný deň. Samotnú sériu počíta
+// currentAbstinenceStreak, ktorá navyše vyžaduje poriadny zápis dňa.
 const hasSweetsDay = (s: DailyStat) => s.hasSweets;
 const hasBreadDay = (s: DailyStat) => s.hasBread;
 const hasAlcoholDay = (s: DailyStat) => s.hasAlcohol;
@@ -180,7 +187,7 @@ function streakBadge(
   };
 }
 
-// Odznak pre sériu „bez ..." – nelogované dni sa berú ako bez výskytu.
+// Odznak pre sériu „bez ..." – počítajú sa len dni s poriadnym zápisom.
 function abstinenceStreakBadge(
   key: string,
   emoji: string,
@@ -290,10 +297,10 @@ export const BADGES: BadgeDef[] = [
   inChallenge("veg", streakBadge("veg_30", "🥬", "Zelený mesiac",    "30 dní po sebe surová zelenina","strava", 30, () => hadVegetable)),
 
   // Zdravá strava
-  inChallenge("healthy", streakBadge("healthy_1",  "🥦", "Zdravý tanier",   "1 deň zdravosť ≥ 7",          "strava", 1,  () => healthy)),
-  inChallenge("healthy", streakBadge("healthy_3",  "🌿", "Čistá trojka",    "3 dni po sebe zdravosť ≥ 7",  "strava", 3,  () => healthy)),
-  inChallenge("healthy", streakBadge("healthy_7",  "🌿", "Zdravý týždeň",   "7 dní po sebe zdravosť ≥ 7",  "strava", 7,  () => healthy)),
-  inChallenge("healthy", streakBadge("healthy_30", "🌳", "Mesiac čistoty",  "30 dní po sebe zdravosť ≥ 7", "strava", 30, () => healthy)),
+  inChallenge("healthy", streakBadge("healthy_1",  "🥦", "Zdravý tanier",   "1 deň zdravosť ≥ 7",          "strava", 1,  healthy)),
+  inChallenge("healthy", streakBadge("healthy_3",  "🌿", "Čistá trojka",    "3 dni po sebe zdravosť ≥ 7",  "strava", 3,  healthy)),
+  inChallenge("healthy", streakBadge("healthy_7",  "🌿", "Zdravý týždeň",   "7 dní po sebe zdravosť ≥ 7",  "strava", 7,  healthy)),
+  inChallenge("healthy", streakBadge("healthy_30", "🌳", "Mesiac čistoty",  "30 dní po sebe zdravosť ≥ 7", "strava", 30, healthy)),
 
   // Proteínový šejk
   inChallenge("protein", streakBadge("protein_1",  "🥤", "Šejkár",      "1 deň proteínový šejk",          "strava", 1,  () => hadProteinShake)),
@@ -344,7 +351,7 @@ export const STREAKS: StreakDef[] = [
   { type: "water", emoji: "💧", title: "Pitný režim", desc: "dni po sebe splnený cieľ vody", pred: metWater },
   { type: "fruit", emoji: "🍎", title: "Surové ovocie", desc: "dni po sebe so surovým ovocím", pred: () => hadFruit },
   { type: "veg", emoji: "🥗", title: "Surová zelenina", desc: "dni po sebe so surovou zeleninou", pred: () => hadVegetable },
-  { type: "healthy", emoji: "🥦", title: "Zdravé dni", desc: "dni po sebe so zdravosťou ≥ 7", pred: () => healthy },
+  { type: "healthy", emoji: "🥦", title: "Zdravé dni", desc: "dni po sebe so zdravosťou ≥ 7", pred: healthy },
   { type: "protein", emoji: "🥤", title: "Proteínový šejk", desc: "dni po sebe s proteínovým šejkom", pred: () => hadProteinShake },
   { type: "no_sweets", emoji: "🚫🍭", title: "Bez sladkého", desc: "dni bez sladkého", pred: () => hasSweetsDay, abstinence: true },
   { type: "no_bread", emoji: "🚫🥐", title: "Bez pečiva", desc: "dni bez pečiva", pred: () => hasBreadDay, abstinence: true },
