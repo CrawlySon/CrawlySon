@@ -118,11 +118,104 @@ export type ParseResult = {
   items: ParsedItem[];
   mealType: DetectedMeal;
   waterMl: number;
+  warning?: string;
   usage: { model: string; promptTokens: number; outputTokens: number; totalTokens: number };
 };
 
+// Nadpisy jedál dňa na začiatku riadku, napr. „Obed:" alebo „Druhá večera –".
+// Poradie je dôležité: „druhá večera" musí ísť pred „večera".
+const MEAL_HEADINGS: { rx: RegExp; meal: DetectedMeal }[] = [
+  { rx: /^\s*(?:2\.|druh[áa])\s*ve[čc]er\w*\s*[:\-–—]/i, meal: "supper" },
+  { rx: /^\s*ra[ňn]ajk\w*\s*[:\-–—]/i, meal: "breakfast" },
+  { rx: /^\s*(?:desiat\w*|dopoludaj\w*)\s*[:\-–—]/i, meal: "snack" },
+  { rx: /^\s*obed\w*\s*[:\-–—]/i, meal: "lunch" },
+  { rx: /^\s*olovrant\w*\s*[:\-–—]/i, meal: "afternoon" },
+  { rx: /^\s*ve[čc]er\w*\s*[:\-–—]/i, meal: "dinner" },
+];
+
+type Section = { meal: DetectedMeal | null; text: string };
+
+// Rozdelí text na sekcie podľa nadpisov jedál dňa. Riadky pred prvým nadpisom
+// (alebo text bez nadpisov) tvoria sekciu bez určeného jedla.
+export function splitMealSections(text: string): Section[] {
+  const sections: Section[] = [];
+  let current: Section | null = null;
+  for (const line of text.split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    const hit = MEAL_HEADINGS.find((h) => h.rx.test(line));
+    if (hit) {
+      current = { meal: hit.meal, text: line.replace(hit.rx, "").trim() };
+      sections.push(current);
+    } else if (current) {
+      current.text += `\n${line.trim()}`;
+    } else {
+      current = { meal: null, text: line.trim() };
+      sections.push(current);
+    }
+  }
+  return sections.filter((s) => s.text.trim().length > 0);
+}
+
+// Viac jedál naraz posielame ako samostatné volania (paralelne). Jeden veľký
+// zoznam model spoľahlivo nezvládne – utne ho po prvej sekcii, aj keď ho prompt
+// výslovne žiada celý. Po sekciách je každé volanie krátke a nič sa nestratí.
 export async function parseFood(text: string, reference: ReferenceFood[]): Promise<ParseResult> {
-  const prompt = `Používateľ povedal/napísal čo zjedol:\n"""${text}"""${buildReferenceBlock(reference)}`;
+  const sections = splitMealSections(text);
+  if (sections.length > 1) return parseBySections(sections, reference);
+  return parseOnce(text, reference);
+}
+
+const emptyUsage = () => ({ model: "openai", promptTokens: 0, outputTokens: 0, totalTokens: 0 });
+
+async function parseBySections(sections: Section[], reference: ReferenceFood[]): Promise<ParseResult> {
+  const results = await Promise.allSettled(sections.map((s) => parseOnce(s.text, reference, s.meal)));
+
+  const items: ParsedItem[] = [];
+  let waterMl = 0;
+  const usage = emptyUsage();
+  const failed: string[] = [];
+
+  results.forEach((r, i) => {
+    const meal = sections[i].meal;
+    if (r.status !== "fulfilled") {
+      failed.push(meal ? MEAL_SK[meal] : "časť zoznamu");
+      return;
+    }
+    // Jedlo dňa poznáme z nadpisu – je spoľahlivejšie než odhad modelu.
+    for (const it of r.value.items) items.push(meal ? { ...it, mealType: meal } : it);
+    waterMl += r.value.waterMl;
+    usage.model = r.value.usage.model;
+    usage.promptTokens += r.value.usage.promptTokens;
+    usage.outputTokens += r.value.usage.outputTokens;
+    usage.totalTokens += r.value.usage.totalTokens;
+  });
+
+  if (!items.length && failed.length) {
+    throw new Error("Nepodarilo sa spracovať žiadnu časť zoznamu. Skús to prosím znova.");
+  }
+
+  return {
+    items,
+    mealType: sections.find((s) => s.meal)?.meal ?? "other",
+    waterMl,
+    warning: failed.length ? `Nepodarilo sa spracovať: ${failed.join(", ")}. Skús to pre tieto jedlá zopakovať.` : undefined,
+    usage,
+  };
+}
+
+const MEAL_SK: Record<DetectedMeal, string> = {
+  breakfast: "raňajky",
+  snack: "desiata",
+  lunch: "obed",
+  afternoon: "olovrant",
+  dinner: "večera",
+  supper: "druhá večera",
+  other: "iné",
+};
+
+async function parseOnce(text: string, reference: ReferenceFood[], meal?: DetectedMeal | null): Promise<ParseResult> {
+  const mealHint = meal ? `\n\nToto je jedlo dňa: ${MEAL_SK[meal]} – všetkým položkám nastav mealType "${meal}".` : "";
+  const prompt = `Používateľ povedal/napísal čo zjedol:\n"""${text}"""${mealHint}${buildReferenceBlock(reference)}`;
 
   const r = await openAIChatJSON({
     system: SYSTEM_INSTRUCTION + PARSE_JSON_SHAPE,

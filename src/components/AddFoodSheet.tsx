@@ -172,8 +172,9 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
     setError(null);
     setNotice(null);
     try {
-      const { items, mealType, waterMl } = await api.parse(text);
+      const { items, mealType, waterMl, warning } = await api.parse(text);
       if (!items.length && !waterMl) setError("AI nerozpoznala žiadne jedlo ani vodu. Skús to upresniť.");
+      if (warning) setNotice(warning);
       setItems(items);
       setWater(waterMl || 0);
       // Ak AI z textu rozpoznala typ jedla a používateľ ho ručne nezmenil,

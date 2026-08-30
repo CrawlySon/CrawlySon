@@ -68,7 +68,7 @@ export async function POST(req: Request) {
     const t0 = Date.now();
     const reference = await pickReference(userId, text.trim());
     const t1 = Date.now();
-    const { items, mealType, waterMl, usage } = await parseFood(text.trim(), reference);
+    const { items, mealType, waterMl, warning, usage } = await parseFood(text.trim(), reference);
     const t2 = Date.now();
 
     const timings = { refMs: t1 - t0, aiMs: t2 - t1, refCount: reference.length };
@@ -91,7 +91,7 @@ export async function POST(req: Request) {
       console.error("aiUsage log error:", e);
     }
 
-    return NextResponse.json({ items, mealType, waterMl, usage, timings });
+    return NextResponse.json({ items, mealType, waterMl, warning, usage, timings });
   } catch (err: any) {
     console.error("parse error:", err);
     return NextResponse.json(
