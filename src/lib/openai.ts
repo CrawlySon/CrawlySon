@@ -1,6 +1,31 @@
 // OpenAI je jediný AI engine appky. Token ide do OPENAI_API_KEY (server-only, nikdy ku klientovi).
-const OPENAI_MODEL = process.env.OPENAI_MODEL || process.env.OPENAI_FALLBACK_MODEL || "gpt-4o-mini";
-const OPENAI_TIMEOUT_MS = Number(process.env.OPENAI_TIMEOUT_MS || 30000);
+// Hlavný model. Rozpoznávanie jedla je úloha na presné dodržanie inštrukcií,
+// kde slabší model vynecháva položky – preto nie „mini". Dá sa prepísať cez
+// OPENAI_MODEL bez zásahu do kódu.
+const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4.1";
+// Záloha, ak hlavný model nie je na účte dostupný (404 / model_not_found).
+const OPENAI_FALLBACK_MODEL = process.env.OPENAI_FALLBACK_MODEL || "gpt-4o-mini";
+const OPENAI_TIMEOUT_MS = Number(process.env.OPENAI_TIMEOUT_MS || 45000);
+
+// Modely s uvažovaním (gpt-5, o1/o3/o4…) neberú max_tokens ani temperature.
+function isReasoningModel(model: string): boolean {
+  return /^(gpt-5|o[1-9])/i.test(model);
+}
+
+function buildBody(model: string, opts: { system: string; content: string | any[]; temperature?: number; maxTokens?: number; json?: boolean }) {
+  const tokens = opts.maxTokens ?? 2048;
+  return {
+    model,
+    messages: [
+      { role: "system", content: opts.system },
+      { role: "user", content: opts.content },
+    ],
+    ...(isReasoningModel(model)
+      ? { max_completion_tokens: tokens }
+      : { max_tokens: tokens, temperature: opts.temperature ?? 0.3 }),
+    ...(opts.json ? { response_format: { type: "json_object" } } : {}),
+  };
+}
 
 export function isOpenAIConfigured(): boolean {
   return !!process.env.OPENAI_API_KEY;
@@ -28,21 +53,24 @@ async function chat(opts: {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), opts.timeoutMs ?? OPENAI_TIMEOUT_MS);
   try {
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: OPENAI_MODEL,
-        messages: [
-          { role: "system", content: opts.system },
-          { role: "user", content: opts.content },
-        ],
-        temperature: opts.temperature ?? 0.3,
-        max_tokens: opts.maxTokens ?? 2048,
-        ...(opts.json ? { response_format: { type: "json_object" } } : {}),
-      }),
-      signal: ctrl.signal,
-    });
+    const send = (model: string) =>
+      fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify(buildBody(model, opts)),
+        signal: ctrl.signal,
+      });
+
+    let res = await send(OPENAI_MODEL);
+
+    // Model nie je na účte dostupný → skús zálohu, nech appka nespadne celá.
+    if (!res.ok && (res.status === 404 || res.status === 400) && OPENAI_FALLBACK_MODEL !== OPENAI_MODEL) {
+      const body = await res.clone().text().catch(() => "");
+      if (/model/i.test(body)) {
+        console.warn(`OpenAI: model ${OPENAI_MODEL} nedostupný, skúšam ${OPENAI_FALLBACK_MODEL}.`);
+        res = await send(OPENAI_FALLBACK_MODEL);
+      }
+    }
 
     if (!res.ok) {
       const body = await res.text().catch(() => "");
