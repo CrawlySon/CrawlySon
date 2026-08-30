@@ -285,13 +285,34 @@ nasýtené tuky, soľ, spracovanie a vlákninu.
 - 3–4: biele pečivo, údeniny, vyprážané jedlá, sladené nápoje a bežné sladené/ochutené mliečne (kakao, ochutené jogurty).
 - 0–2: fast food, sladkosti, čokoláda, zákusky, chipsy, alkohol.
 Modifikátory: sladený/ochutený mliečny výrobok NEhodnoť ako biely jogurt (patrí medzi sladené);
-ak je sladený ALE s vysokým podielom bielkovín (proteínové nápoje/jogurty), pridaj +1 (typicky 4–5).`;
+ak je sladený ALE s vysokým podielom bielkovín (proteínové nápoje/jogurty), pridaj +1 (typicky 4–5).
 
-export async function scoreHealthBatch(
-  items: { name: string; category: string | null }[]
-): Promise<Map<number, number>> {
+KONZISTENTNOSŤ (dôležité):
+- Hodnoť podľa uvedených hodnôt NA 100 g, nie podľa toho, ako názov znie.
+  Hodnoty sú už prepočítané na 100 g – veľkosť balenia ani porcie neber do úvahy.
+- Položky s prakticky rovnakými hodnotami a rovnakého druhu musia dostať ROVNAKÉ
+  skóre. Napr. „Müllermilch" a „Müllermilch pistácia a kokos" pri rovnakých
+  hodnotách na 100 g patria na rovnaké číslo – príchuť sama o sebe skóre nemení.
+- Prejdi zoznam ako celok a over, že podobné položky nemajú rozhádzané skóre.`;
+
+export type HealthScoreItem = {
+  name: string;
+  category: string | null;
+  // Výživové hodnoty PREPOČÍTANÉ na 100 g (ak ich poznáme).
+  per100?: { calories?: number | null; protein?: number | null; carbs?: number | null; fat?: number | null; fiber?: number | null } | null;
+};
+
+function per100Text(p: HealthScoreItem["per100"]): string {
+  if (!p || p.calories == null) return "";
+  const n = (v: number | null | undefined) => (v == null ? "?" : Math.round(v * 10) / 10);
+  return ` – na 100 g: ${Math.round(p.calories)} kcal, B ${n(p.protein)} g, S ${n(p.carbs)} g, T ${n(p.fat)} g${
+    p.fiber != null ? `, vláknina ${n(p.fiber)} g` : ""
+  }`;
+}
+
+export async function scoreHealthBatch(items: HealthScoreItem[]): Promise<Map<number, number>> {
   const list = items
-    .map((it, i) => `${i + 1}. ${it.name}${it.category ? ` (kat. ${it.category})` : ""}`)
+    .map((it, i) => `${i + 1}. ${it.name}${it.category ? ` (kat. ${it.category})` : ""}${per100Text(it.per100)}`)
     .join("\n");
 
   const prompt = `Ohodnoť zdravosť každej položky podľa pravidiel a vráť pre každú jej "index" (poradové číslo zo zoznamu) a "healthIndex" (0..10).\n\n${HEALTH_RUBRIC}\n\nPOLOŽKY:\n${list}`;

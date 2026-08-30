@@ -31,34 +31,65 @@ export async function GET(req: Request) {
   const apply = new URL(req.url).searchParams.get("apply") === "1";
   const where = auth.userId ? { userId: auth.userId } : {};
 
-  // Distinct názvy záznamov + reprezentatívna kategória a doterajší index
-  const entries = await prisma.entry.findMany({
-    where,
-    select: { name: true, category: true, healthIndex: true },
-  });
+  // Zoznam staviame z denníka AJ z databázy potravín – inak by sa potravina,
+  // ktorú používateľ ešte nezjedol, nikdy neprehodnotila.
+  const [entries, foods] = await Promise.all([
+    prisma.entry.findMany({
+      where,
+      select: { name: true, category: true, healthIndex: true, quantityGrams: true, calories: true, protein: true, carbs: true, fat: true, fiber: true },
+    }),
+    prisma.food.findMany({
+      where: auth.userId ? { userId: auth.userId } : {},
+      select: { name: true, category: true, healthIndex: true, baseGrams: true, calories: true, protein: true, carbs: true, fat: true, fiber: true },
+    }),
+  ]);
 
-  type Grp = { name: string; category: string | null; oldIndex: number | null; count: number };
+  type Per100 = { calories: number; protein: number; carbs: number; fat: number; fiber: number | null };
+  type Grp = { name: string; category: string | null; oldIndex: number | null; count: number; per100: Per100 | null };
+
+  // Zdravosť je vlastnosť potraviny, nie porcie – hodnoty preto normalizujeme
+  // na 100 g. Bez toho by 400 g balenie vyzeralo horšie než to isté v 100 g.
+  const scale = (base: number | null | undefined, v: { calories: number; protein: number; carbs: number; fat: number; fiber: number | null }): Per100 | null => {
+    if (!base || base <= 0) return null;
+    const f = 100 / base;
+    return {
+      calories: v.calories * f,
+      protein: v.protein * f,
+      carbs: v.carbs * f,
+      fat: v.fat * f,
+      fiber: v.fiber != null ? v.fiber * f : null,
+    };
+  };
+
   const groups = new Map<string, Grp>();
-  for (const e of entries) {
-    const key = e.name.trim().toLowerCase();
+  const add = (name: string, category: string | null, oldIndex: number | null, per100: Per100 | null, counts: boolean) => {
+    const key = name.trim().toLowerCase();
+    if (!key) return;
     const g = groups.get(key);
     if (g) {
-      g.count++;
-      if (g.category == null && e.category) g.category = e.category;
-      if (g.oldIndex == null && e.healthIndex != null) g.oldIndex = e.healthIndex;
+      if (counts) g.count++;
+      if (g.category == null && category) g.category = category;
+      if (g.oldIndex == null && oldIndex != null) g.oldIndex = oldIndex;
+      if (g.per100 == null && per100) g.per100 = per100;
     } else {
-      groups.set(key, { name: e.name.trim(), category: e.category, oldIndex: e.healthIndex, count: 1 });
+      groups.set(key, { name: name.trim(), category, oldIndex, count: counts ? 1 : 0, per100 });
     }
-  }
+  };
 
-  const list = Array.from(groups.values());
+  // Najprv potraviny – ich hodnoty na baseGrams sú spoľahlivejšie než z porcie.
+  for (const f of foods) add(f.name, f.category, f.healthIndex, scale(f.baseGrams, f), false);
+  for (const e of entries) add(e.name, e.category, e.healthIndex, scale(e.quantityGrams, e), true);
+
+  // Abecedne, nech podobné výrobky („Müllermilch", „Müllermilch pistácia…")
+  // skončia v rovnakej dávke a model ich hodnotí vedľa seba.
+  const list = Array.from(groups.values()).sort((a, b) => a.name.localeCompare(b.name, "sk"));
   if (list.length === 0) return NextResponse.json({ ok: true, message: "Žiadne záznamy.", changes: [] });
 
   // Dávkové ohodnotenie cez AI
   const newIndex = new Map<string, number>(); // key (lowercased name) -> nový index
   for (let i = 0; i < list.length; i += BATCH) {
     const slice = list.slice(i, i + BATCH);
-    const scores = await scoreHealthBatch(slice.map((g) => ({ name: g.name, category: g.category })));
+    const scores = await scoreHealthBatch(slice.map((g) => ({ name: g.name, category: g.category, per100: g.per100 })));
     for (const [idx, hi] of scores) {
       const g = slice[idx];
       if (g) newIndex.set(g.name.trim().toLowerCase(), hi);
