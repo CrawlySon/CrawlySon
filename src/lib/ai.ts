@@ -213,28 +213,12 @@ const MEAL_SK: Record<DetectedMeal, string> = {
   other: "iné",
 };
 
-async function parseOnce(text: string, reference: ReferenceFood[], meal?: DetectedMeal | null): Promise<ParseResult> {
-  const mealHint = meal ? `\n\nToto je jedlo dňa: ${MEAL_SK[meal]} – všetkým položkám nastav mealType "${meal}".` : "";
-  const prompt = `Používateľ povedal/napísal čo zjedol:\n"""${text}"""${mealHint}${buildReferenceBlock(reference)}`;
-
-  const r = await openAIChatJSON({
-    system: SYSTEM_INSTRUCTION + PARSE_JSON_SHAPE,
-    user: prompt,
-    temperature: 0.3,
-    // Jedna položka zaberie ~100–130 tokenov, takže strop musí uniesť aj dlhý
-    // zoznam (celý deň naraz). Pri prekročení by prišiel odseknutý JSON.
-    maxTokens: 6000,
-  });
-  const usage = r.usage;
-
-  // Odseknutá odpoveď = neúplný zoznam. Radšej zrozumiteľná hláška než „neplatný JSON".
-  if (r.finishReason === "length") {
-    throw new Error("Zoznam jedál je príliš dlhý na jedno spracovanie. Rozdeľ ho prosím na dve časti.");
-  }
-
+// Prevedie surovú JSON odpoveď modelu na ParseResult. Zdieľané textovým
+// rozpoznávaním aj odhadom z fotky – obe vracajú rovnaký tvar.
+function toParseResult(raw: string, usage: ParseResult["usage"]): ParseResult {
   let parsed: { items?: any[]; mealType?: string; waterMl?: number };
   try {
-    parsed = JSON.parse(r.text);
+    parsed = JSON.parse(raw);
   } catch {
     throw new Error("Nepodarilo sa spracovať odpoveď AI (neplatný JSON).");
   }
@@ -274,6 +258,67 @@ async function parseOnce(text: string, reference: ReferenceFood[], meal?: Detect
   });
 
   return { items, mealType, waterMl, usage };
+}
+
+async function parseOnce(text: string, reference: ReferenceFood[], meal?: DetectedMeal | null): Promise<ParseResult> {
+  const mealHint = meal ? `\n\nToto je jedlo dňa: ${MEAL_SK[meal]} – všetkým položkám nastav mealType "${meal}".` : "";
+  const prompt = `Používateľ povedal/napísal čo zjedol:\n"""${text}"""${mealHint}${buildReferenceBlock(reference)}`;
+
+  const r = await openAIChatJSON({
+    system: SYSTEM_INSTRUCTION + PARSE_JSON_SHAPE,
+    user: prompt,
+    temperature: 0.3,
+    // Jedna položka zaberie ~100–130 tokenov, takže strop musí uniesť aj dlhý
+    // zoznam (celý deň naraz). Pri prekročení by prišiel odseknutý JSON.
+    maxTokens: 6000,
+  });
+
+  // Odseknutá odpoveď = neúplný zoznam. Radšej zrozumiteľná hláška než „neplatný JSON".
+  if (r.finishReason === "length") {
+    throw new Error("Zoznam jedál je príliš dlhý na jedno spracovanie. Rozdeľ ho prosím na dve časti.");
+  }
+
+  return toParseResult(r.text, r.usage);
+}
+
+// ── Odhad jedla z fotky taniera ──────────────────────────────────────────────
+
+const MEAL_PHOTO_INSTRUCTION = `
+ÚLOHA: Na fotke je jedlo, ktoré používateľ zjedol. Rozpoznaj, čo na nej je, a
+odhadni veľkosť porcie aj nutričné hodnoty.
+
+ODHAD PORCIE:
+- Každú zložiteľne odlíšiteľnú zložku vráť ako samostatnú položku (napr. mäso,
+  príloha, omáčka, šalát – nie „obed" ako jednu položku).
+- Veľkosť porcie odhadni z vizuálnych opôr: priemer taniera (bežne 26–28 cm),
+  príbor, pohár, ruka, obal. Do "assumption" napíš, z čoho si vychádzal,
+  napr. "odhad z fotky, ~1/3 taniera ≈ 150 g".
+- Radšej triezvy stredný odhad než extrém. Gramáž uveď v "quantityGrams".
+- "confidence" drž realisticky nižšie než pri textovom popise (typicky 0.4–0.7);
+  ak je jedlo prekryté, rozmazané alebo nejednoznačné, choď ešte nižšie.
+- Ak na fotke nie je žiadne jedlo ani nápoj, vráť prázdne "items".
+- Nápoj na fotke zaraď tiež (čistá voda ide do "waterMl", nie do items).`;
+
+export async function parseMealPhoto(
+  imageBase64: string,
+  mimeType: string,
+  reference: ReferenceFood[]
+): Promise<ParseResult> {
+  const r = await openAIVisionJSON({
+    system: SYSTEM_INSTRUCTION + MEAL_PHOTO_INSTRUCTION + PARSE_JSON_SHAPE,
+    prompt: `Rozpoznaj jedlo na fotke a odhadni porcie aj nutričné hodnoty.${buildReferenceBlock(reference)}`,
+    imageBase64,
+    mimeType,
+    temperature: 0.2,
+    maxTokens: 4000,
+    timeoutMs: 60000,
+  });
+
+  if (r.finishReason === "length") {
+    throw new Error("Odpoveď AI sa nezmestila. Skús fotku s menším počtom jedál.");
+  }
+
+  return toParseResult(r.text, r.usage);
 }
 
 // ── Dávkové prehodnotenie zdravosti (re-scoring existujúcich záznamov) ──

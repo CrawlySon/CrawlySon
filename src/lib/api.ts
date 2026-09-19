@@ -30,6 +30,13 @@ export const api = {
       body: JSON.stringify({ text }),
     }),
 
+  // Odhad jedla z fotky taniera (čo to je + porcia + kalórie)
+  parseMealPhoto: (imageBase64: string, mimeType: string) =>
+    req<{ items: ParsedItem[]; mealType: MealType; waterMl: number; usage?: { model: string } }>(`/api/parse/photo`, {
+      method: "POST",
+      body: JSON.stringify({ imageBase64, mimeType }),
+    }),
+
   getFavorites: () => req<{ favorites: Favorite[] }>(`/api/favorites`),
   addFavorite: (payload: { name: string; mealType: MealType; items: FavoriteItem[] }) =>
     req<{ favorite: Favorite }>(`/api/favorites`, { method: "POST", body: JSON.stringify(payload) }),

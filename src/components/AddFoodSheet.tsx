@@ -55,6 +55,7 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
   }>({ name: "", calories: 0, protein: 0, carbs: 0, fat: 0, category: "", healthIndex: null });
   const [estimating, setEstimating] = useState(false);
   const [photoBusy, setPhotoBusy] = useState(false);
+  const [mealPhotoBusy, setMealPhotoBusy] = useState(false);
   const [showForm, setShowForm] = useState(false);
 
   // Zistenie podpory rozpoznávania reči až na klientovi (bez SSR nesúladu)
@@ -307,6 +308,34 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
     return { base64: out.split(",")[1] || "", mime: "image/jpeg" };
   }
 
+  // Odfotenie SAMOTNÉHO JEDLA → AI odhadne, čo to je, porciu aj kalórie.
+  // (Iné než „odfotiť tabuľku" v Databáze – tá číta údaje z obalu.)
+  async function onMealPhoto(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // umožni vybrať tú istú fotku znova
+    if (!file) return;
+    setMealPhotoBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const { base64, mime } = await fileToCompressedBase64(file);
+      if (!base64) throw new Error("Fotku sa nepodarilo spracovať.");
+      const { items, mealType, waterMl } = await api.parseMealPhoto(base64, mime);
+      if (!items.length && !waterMl) {
+        setError("Na fotke sa nepodarilo rozpoznať jedlo. Skús ostrejšiu fotku zhora, alebo popíš jedlo textom.");
+      } else {
+        setNotice("Hodnoty sú odhad z fotky – skontroluj gramáž a uprav, ak treba.");
+      }
+      setItems(items);
+      setWater(waterMl || 0);
+      if (mealType && mealType !== "other" && !mealTouched) setMeal(mealType);
+    } catch (err: any) {
+      setError(err?.message || "Chyba pri rozpoznávaní fotky.");
+    } finally {
+      setMealPhotoBusy(false);
+    }
+  }
+
   // Odfotenie tabuľky nutričných hodnôt → AI ju prečíta a predvyplní formulár.
   async function onLabelPhoto(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -484,6 +513,23 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
                 {loading ? "Spracúvam…" : "Spracovať AI"}
               </button>
             </div>
+
+            {/* Odfotenie jedla – alternatíva k popisu textom */}
+            <label
+              className={`mt-2 flex w-full cursor-pointer items-center justify-center rounded-xl border border-brand-200 bg-brand-50 py-2.5 text-sm font-medium text-brand-700 ${
+                mealPhotoBusy || loading ? "opacity-60" : "active:bg-brand-100"
+              }`}
+            >
+              {mealPhotoBusy ? "Rozpoznávam jedlo…" : "📷 Odfotiť jedlo (odhad porcie a kalórií)"}
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                disabled={mealPhotoBusy || loading}
+                onChange={onMealPhoto}
+              />
+            </label>
             <p className="mt-2 text-xs text-slate-400">
               {speechSupported
                 ? "Tip: ak diktovanie cez tlačidlo nezačne (časté na iPhone), ťukni do poľa a použi mikrofón priamo na klávesnici."
