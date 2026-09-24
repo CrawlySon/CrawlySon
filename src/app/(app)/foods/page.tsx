@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { setCache } from "@/lib/page-cache";
 import { round } from "@/lib/nutrition";
 
 type Food = {
@@ -31,10 +32,64 @@ export default function FoodsPage() {
   const [building, setBuilding] = useState(false);
   const [form, setForm] = useState<any>(EMPTY);
   const [seeding, setSeeding] = useState(false);
+  // Názov (lowercase) -> id obľúbeného, pre potraviny pridané ako „rýchle pridanie".
+  const [favByName, setFavByName] = useState<Map<string, string>>(new Map());
+  const [favBusy, setFavBusy] = useState<string | null>(null);
 
   const load = useCallback(() => {
     api.searchFoods(q, scope).then((r) => setFoods(r.foods));
   }, [q, scope]);
+
+  // Obľúbené sú zoznam na hlavnej obrazovke; hviezdička tu ich len spravuje.
+  // Za „hviezdičkovú potravinu" považujeme obľúbené s jedinou položkou.
+  const loadFavorites = useCallback(async () => {
+    const { favorites } = await api.getFavorites();
+    setCache("favorites", favorites); // nech Dnes ukáže zmenu hneď po prepnutí
+    const m = new Map<string, string>();
+    for (const f of favorites) {
+      const items = Array.isArray(f.items) ? f.items : [];
+      if (items.length === 1 && items[0]?.name) m.set(String(items[0].name).trim().toLowerCase(), f.id);
+    }
+    setFavByName(m);
+  }, []);
+
+  useEffect(() => {
+    loadFavorites();
+  }, [loadFavorites]);
+
+  async function toggleFavorite(food: Food) {
+    const key = food.name.trim().toLowerCase();
+    setFavBusy(food.id);
+    try {
+      const existing = favByName.get(key);
+      if (existing) {
+        await api.deleteFavorite(existing);
+      } else {
+        // Porcia = základná gramáž potraviny; hodnoty sú už na ňu prepočítané.
+        await api.addFavorite({
+          name: food.name,
+          mealType: "other",
+          items: [
+            {
+              name: food.name,
+              quantityGrams: food.baseGrams,
+              calories: food.calories,
+              protein: food.protein,
+              carbs: food.carbs,
+              fat: food.fat,
+              fiber: food.fiber ?? null,
+              category: food.category ?? null,
+              subcategory: food.subcategory ?? null,
+              healthIndex: food.healthIndex ?? null,
+            },
+          ],
+        });
+      }
+      await loadFavorites();
+    } finally {
+      setFavBusy(null);
+    }
+  }
 
   async function seed() {
     setSeeding(true);
@@ -138,9 +193,19 @@ export default function FoodsPage() {
 
       <input className="input mb-3" placeholder="Hľadaj…" value={q} onChange={(e) => setQ(e.target.value)} />
 
+      <p className="mb-2 px-1 text-xs text-slate-400">
+        Ťuknutím na ☆ pridáš potravinu medzi ⚡ rýchle pridanie na obrazovke Dnes.
+      </p>
       <div className="card divide-y divide-slate-50">
         {foods.map((f) => (
-          <FoodRow key={f.id} food={f} onChanged={load} />
+          <FoodRow
+            key={f.id}
+            food={f}
+            onChanged={load}
+            isFavorite={favByName.has(f.name.trim().toLowerCase())}
+            favBusy={favBusy === f.id}
+            onToggleFavorite={() => toggleFavorite(f)}
+          />
         ))}
         {q && foods.length === 0 && <p className="px-4 py-6 text-center text-sm text-slate-400">Nič nenájdené.</p>}
       </div>
@@ -295,7 +360,19 @@ function RecipeBuilder({ onSaved }: { onSaved: () => void }) {
   );
 }
 
-function FoodRow({ food, onChanged }: { food: Food; onChanged: () => void }) {
+function FoodRow({
+  food,
+  onChanged,
+  isFavorite,
+  favBusy,
+  onToggleFavorite,
+}: {
+  food: Food;
+  onChanged: () => void;
+  isFavorite: boolean;
+  favBusy: boolean;
+  onToggleFavorite: () => void;
+}) {
   const owned = food.userId != null; // globálne (userId null) sú len na čítanie
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<any>(food);
@@ -336,24 +413,39 @@ function FoodRow({ food, onChanged }: { food: Food; onChanged: () => void }) {
 
   return (
     <div className="px-4 py-2.5">
-      <button
-        onClick={() => owned && setOpen((o) => !o)}
-        className="flex w-full items-center justify-between text-left"
-      >
-        <div className="min-w-0">
-          <p className="truncate font-medium text-slate-800">
-            {food.name}
-            {!owned && <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-400">globálne</span>}
-            {food.useCount ? <span className="ml-2 rounded bg-brand-50 px-1.5 py-0.5 text-[10px] text-brand-600">{food.useCount}×</span> : null}
-          </p>
-          <p className="text-xs text-slate-400">
-            na {food.baseGrams} g · B {food.protein} · S {food.carbs} · T {food.fat}
-            {food.category ? ` · ${food.category}` : ""}
-            {food.healthIndex != null ? ` · ♥ ${food.healthIndex}/10` : ""}
-          </p>
-        </div>
-        <span className="ml-2 shrink-0 text-sm font-semibold text-slate-600">{food.calories} kcal</span>
-      </button>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => owned && setOpen((o) => !o)}
+          className="flex min-w-0 flex-1 items-center justify-between text-left"
+        >
+          <div className="min-w-0">
+            <p className="truncate font-medium text-slate-800">
+              {food.name}
+              {!owned && <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-400">globálne</span>}
+              {food.useCount ? <span className="ml-2 rounded bg-brand-50 px-1.5 py-0.5 text-[10px] text-brand-600">{food.useCount}×</span> : null}
+            </p>
+            <p className="text-xs text-slate-400">
+              na {food.baseGrams} g · B {food.protein} · S {food.carbs} · T {food.fat}
+              {food.category ? ` · ${food.category}` : ""}
+              {food.healthIndex != null ? ` · ♥ ${food.healthIndex}/10` : ""}
+            </p>
+          </div>
+          <span className="ml-2 shrink-0 text-sm font-semibold text-slate-600">{food.calories} kcal</span>
+        </button>
+
+        {/* Rýchle pridanie na hlavnú obrazovku – funguje aj pri globálnych potravinách */}
+        <button
+          onClick={onToggleFavorite}
+          disabled={favBusy}
+          className={`shrink-0 rounded-lg px-2 py-1 text-lg leading-none transition active:scale-90 disabled:opacity-40 ${
+            isFavorite ? "text-amber-500" : "text-slate-300 hover:text-amber-400"
+          }`}
+          title={isFavorite ? "Odobrať z rýchleho pridania" : "Pridať do ★ rýchleho pridania"}
+          aria-label={isFavorite ? "Odobrať z rýchleho pridania" : "Pridať do rýchleho pridania"}
+        >
+          {isFavorite ? "★" : "☆"}
+        </button>
+      </div>
 
       {open && owned && (
         <div className="mt-3 space-y-2">
