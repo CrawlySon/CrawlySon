@@ -378,6 +378,31 @@ function FoodRow({
   const [draft, setDraft] = useState<any>(food);
   const [busy, setBusy] = useState(false);
 
+  // Hodnoty potraviny sú zapísané PRE baseGrams, takže zmena základnej gramáže
+  // (napr. „na 100 g" → „na 52 g" = jeden navážený kus) musí prepočítať aj
+  // kcal a makrá – inak by výrobok tvrdil 275 kcal na 52 g.
+  //
+  // Prepočítavame vždy z PÔVODNÉHO záznamu, nie z rozpísaného draftu: pri písaní
+  // prejde pole cez medzistavy („5" → „52") a reťazenie faktorov by hodnoty
+  // zaokrúhľovaním rozsypalo (2,5 → 0,1 → 1,0 namiesto 1,3).
+  function setBaseGrams(next: number) {
+    const base = food.baseGrams || 100;
+    if (!next || next <= 0) {
+      setDraft((d: any) => ({ ...d, baseGrams: next }));
+      return;
+    }
+    const f = next / base;
+    setDraft((d: any) => ({
+      ...d,
+      baseGrams: next,
+      calories: round(food.calories * f),
+      protein: round(food.protein * f, 1),
+      carbs: round(food.carbs * f, 1),
+      fat: round(food.fat * f, 1),
+      fiber: food.fiber != null ? round(food.fiber * f, 1) : d.fiber,
+    }));
+  }
+
   async function save() {
     setBusy(true);
     try {
@@ -453,13 +478,18 @@ function FoodRow({
           <div className="grid grid-cols-2 gap-2">
             <FieldText label="Kategória" v={draft.category ?? ""} on={(v) => setDraft({ ...draft, category: v })} />
             <FieldText label="Podkategória" v={draft.subcategory ?? ""} on={(v) => setDraft({ ...draft, subcategory: v })} />
-            <FieldNum label="Na koľko g" v={draft.baseGrams} on={(v) => setDraft({ ...draft, baseGrams: v })} />
+            <FieldNum label="Na koľko g" v={draft.baseGrams} on={setBaseGrams} />
             <FieldNum label="kcal" v={draft.calories} on={(v) => setDraft({ ...draft, calories: v })} />
             <FieldNum label="Bielkoviny g" v={draft.protein} on={(v) => setDraft({ ...draft, protein: v })} />
             <FieldNum label="Sacharidy g" v={draft.carbs} on={(v) => setDraft({ ...draft, carbs: v })} />
             <FieldNum label="Tuky g" v={draft.fat} on={(v) => setDraft({ ...draft, fat: v })} />
             <FieldNum label="Zdravosť 0–10" v={draft.healthIndex ?? 0} on={(v) => setDraft({ ...draft, healthIndex: Math.min(10, Math.max(0, v)) })} />
           </div>
+          {draft.baseGrams > 0 && draft.baseGrams !== food.baseGrams && (
+            <p className="rounded-lg bg-brand-50 px-2 py-1.5 text-[11px] text-brand-700">
+              Hodnoty prepočítané z {food.baseGrams} g na {draft.baseGrams} g. Ak ich máš navážené inak, prepíš ich ručne.
+            </p>
+          )}
           <div className="flex gap-2">
             <button onClick={remove} disabled={busy} className="btn-ghost text-red-500">
               Zmazať
