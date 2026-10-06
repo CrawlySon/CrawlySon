@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getUserId } from "@/lib/server-auth";
+import { skToday } from "@/lib/coach";
+import { isISODate } from "@/lib/dates";
+import { apiError } from "@/lib/errors";
 
 export const runtime = "nodejs";
 
@@ -12,16 +15,28 @@ const DATE_RX = /^\d{4}-\d{2}-\d{2}$/;
 // suplementy nie sú nijako ovplyvnené. Cieľový deň sa nepremazáva, záznamy
 // sa k jeho prípadnému obsahu pridajú.
 export async function POST(req: Request) {
+  try {
+    return await handle(req);
+  } catch (e) {
+    return apiError(e, "entries/move");
+  }
+}
+
+async function handle(req: Request) {
   const userId = await getUserId();
   if (!userId) return NextResponse.json({ error: "Neprihlásený" }, { status: 401 });
 
-  const b = await req.json();
+  const b = await req.json().catch(() => ({}));
   const from = String(b.from || "").trim();
   const to = String(b.to || "").trim();
   const mode = b.mode === "copy" ? "copy" : "move";
 
-  if (!DATE_RX.test(from) || !DATE_RX.test(to)) {
+  if (!DATE_RX.test(from) || !DATE_RX.test(to) || !isISODate(from) || !isISODate(to)) {
     return NextResponse.json({ error: "Neplatný dátum." }, { status: 400 });
+  }
+  // Budúce dni sa v appke nedajú zobraziť – presunuté záznamy by „zmizli".
+  if (to > skToday()) {
+    return NextResponse.json({ error: "Do budúcnosti sa záznamy presúvať nedajú." }, { status: 400 });
   }
   if (from === to) {
     return NextResponse.json({ error: "Zdrojový a cieľový deň sú rovnaké." }, { status: 400 });

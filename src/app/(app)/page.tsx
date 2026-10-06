@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -86,6 +86,30 @@ export default function TodayPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [actionBusy, setActionBusy] = useState(false);
 
+  // Prechod cez polnoc: dátum sa nastavil raz pri štarte a PWA na iPhone ostáva
+  // v pamäti dni. Ráno by hlavička písala „Včera“ a zápis by šiel do včerajška.
+  // Pri návrate do appky (a raz za minútu) preto overíme, či ešte platí „dnes“;
+  // ak používateľ pozeral dnešok, preklopíme ho na nový deň.
+  const todayRef = useRef(todayISO());
+  useEffect(() => {
+    function check() {
+      const now = todayISO();
+      if (now !== todayRef.current) {
+        const prevToday = todayRef.current;
+        todayRef.current = now;
+        setDate((d) => (d === prevToday ? now : d));
+      }
+    }
+    document.addEventListener("visibilitychange", check);
+    window.addEventListener("focus", check);
+    const id = setInterval(check, 60_000);
+    return () => {
+      document.removeEventListener("visibilitychange", check);
+      window.removeEventListener("focus", check);
+      clearInterval(id);
+    };
+  }, []);
+
   // Plávajúce tlačidlo sa schová pri scrollovaní dole a zobrazí pri scrollovaní hore
   useEffect(() => {
     let lastY = window.scrollY;
@@ -116,7 +140,11 @@ export default function TodayPage() {
     [date]
   );
 
+  // Poradové číslo načítania – pri rýchlom prepínaní dní smie stav nastaviť
+  // len posledná požiadavka, inak sa pod hlavičkou ukážu záznamy iného dňa.
+  const loadSeq = useRef(0);
   const load = useCallback(async () => {
+    const seq = ++loadSeq.current;
     // Ak máme dáta z cache, ukáž ich okamžite a obnov potichu na pozadí.
     const cachedEntries = getCache<Entry[]>(entriesKey(date));
     const cachedProfile = getCache<Profile>(PROFILE_KEY);
@@ -124,12 +152,19 @@ export default function TodayPage() {
     if (cachedProfile) setProfile(cachedProfile);
     setLoading(cachedEntries === undefined);
 
-    const [{ entries }, { profile }] = await Promise.all([api.getEntries(date), api.getProfile()]);
-    setEntries(entries);
-    setCache(entriesKey(date), entries);
-    setProfile(profile);
-    setCache(PROFILE_KEY, profile);
-    setLoading(false);
+    try {
+      const [{ entries }, { profile }] = await Promise.all([api.getEntries(date), api.getProfile()]);
+      if (seq !== loadSeq.current) return;
+      setEntries(entries);
+      setCache(entriesKey(date), entries);
+      setProfile(profile);
+      setCache(PROFILE_KEY, profile);
+    } catch (e: any) {
+      if (seq !== loadSeq.current) return;
+      showToast({ emoji: "⚠️", title: "Nepodarilo sa načítať deň", body: e?.message });
+    } finally {
+      if (seq === loadSeq.current) setLoading(false);
+    }
   }, [date]);
 
   useEffect(() => {
@@ -514,7 +549,10 @@ export default function TodayPage() {
         <AddFoodSheet date={date} defaultMeal={sheet} onClose={() => setSheet(null)} onSaved={onAdded} />
       )}
 
-      {bubble && <CoachBubble text={bubble.text} persona={bubble.persona} kind={bubble.kind} onClose={closeBubble} />}
+      {bubble && (
+        /* key: nová hláška = nový komponent, nech nezdedí hodnotenie ani časovač tej starej */
+        <CoachBubble key={bubble.text} text={bubble.text} persona={bubble.persona} kind={bubble.kind} onClose={closeBubble} />
+      )}
 
       {showCal && (
         <CalendarPopup value={date} max={todayISO()} onSelect={setDate} onClose={() => setShowCal(false)} />

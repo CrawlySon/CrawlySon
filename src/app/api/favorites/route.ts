@@ -1,52 +1,46 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { getUserId } from "@/lib/server-auth";
+import { apiError, unauthorized } from "@/lib/errors";
+import { foodItemSchema, mealTypeSchema, parseBody } from "@/lib/validation";
 
 export const runtime = "nodejs";
 
-function cleanItem(it: any) {
-  return {
-    name: String(it.name || "Jedlo"),
-    quantityGrams: it.quantityGrams != null ? Number(it.quantityGrams) : null,
-    calories: Math.max(0, Number(it.calories || 0)),
-    protein: Math.max(0, Number(it.protein || 0)),
-    carbs: Math.max(0, Number(it.carbs || 0)),
-    fat: Math.max(0, Number(it.fat || 0)),
-    fiber: it.fiber != null ? Number(it.fiber) : null,
-    category: it.category ? String(it.category) : null,
-    subcategory: it.subcategory ? String(it.subcategory) : null,
-    healthIndex: it.healthIndex != null ? Number(it.healthIndex) : null,
-  };
-}
-
 // GET /api/favorites -> obľúbené používateľa (najčastejšie najprv)
 export async function GET() {
-  const userId = await getUserId();
-  if (!userId) return NextResponse.json({ error: "Neprihlásený" }, { status: 401 });
+  try {
+    const userId = await getUserId();
+    if (!userId) return unauthorized();
 
-  const favorites = await prisma.favorite.findMany({
-    where: { userId },
-    orderBy: [{ useCount: "desc" }, { createdAt: "desc" }],
-  });
-  return NextResponse.json({ favorites });
+    const favorites = await prisma.favorite.findMany({
+      where: { userId },
+      orderBy: [{ useCount: "desc" }, { createdAt: "desc" }],
+    });
+    return NextResponse.json({ favorites });
+  } catch (e) {
+    return apiError(e, "favorites GET");
+  }
 }
+
+const postSchema = z.object({
+  name: z.string().trim().min(1, "Chýba názov.").max(120),
+  mealType: mealTypeSchema.optional().catch(undefined),
+  items: z.array(foodItemSchema).min(1, "Žiadne položky.").max(40),
+});
 
 // POST /api/favorites { name, mealType?, items: [...] } -> vytvorí obľúbené
 export async function POST(req: Request) {
-  const userId = await getUserId();
-  if (!userId) return NextResponse.json({ error: "Neprihlásený" }, { status: 401 });
+  try {
+    const userId = await getUserId();
+    if (!userId) return unauthorized();
 
-  const body = await req.json().catch(() => ({}));
-  const name = String(body.name || "").trim();
-  const mealType = String(body.mealType || "other");
-  const rawItems = Array.isArray(body.items) ? body.items : [];
-  const items = rawItems.map(cleanItem).filter((i: any) => i.name);
-
-  if (!name) return NextResponse.json({ error: "Chýba názov." }, { status: 400 });
-  if (!items.length) return NextResponse.json({ error: "Žiadne položky." }, { status: 400 });
-
-  const favorite = await prisma.favorite.create({
-    data: { userId, name, mealType, items },
-  });
-  return NextResponse.json({ favorite });
+    const body = await parseBody(req, postSchema);
+    const favorite = await prisma.favorite.create({
+      data: { userId, name: body.name, mealType: body.mealType ?? "other", items: body.items },
+    });
+    return NextResponse.json({ favorite });
+  } catch (e) {
+    return apiError(e, "favorites POST");
+  }
 }

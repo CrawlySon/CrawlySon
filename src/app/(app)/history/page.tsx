@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { daysBetween as daysBetweenLib, shiftISO, todayISO, weekStartISO } from "@/lib/dates";
 import { api } from "@/lib/api";
 import { getCache, setCache } from "@/lib/page-cache";
 import { round } from "@/lib/nutrition";
@@ -31,29 +32,9 @@ type HistoryState = { days: Day[]; categories: Category[] };
 
 // --- helpers ----------------------------------------------------------------
 
-function todayISO(): string {
-  const d = new Date();
-  const tz = d.getTimezoneOffset() * 60000;
-  return new Date(d.getTime() - tz).toISOString().slice(0, 10);
-}
-
-function shiftISO(dateISO: string, delta: number): string {
-  const [y, m, d] = dateISO.split("-").map(Number);
-  const dt = new Date(y, m - 1, d + delta);
-  return dt.toISOString().slice(0, 10);
-}
-
-function daysBetween(a: string, b: string): number {
-  const ms = new Date(b + "T00:00:00").getTime() - new Date(a + "T00:00:00").getTime();
-  return Math.max(0, Math.round(ms / 86400000));
-}
-
-function weekStartISO(dateISO: string): string {
-  const dt = new Date(dateISO + "T00:00:00");
-  const day = dt.getDay(); // 0=Sun
-  dt.setDate(dt.getDate() - ((day + 6) % 7)); // align to Monday
-  return dt.toISOString().slice(0, 10);
-}
+// Dátumové pomôcky sú v lib/dates.ts (lokálne, bez UTC posunu). Pôvodné lokálne
+// verzie išli cez toISOString(), čo v SK čase posúvalo celý graf o deň dozadu.
+const daysBetween = (a: string, b: string) => Math.max(0, daysBetweenLib(a, b));
 
 function computeGranularity(rangeDays: number): "daily" | "weekly" | "monthly" {
   if (rangeDays <= 35) return "daily";
@@ -689,7 +670,7 @@ export default function HistoryPage() {
         </p>
       ) : (
         <p className="mt-1 px-1 text-xs text-slate-400">
-          „Nekompletné" dni (bez jedla alebo pod {Math.round(INCOMPLETE_FRACTION * 100)} % cieľa) sa v grafe nezobrazujú a
+          „Nekompletné“ dni (bez jedla alebo pod {Math.round(INCOMPLETE_FRACTION * 100)} % cieľa) sa v grafe nezobrazujú a
           nezapočítavajú do priemerov ani mediánu; v zozname nižšie ostávajú označené. Dnešok je v grafe vždy vidno priebežne a
           do štatistík vstúpi po prekročení prahu.
         </p>

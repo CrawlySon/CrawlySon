@@ -4,6 +4,8 @@ import { prisma } from "@/lib/db";
 import { getUserId } from "@/lib/server-auth";
 import { bumpStats, type CommentStats } from "@/lib/food-comment";
 import { distillCommentStyle } from "@/lib/ai";
+import { checkAiQuota, logAiUsage } from "@/lib/ai-quota";
+import { apiError } from "@/lib/errors";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -44,10 +46,17 @@ export async function POST(req: Request) {
     select: { text: true, rating: true, kind: true, persona: true },
   });
   if (pending.length >= DISTILL_EVERY) {
-    const profile = await distillCommentStyle(user.commentStyle, pending);
-    if (profile) {
-      data.commentStyle = profile;
-      data.styleDistilledAt = new Date();
+    try {
+      await checkAiQuota(userId, "distill");
+      const out = await distillCommentStyle(user.commentStyle, pending);
+      if (out) {
+        await logAiUsage(userId, "distill", out.usage);
+        data.commentStyle = out.profile;
+        data.styleDistilledAt = new Date();
+      }
+    } catch (e) {
+      // Destilácia je bonus – pri vyčerpanom limite sa hodnotenie uloží aj tak.
+      console.warn("distill preskočená:", (e as Error).message);
     }
   }
 

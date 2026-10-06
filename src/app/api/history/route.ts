@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getUserId } from "@/lib/server-auth";
 import { isAlcohol, isDrink } from "@/lib/food-tags";
+import { skToday } from "@/lib/coach";
+import { isISODate, shiftISO } from "@/lib/dates";
 
 export const runtime = "nodejs";
 
@@ -54,16 +56,16 @@ export async function GET(req: Request) {
   const toParam = searchParams.get("to");
   let sinceISO: string;
   let untilISO: string;
-  if (fromParam && toParam) {
-    sinceISO = fromParam;
-    untilISO = toParam;
+  if (isISODate(fromParam) && isISODate(toParam)) {
+    sinceISO = fromParam <= toParam ? fromParam : toParam;
+    untilISO = fromParam <= toParam ? toParam : fromParam;
   } else {
-    const days = Math.min(400, Math.max(1, parseInt(searchParams.get("days") || "14", 10)));
-    const now = new Date();
-    untilISO = now.toISOString().slice(0, 10);
-    const since = new Date(now);
-    since.setDate(since.getDate() - (days - 1));
-    sinceISO = since.toISOString().slice(0, 10);
+    // Bez platného rozsahu: posledných N dní podľa SK dátumu (nie UTC – inak
+    // ráno chýbal dnešok).
+    const parsed = parseInt(searchParams.get("days") || "14", 10);
+    const days = Math.min(400, Math.max(1, Number.isFinite(parsed) ? parsed : 14));
+    untilISO = skToday();
+    sinceISO = shiftISO(untilISO, -(days - 1));
   }
 
   const [entries, waterLogs, sleepLogs] = await Promise.all([

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { recommendedCalories, suggestedMacros, tdee } from "@/lib/nutrition";
 import { enablePush, disablePush, isPushSupported, isStandalone } from "@/lib/push-client";
-import { getCache, setCache } from "@/lib/page-cache";
+import { clearCache, getCache, setCache } from "@/lib/page-cache";
 import { personaOf, type Profile, type Badge, type Streak } from "@/lib/types";
 import { CHALLENGE_META, CHALLENGE_ORDER } from "@/lib/badges";
 
@@ -52,6 +52,7 @@ export default function ProfilePage() {
   async function save() {
     if (!p) return;
     const { profile } = await api.updateProfile(p);
+    setCache("profile", profile); // Dnes a Analytika čítajú ciele z cache – nech neukazujú staré
     setP(profile);
     setSaved(true);
     setTimeout(() => setSaved(false), 1800);
@@ -113,9 +114,19 @@ export default function ProfilePage() {
     }
   }
 
+  // Odhlásenie musí zahodiť všetko, čo patrí tomuto používateľovi: push odber
+  // zariadenia (inak by ďalší prihlásený dostával cudzie notifikácie), cache
+  // stránok v pamäti a nakoniec plné načítanie stránky – router.push by nechal
+  // JS pamäť (aj dáta) žiť ďalej.
   async function logout() {
-    await api.logout();
-    router.push("/login");
+    try {
+      await disablePush();
+    } catch {
+      /* best effort */
+    }
+    await api.logout().catch(() => {});
+    clearCache();
+    window.location.href = "/login";
   }
 
   return (
@@ -269,7 +280,7 @@ export default function ProfilePage() {
               <span className="text-xs text-slate-500">l</span>
             </div>
           ))}
-          <p className="text-[11px] text-slate-400">Zmeny pravidiel ulož tlačidlom „Uložiť zmeny".</p>
+          <p className="text-[11px] text-slate-400">Zmeny pravidiel ulož tlačidlom „Uložiť zmeny“.</p>
         </div>
 
         {/* Motivačný kouč */}

@@ -1,6 +1,13 @@
 // Výživová AI logika appky – beží výhradne na OpenAI (žiadny Gemini).
 import type { ParsedItem } from "./types";
 import { openAIChatJSON, openAIVisionJSON, isOpenAIConfigured } from "./openai";
+import { UserFacingError } from "./errors";
+
+// Viac sekcií = viac paralelných platených volaní; strop chráni účet pred
+// textom s desiatkami nadpisov „obed:" naraz.
+export const MAX_SECTIONS = 8;
+
+export type AiUsage = { model: string; promptTokens: number; outputTokens: number; totalTokens: number };
 
 export type ReferenceFood = {
   name: string;
@@ -161,6 +168,9 @@ export function splitMealSections(text: string): Section[] {
 // výslovne žiada celý. Po sekciách je každé volanie krátke a nič sa nestratí.
 export async function parseFood(text: string, reference: ReferenceFood[]): Promise<ParseResult> {
   const sections = splitMealSections(text);
+  if (sections.length > MAX_SECTIONS) {
+    throw new UserFacingError(`Naraz zvládnem najviac ${MAX_SECTIONS} jedál dňa. Rozdeľ zoznam na dve časti.`, 413);
+  }
   if (sections.length > 1) return parseBySections(sections, reference);
   return parseOnce(text, reference);
 }
@@ -191,7 +201,7 @@ async function parseBySections(sections: Section[], reference: ReferenceFood[]):
   });
 
   if (!items.length && failed.length) {
-    throw new Error("Nepodarilo sa spracovať žiadnu časť zoznamu. Skús to prosím znova.");
+    throw new UserFacingError("Nepodarilo sa spracovať žiadnu časť zoznamu. Skús to prosím znova.", 502);
   }
 
   return {
@@ -220,7 +230,7 @@ function toParseResult(raw: string, usage: ParseResult["usage"]): ParseResult {
   try {
     parsed = JSON.parse(raw);
   } catch {
-    throw new Error("Nepodarilo sa spracovať odpoveď AI (neplatný JSON).");
+    throw new UserFacingError("Nepodarilo sa spracovať odpoveď AI. Skús to prosím znova.", 502);
   }
 
   const rawMeal = String(parsed.mealType ?? "other");
@@ -275,7 +285,7 @@ async function parseOnce(text: string, reference: ReferenceFood[], meal?: Detect
 
   // Odseknutá odpoveď = neúplný zoznam. Radšej zrozumiteľná hláška než „neplatný JSON".
   if (r.finishReason === "length") {
-    throw new Error("Zoznam jedál je príliš dlhý na jedno spracovanie. Rozdeľ ho prosím na dve časti.");
+    throw new UserFacingError("Zoznam jedál je príliš dlhý na jedno spracovanie. Rozdeľ ho prosím na dve časti.", 413);
   }
 
   return toParseResult(r.text, r.usage);
@@ -315,7 +325,7 @@ export async function parseMealPhoto(
   });
 
   if (r.finishReason === "length") {
-    throw new Error("Odpoveď AI sa nezmestila. Skús fotku s menším počtom jedál.");
+    throw new UserFacingError("Odpoveď AI sa nezmestila. Skús fotku s menším počtom jedál.", 413);
   }
 
   return toParseResult(r.text, r.usage);
@@ -677,7 +687,7 @@ export async function writeDaySummary(
   f: DaySummaryFacts,
   roast = false,
   avoidNicknames: string[] = []
-): Promise<string | null> {
+): Promise<{ body: string; usage: AiUsage } | null> {
   if (!isOpenAIConfigured()) return null;
   try {
     const r = await openAIChatJSON({
@@ -701,7 +711,7 @@ export async function writeDaySummary(
     });
     const body = String(JSON.parse(r.text)?.body ?? "").trim();
     if (!body) return null;
-    return body.length > 200 ? body.slice(0, 197) + "…" : body;
+    return { body: body.length > 200 ? body.slice(0, 197) + "…" : body, usage: r.usage };
   } catch (e) {
     console.error("writeDaySummary zlyhal:", (e as any)?.message || e);
     return null;
@@ -748,7 +758,7 @@ export async function writeFoodComment(input: {
   style?: string | null; // naučený vkus používateľa (destilát z 👍/👎)
   avoidNicknames?: string[]; // prezývky z posledných bublín
   avoidMotifs?: string[]; // pointy z posledných ~20 bublín
-}): Promise<{ text: string; nickname: string | null; motif: string | null } | null> {
+}): Promise<{ text: string; nickname: string | null; motif: string | null; usage: AiUsage } | null> {
   if (!isOpenAIConfigured()) return null;
   const facts = [
     `Práve pridané: ${input.added.map((a) => `${a.name} (${Math.round(a.calories)} kcal)`).join(", ")}`,
@@ -784,7 +794,7 @@ export async function writeFoodComment(input: {
       const t = v == null ? "" : String(v).trim();
       return t && t.toLowerCase() !== "null" ? t.slice(0, 60) : null;
     };
-    return { text: text.length > 160 ? text.slice(0, 157) + "…" : text, nickname: clean(out.nickname), motif: clean(out.motif) };
+    return { text: text.length > 160 ? text.slice(0, 157) + "…" : text, nickname: clean(out.nickname), motif: clean(out.motif), usage: r.usage };
   } catch (e) {
     console.error("writeFoodComment zlyhal:", (e as any)?.message || e);
     return null;
@@ -801,7 +811,7 @@ const STYLE_MAX = 700;
 export async function distillCommentStyle(
   current: string | null,
   rated: { text: string; rating: number; kind: string | null; persona: string | null }[]
-): Promise<string | null> {
+): Promise<{ profile: string; usage: AiUsage } | null> {
   if (!isOpenAIConfigured() || !rated.length) return null;
   const lines = rated
     .map((r) => `${r.rating > 0 ? "👍" : "👎"} [${r.kind || "?"}${r.persona ? `, ${r.persona}` : ""}] „${r.text}"`)
@@ -826,7 +836,7 @@ export async function distillCommentStyle(
     });
     const profile = String(JSON.parse(r.text)?.profile ?? "").trim();
     if (!profile) return null;
-    return profile.length > STYLE_MAX ? profile.slice(0, STYLE_MAX) : profile;
+    return { profile: profile.length > STYLE_MAX ? profile.slice(0, STYLE_MAX) : profile, usage: r.usage };
   } catch (e) {
     console.error("distillCommentStyle zlyhal:", (e as any)?.message || e);
     return null;

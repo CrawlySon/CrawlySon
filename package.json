@@ -10,31 +10,36 @@
     "postinstall": "prisma generate",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
-    "db:import": "node scripts/import-openfoodfacts.mjs"
+    "db:import": "node scripts/import-openfoodfacts.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
-    "@google/genai": "^0.8.0",
     "@prisma/client": "^5.22.0",
     "@types/web-push": "^3.6.4",
     "html5-qrcode": "^2.3.8",
-    "next": "14.2.18",
+    "next": "^14.2.35",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "web-push": "^3.6.7"
+    "web-push": "^3.6.7",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "autoprefixer": "^10.4.19",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "^14.2.35",
     "postcss": "^8.4.38",
     "prisma": "^5.22.0",
     "tailwindcss": "^3.4.4",
     "tsx": "^4.16.0",
-    "typescript": "^5.5.2"
+    "typescript": "^5.5.2",
+    "vitest": "^3.2.7"
   }
 }

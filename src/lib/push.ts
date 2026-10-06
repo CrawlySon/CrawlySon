@@ -12,7 +12,8 @@ function ensureConfigured() {
   configured = true;
 }
 
-export type PushPayload = { title: string; body: string; url?: string };
+// tag: rovnaké notifikácie sa na zariadení nahradia, nekopia sa (napr. voda).
+export type PushPayload = { title: string; body: string; url?: string; tag?: string };
 
 type SubRow = { id: string; endpoint: string; p256dh: string; auth: string };
 

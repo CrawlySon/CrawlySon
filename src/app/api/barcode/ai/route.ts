@@ -2,55 +2,49 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getUserId } from "@/lib/server-auth";
 import { lookupProductByWeb } from "@/lib/ai";
+import { checkAiQuota, logAiUsage } from "@/lib/ai-quota";
+import { apiError, unauthorized } from "@/lib/errors";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-function todayLocalISO() {
-  return new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
-}
+const CODE_RX = /^\d{6,14}$/;
 
-// POST /api/barcode/ai { code?, name } -> OpenAI určí produkt (z vedomostí modelu) a uloží ho
+// POST /api/barcode/ai { name?, code? } -> dohľadá produkt z vedomostí modelu
+// a uloží ho ako SÚKROMNÚ potravinu používateľa. Predtým sa ukladal ako
+// zdieľaný – ktokoľvek tak vedel podstrčiť názov všetkým ostatným (aj do ich
+// AI promptov cez referenčný blok). Zdieľané ostávajú len seed a Open Food Facts.
 export async function POST(req: Request) {
-  const userId = await getUserId();
-  if (!userId) return NextResponse.json({ error: "Neprihlásený" }, { status: 401 });
-
-  const b = await req.json().catch(() => ({}));
-  const name = String(b.name || "").trim();
-  const code = b.code ? String(b.code).trim() : null;
-  if (!name && !code) return NextResponse.json({ error: "Zadaj kód alebo názov produktu." }, { status: 400 });
-
-  // Postav dopyt: primárne podľa EAN kódu, názov je voliteľné upresnenie
-  const query = name && code ? `${name}, čiarový kód EAN ${code}` : code ? `produkt s čiarovým kódom (EAN/GTIN) ${code}` : name;
-
   try {
-    const { food, usage } = await lookupProductByWeb(query);
+    const userId = await getUserId();
+    if (!userId) return unauthorized();
 
-    // zaloguj spotrebu tokenov
-    try {
-      await prisma.aiUsage.create({
-        data: {
-          userId,
-          kind: "barcode-web",
-          model: usage.model,
-          promptTokens: usage.promptTokens,
-          outputTokens: usage.outputTokens,
-          totalTokens: usage.totalTokens,
-          date: todayLocalISO(),
-        },
-      });
-    } catch (e) {
-      console.error("aiUsage log error:", e);
+    const b = await req.json().catch(() => ({}));
+    const name = String(b.name || "").trim().slice(0, 120);
+    const codeRaw = b.code ? String(b.code).trim() : "";
+    const code = CODE_RX.test(codeRaw) ? codeRaw : null;
+    if (!name && !code) return NextResponse.json({ error: "Zadaj kód alebo názov produktu." }, { status: 400 });
+
+    // Ak už používateľ tento kód má, netreba platiť za AI.
+    if (code) {
+      const own = await prisma.food.findFirst({ where: { userId, barcode: code } });
+      if (own) return NextResponse.json({ found: true, food: own, cached: true });
     }
+
+    await checkAiQuota(userId, "barcode-web");
+
+    // Postav dopyt: primárne podľa EAN kódu, názov je voliteľné upresnenie
+    const query = name && code ? `${name}, čiarový kód EAN ${code}` : code ? `produkt s čiarovým kódom (EAN/GTIN) ${code}` : name;
+    const { food, usage } = await lookupProductByWeb(query);
+    await logAiUsage(userId, "barcode-web", usage);
 
     if (!food) return NextResponse.json({ found: false });
 
-    // ulož ako zdieľanú potravinu (nabudúce „známa")
     const created = await prisma.food.create({
       data: {
-        userId: null,
+        userId,
         barcode: code,
-        name: food.name,
+        name: food.name.slice(0, 120),
         category: food.category,
         baseGrams: 100,
         calories: food.calories,
@@ -64,8 +58,7 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json({ found: true, food: created });
-  } catch (err: any) {
-    console.error("barcode ai error:", err);
-    return NextResponse.json({ error: err?.message || "Chyba pri dohľadávaní." }, { status: 500 });
+  } catch (err) {
+    return apiError(err, "barcode/ai");
   }
 }

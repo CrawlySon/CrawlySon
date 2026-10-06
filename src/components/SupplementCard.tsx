@@ -249,7 +249,7 @@ export default function SupplementCard({ date, reloadSignal }: { date: string; r
               )}
 
               {items.length === 0 && adhoc.length === 0 && addingKind !== kind && (
-                <p className="text-xs text-slate-400">Zatiaľ nič. Ťukni na „+ pridať {meta.addLabel}".</p>
+                <p className="text-xs text-slate-400">Zatiaľ nič. Ťukni na „+ pridať {meta.addLabel}“.</p>
               )}
 
               <div className="space-y-1">

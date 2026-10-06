@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { parseMealPhoto, type ReferenceFood } from "@/lib/ai";
 import { getUserId } from "@/lib/server-auth";
+import { checkAiQuota, checkImageInput, logAiUsage } from "@/lib/ai-quota";
+import { apiError, unauthorized } from "@/lib/errors";
 
 export const runtime = "nodejs";
 // Vision volanie býva pomalšie než textové – nechávame mu rezervu.
@@ -25,50 +27,31 @@ const SELECT = {
 export async function POST(req: Request) {
   try {
     const userId = await getUserId();
-    if (!userId) return NextResponse.json({ error: "Neprihlásený" }, { status: 401 });
+    if (!userId) return unauthorized();
 
-    const { imageBase64, mimeType } = await req.json();
-    if (!imageBase64 || typeof imageBase64 !== "string") {
-      return NextResponse.json({ error: "Chýba fotka." }, { status: 400 });
-    }
+    const b = await req.json().catch(() => ({}));
+    const { imageBase64, mimeType } = checkImageInput(b.imageBase64, b.mimeType);
+    await checkAiQuota(userId, "parse-photo");
 
     // Z fotky nemáme text, podľa ktorého by sa dala vyberať referencia, tak
-    // pošleme naposledy pridané potraviny – model sa nimi vie kalibrovať
-    // (napr. trafiť „tvoju" kávu namiesto všeobecnej).
+    // pošleme naposledy použité VLASTNÉ potraviny – model sa nimi vie kalibrovať
+    // (napr. trafiť „tvoju" kávu namiesto všeobecnej). Zdieľané sem zámerne
+    // nejdú: ich najnovšie riadky by do promptu každého používateľa dostali
+    // čokoľvek, čo práve niekto naskenoval.
     const reference = (await prisma.food.findMany({
-      where: { OR: [{ userId: null }, { userId }] },
+      where: { userId },
       select: SELECT,
       take: 15,
       orderBy: { createdAt: "desc" },
     })) as ReferenceFood[];
 
     const t0 = Date.now();
-    const { items, mealType, waterMl, usage } = await parseMealPhoto(
-      imageBase64,
-      typeof mimeType === "string" && mimeType ? mimeType : "image/jpeg",
-      reference
-    );
+    const { items, mealType, waterMl, usage } = await parseMealPhoto(imageBase64, mimeType, reference);
     console.log(`[parse/photo] ai=${Date.now() - t0}ms items=${items.length} model=${usage.model}`);
-
-    try {
-      await prisma.aiUsage.create({
-        data: {
-          userId,
-          kind: "parse-photo",
-          model: usage.model,
-          promptTokens: usage.promptTokens,
-          outputTokens: usage.outputTokens,
-          totalTokens: usage.totalTokens,
-          date: new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10),
-        },
-      });
-    } catch (e) {
-      console.error("aiUsage log error:", e);
-    }
+    await logAiUsage(userId, "parse-photo", usage);
 
     return NextResponse.json({ items, mealType, waterMl, usage });
-  } catch (err: any) {
-    console.error("parse/photo error:", err);
-    return NextResponse.json({ error: err?.message || "Chyba pri rozpoznávaní fotky." }, { status: 500 });
+  } catch (err) {
+    return apiError(err, "parse/photo");
   }
 }

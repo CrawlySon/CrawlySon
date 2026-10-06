@@ -2,6 +2,8 @@
 // Hlavný model. Rozpoznávanie jedla je úloha na presné dodržanie inštrukcií,
 // kde slabší model vynecháva položky – preto nie „mini". Dá sa prepísať cez
 // OPENAI_MODEL bez zásahu do kódu.
+import { UserFacingError } from "./errors";
+
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4.1";
 // Záloha, ak hlavný model nie je na účte dostupný (404 / model_not_found).
 const OPENAI_FALLBACK_MODEL = process.env.OPENAI_FALLBACK_MODEL || "gpt-4o-mini";
@@ -48,7 +50,7 @@ async function chat(opts: {
   timeoutMs?: number;
 }): Promise<OpenAIResult> {
   const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) throw new Error("OpenAI nie je nakonfigurované (chýba OPENAI_API_KEY).");
+  if (!apiKey) throw new UserFacingError("AI nie je na serveri nastavená. Zapisuj zatiaľ z databázy alebo obľúbených.", 503);
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), opts.timeoutMs ?? OPENAI_TIMEOUT_MS);
@@ -94,7 +96,7 @@ async function chat(opts: {
     };
   } catch (e: any) {
     if (e?.name === "AbortError") {
-      throw new Error("AI nestihla odpovedať včas. Skús to prosím o chvíľu znova.");
+      throw new UserFacingError("AI nestihla odpovedať včas. Skús to prosím o chvíľu znova.", 504);
     }
     throw e;
   } finally {

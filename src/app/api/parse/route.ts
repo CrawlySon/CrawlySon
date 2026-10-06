@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { parseFood, type ReferenceFood } from "@/lib/ai";
 import { getUserId } from "@/lib/server-auth";
+import { LIMITS, checkAiQuota, logAiUsage } from "@/lib/ai-quota";
+import { apiError, unauthorized, UserFacingError } from "@/lib/errors";
 
 export const runtime = "nodejs";
 // 90s: dostatočná rezerva na volanie OpenAI (strop ~30s) aj pri pomalšej odpovedi.
@@ -31,7 +33,7 @@ async function pickReference(userId: string, text: string): Promise<ReferenceFoo
         .split(/\s+/)
         .filter((w) => w.length >= 3)
     )
-  );
+  ).slice(0, 40);
 
   const visibility = { OR: [{ userId: null }, { userId }] };
 
@@ -47,9 +49,9 @@ async function pickReference(userId: string, text: string): Promise<ReferenceFoo
     });
   }
 
-  // Ak nič nematchne, pošli pár naposledy pridaných (kalibrácia pre model).
+  // Ak nič nematchne, pošli pár naposledy použitých VLASTNÝCH potravín (kalibrácia).
   if (!matched.length) {
-    matched = await prisma.food.findMany({ where: visibility, select: SELECT, take: 15, orderBy: { createdAt: "desc" } });
+    matched = await prisma.food.findMany({ where: { userId }, select: SELECT, take: 15, orderBy: { createdAt: "desc" } });
   }
 
   return matched as ReferenceFood[];
@@ -58,45 +60,29 @@ async function pickReference(userId: string, text: string): Promise<ReferenceFoo
 export async function POST(req: Request) {
   try {
     const userId = await getUserId();
-    if (!userId) return NextResponse.json({ error: "Neprihlásený" }, { status: 401 });
+    if (!userId) return unauthorized();
 
-    const { text } = await req.json();
-    if (!text || typeof text !== "string" || !text.trim()) {
-      return NextResponse.json({ error: "Zadaj popis jedla." }, { status: 400 });
+    const body = await req.json().catch(() => ({}));
+    const text = typeof body?.text === "string" ? body.text.trim() : "";
+    if (!text) return NextResponse.json({ error: "Zadaj popis jedla." }, { status: 400 });
+    if (text.length > LIMITS.parseTextChars) {
+      throw new UserFacingError(`Text je príliš dlhý (max ${LIMITS.parseTextChars} znakov). Rozdeľ ho na dve časti.`, 413);
     }
 
+    await checkAiQuota(userId, "parse");
+
     const t0 = Date.now();
-    const reference = await pickReference(userId, text.trim());
+    const reference = await pickReference(userId, text);
     const t1 = Date.now();
-    const { items, mealType, waterMl, warning, usage } = await parseFood(text.trim(), reference);
+    const { items, mealType, waterMl, warning, usage } = await parseFood(text, reference);
     const t2 = Date.now();
 
     const timings = { refMs: t1 - t0, aiMs: t2 - t1, refCount: reference.length };
     console.log(`[parse] ref=${timings.refMs}ms ai=${timings.aiMs}ms refCount=${timings.refCount} model=${usage.model}`);
-
-    // Zaloguj spotrebu tokenov (best-effort, nech nezhodí odpoveď)
-    try {
-      await prisma.aiUsage.create({
-        data: {
-          userId,
-          kind: "parse",
-          model: usage.model,
-          promptTokens: usage.promptTokens,
-          outputTokens: usage.outputTokens,
-          totalTokens: usage.totalTokens,
-          date: new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10),
-        },
-      });
-    } catch (e) {
-      console.error("aiUsage log error:", e);
-    }
+    await logAiUsage(userId, "parse", usage);
 
     return NextResponse.json({ items, mealType, waterMl, warning, usage, timings });
-  } catch (err: any) {
-    console.error("parse error:", err);
-    return NextResponse.json(
-      { error: err?.message || "Chyba pri spracovaní AI." },
-      { status: 500 }
-    );
+  } catch (err) {
+    return apiError(err, "parse");
   }
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { todayISO } from "@/lib/nutrition";
+import { skToday } from "@/lib/coach";
+import { dateOr } from "@/lib/validation";
 import { getUserId } from "@/lib/server-auth";
 
 export const runtime = "nodejs";
@@ -24,7 +25,7 @@ export async function GET(req: Request) {
   if (!userId) return NextResponse.json({ error: "Neprihlásený" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
-  const date = searchParams.get("date") || todayISO();
+  const date = dateOr(searchParams.get("date"), skToday());
 
   const [supplements, logs] = await Promise.all([
     prisma.supplement.findMany({
@@ -47,7 +48,7 @@ export async function POST(req: Request) {
   const userId = await getUserId();
   if (!userId) return NextResponse.json({ error: "Neprihlásený" }, { status: 401 });
 
-  const b = await req.json();
+  const b = await req.json().catch(() => ({}));
   const name = String(b.name ?? "").trim();
   if (!name) return NextResponse.json({ error: "Zadaj názov." }, { status: 400 });
 

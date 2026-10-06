@@ -1,35 +1,40 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getUserId } from "@/lib/server-auth";
+import { getAdminId } from "@/lib/server-auth";
 import { scoreHealthBatch } from "@/lib/ai";
+import { checkAiQuota } from "@/lib/ai-quota";
+import { apiError, forbidden } from "@/lib/errors";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 // Jednorazové prehodnotenie zdravosti existujúcich záznamov podľa nových pravidiel.
-//   GET /api/admin/reevaluate-health            -> NÁHĽAD (nič nezapíše)
-//   GET /api/admin/reevaluate-health?apply=1    -> APLIKUJE zmeny
-// Autorizácia: prihlásený admin, alebo ?secret=CRON_SECRET.
-async function authorize(req: Request): Promise<{ ok: true; userId: string | null } | { ok: false }> {
-  const secret = process.env.CRON_SECRET;
-  const provided = new URL(req.url).searchParams.get("secret");
-  if (secret && provided === secret) return { ok: true, userId: null }; // secret => všetci používatelia
-
-  const userId = await getUserId();
-  if (!userId) return { ok: false };
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
-  if (user?.role !== "admin") return { ok: false };
-  return { ok: true, userId }; // admin => jeho vlastné záznamy
-}
-
+//   POST /api/admin/reevaluate-health            -> NÁHĽAD (nič nezapíše)
+//   POST /api/admin/reevaluate-health?apply=1    -> APLIKUJE zmeny
+// Len prihlásený admin a len jeho vlastné záznamy. Predtým existoval aj režim
+// „?secret=" nad dátami všetkých používateľov a zápis bežal na GET – odkaz
+// v prehliadači tak vedel prepísať cudzie dáta (CSRF). POST + admin to rieši.
 const BATCH = 50;
 
-export async function GET(req: Request) {
-  const auth = await authorize(req);
-  if (!auth.ok) return NextResponse.json({ error: "Neautorizované (admin alebo ?secret=)." }, { status: 401 });
+export async function GET() {
+  return NextResponse.json({ error: "Použi POST (náhľad) alebo POST ?apply=1 (zápis)." }, { status: 405 });
+}
+
+export async function POST(req: Request) {
+  try {
+    return await run(req);
+  } catch (e) {
+    return apiError(e, "admin/reevaluate-health");
+  }
+}
+
+async function run(req: Request) {
+  const adminId = await getAdminId();
+  if (!adminId) return forbidden();
+  await checkAiQuota(adminId, "rescore");
 
   const apply = new URL(req.url).searchParams.get("apply") === "1";
-  const where = auth.userId ? { userId: auth.userId } : {};
+  const where = { userId: adminId };
 
   // Zoznam staviame z denníka AJ z databázy potravín – inak by sa potravina,
   // ktorú používateľ ešte nezjedol, nikdy neprehodnotila.
@@ -39,7 +44,7 @@ export async function GET(req: Request) {
       select: { name: true, category: true, healthIndex: true, quantityGrams: true, calories: true, protein: true, carbs: true, fat: true, fiber: true },
     }),
     prisma.food.findMany({
-      where: auth.userId ? { userId: auth.userId } : {},
+      where,
       select: { name: true, category: true, healthIndex: true, baseGrams: true, calories: true, protein: true, carbs: true, fat: true, fiber: true },
     }),
   ]);
@@ -130,8 +135,7 @@ export async function GET(req: Request) {
 
   // Obľúbené (items JSON)
   let updatedFavorites = 0;
-  const favWhere = auth.userId ? { userId: auth.userId } : {};
-  const favorites = await prisma.favorite.findMany({ where: favWhere, select: { id: true, items: true } });
+  const favorites = await prisma.favorite.findMany({ where, select: { id: true, items: true } });
   for (const f of favorites) {
     const items = Array.isArray(f.items) ? (f.items as any[]) : [];
     let changed = false;
@@ -152,14 +156,12 @@ export async function GET(req: Request) {
 
   // Vlastné potraviny používateľa (zdieľané/seed nechávame tak)
   let updatedFoods = 0;
-  if (auth.userId) {
-    for (const c of changes) {
-      const r = await prisma.food.updateMany({
-        where: { userId: auth.userId, name: { equals: c.name, mode: "insensitive" } },
-        data: { healthIndex: c.new },
-      });
-      updatedFoods += r.count;
-    }
+  for (const c of changes) {
+    const r = await prisma.food.updateMany({
+      where: { userId: adminId, name: { equals: c.name, mode: "insensitive" } },
+      data: { healthIndex: c.new },
+    });
+    updatedFoods += r.count;
   }
 
   return NextResponse.json({

@@ -74,8 +74,5 @@ export function suggestedMacros(calories: number): { protein: number; carbs: num
   };
 }
 
-export function todayISO(): string {
-  const d = new Date();
-  const tz = d.getTimezoneOffset() * 60000;
-  return new Date(d.getTime() - tz).toISOString().slice(0, 10);
-}
+// Lokálny dnešok klienta – jediná implementácia je v dates.ts (bez UTC posunu).
+export { todayISO } from "./dates";

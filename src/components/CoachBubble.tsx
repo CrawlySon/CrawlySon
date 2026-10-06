@@ -55,6 +55,7 @@ export default function CoachBubble({
       className={`fixed inset-x-4 bottom-40 z-40 mx-auto max-w-md rounded-2xl bg-white p-3 shadow-xl ring-1 ring-black/5 transition-all duration-300 ${
         shown ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-4 opacity-0"
       }`}
+      role="status"
       aria-live="polite"
     >
       <button onClick={() => close()} className="flex w-full items-start gap-3 text-left">

@@ -1,8 +1,26 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getUserId } from "@/lib/server-auth";
+import { z } from "zod";
+import { apiError, unauthorized } from "@/lib/errors";
+import { nullableNumberish, numberish, optionalText, parseBody } from "@/lib/validation";
 
 export const runtime = "nodejs";
+
+const foodSchema = z.object({
+  name: z.string().trim().min(1, "Chýba názov.").max(120),
+  barcode: z.preprocess((v) => (v ? String(v).trim() : null), z.string().regex(/^\d{6,14}$/).nullable().catch(null)),
+  brand: optionalText(80).optional(),
+  category: optionalText(80).optional(),
+  subcategory: optionalText(80).optional(),
+  baseGrams: numberish({ min: 1, max: 20000 }).transform((n) => n ?? 100),
+  calories: numberish({ min: 0, max: 20000 }).transform((n) => n ?? 0),
+  protein: numberish({ min: 0, max: 2000 }).transform((n) => n ?? 0),
+  carbs: numberish({ min: 0, max: 2000 }).transform((n) => n ?? 0),
+  fat: numberish({ min: 0, max: 2000 }).transform((n) => n ?? 0),
+  fiber: nullableNumberish({ min: 0, max: 500 }).optional(),
+  healthIndex: nullableNumberish({ min: 0, max: 10 }).optional(),
+});
 
 // GET /api/foods?q=...  -> vyhľadávanie v zdieľanej + vlastnej databáze
 export async function GET(req: Request) {
@@ -91,27 +109,31 @@ export async function GET(req: Request) {
 
 // POST /api/foods -> pridá vlastnú (súkromnú) potravinu
 export async function POST(req: Request) {
-  const userId = await getUserId();
-  if (!userId) return NextResponse.json({ error: "Neprihlásený" }, { status: 401 });
+  try {
+    const userId = await getUserId();
+    if (!userId) return unauthorized();
 
-  const b = await req.json();
-  if (!b.name) return NextResponse.json({ error: "Chýba názov." }, { status: 400 });
-  const food = await prisma.food.create({
-    data: {
-      userId,
-      name: String(b.name),
-      barcode: b.barcode ? String(b.barcode) : null,
-      category: b.category ? String(b.category) : null,
-      subcategory: b.subcategory ? String(b.subcategory) : null,
-      baseGrams: b.baseGrams ? Number(b.baseGrams) : 100,
-      calories: Math.max(0, Number(b.calories || 0)),
-      protein: Math.max(0, Number(b.protein || 0)),
-      carbs: Math.max(0, Number(b.carbs || 0)),
-      fat: Math.max(0, Number(b.fat || 0)),
-      fiber: b.fiber != null ? Number(b.fiber) : null,
-      healthIndex: b.healthIndex != null && b.healthIndex !== "" ? Number(b.healthIndex) : null,
-      source: "manual",
-    },
-  });
-  return NextResponse.json({ food });
+    const b = await parseBody(req, foodSchema);
+    const food = await prisma.food.create({
+      data: {
+        userId,
+        name: b.name,
+        barcode: b.barcode ?? null,
+        brand: b.brand ?? null,
+        category: b.category ?? null,
+        subcategory: b.subcategory ?? null,
+        baseGrams: b.baseGrams,
+        calories: b.calories,
+        protein: b.protein,
+        carbs: b.carbs,
+        fat: b.fat,
+        fiber: b.fiber ?? null,
+        healthIndex: b.healthIndex ?? null,
+        source: "manual",
+      },
+    });
+    return NextResponse.json({ food });
+  } catch (e) {
+    return apiError(e, "foods POST");
+  }
 }

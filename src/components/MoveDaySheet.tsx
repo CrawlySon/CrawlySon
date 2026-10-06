@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { api } from "@/lib/api";
+import { todayISO } from "@/lib/dates";
 
 function shiftDate(date: string, days: number): string {
   const [y, m, d] = date.split("-").map(Number);
@@ -95,15 +96,19 @@ export default function MoveDaySheet({
           <input
             type="date"
             value={target}
+            max={todayISO()}
             onChange={(e) => setTarget(e.target.value)}
             className="input flex-1"
           />
           <button onClick={() => setTarget(shiftDate(date, -1))} className="btn-ghost px-3 py-2 text-xs">
             Včera
           </button>
-          <button onClick={() => setTarget(shiftDate(date, 1))} className="btn-ghost px-3 py-2 text-xs">
-            Zajtra
-          </button>
+          {/* Budúce dni sa v appke nedajú zobraziť – presun by záznamy „stratil“. */}
+          {shiftDate(date, 1) <= todayISO() && (
+            <button onClick={() => setTarget(shiftDate(date, 1))} className="btn-ghost px-3 py-2 text-xs">
+              Zajtra
+            </button>
+          )}
         </div>
         {target && target !== date && (
           <p className="mt-1.5 text-xs text-slate-500">
