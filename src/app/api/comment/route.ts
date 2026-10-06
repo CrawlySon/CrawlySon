@@ -18,7 +18,16 @@ import { personaOf } from "@/lib/types";
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
-type Log = { at?: string; recent?: string[] };
+// Pamäť proti opakovaniu. Ukladáme len krátke značky, nie celé hlášky, takže
+// prompt ostáva krátky aj po stovkách bublín:
+//  recent – posledné celé hlášky (doslovné zopakovanie)
+//  nicks  – posledné prezývky (nech ťa nevolá stále rovnako)
+//  motifs – pointy posledných bublín; po ~20 bublinách vypadnú a motív sa
+//           môže vrátiť v novej podobe
+type Log = { at?: string; recent?: string[]; nicks?: string[]; motifs?: string[] };
+const KEEP_RECENT = 6;
+const KEEP_NICKS = 15;
+const KEEP_MOTIFS = 20;
 
 // POST /api/comment { date, items } -> { comment: string | null }
 // Volá sa PO uložení jedla (záznamy už sú v DB). Väčšinou vráti null –
@@ -83,9 +92,11 @@ export async function POST(req: Request) {
   if (!shouldComment(triggers, minutesSinceLast)) return NextResponse.json({ comment: null });
 
   const persona = personaOf(user);
-  const recent = Array.isArray(log.recent) ? log.recent.slice(0, 6) : [];
+  const recent = Array.isArray(log.recent) ? log.recent.slice(0, KEEP_RECENT) : [];
+  const nicks = Array.isArray(log.nicks) ? log.nicks.slice(0, KEEP_NICKS) : [];
+  const motifs = Array.isArray(log.motifs) ? log.motifs.slice(0, KEEP_MOTIFS) : [];
   const focus = focusItem(added);
-  const comment = await writeFoodComment({
+  const out = await writeFoodComment({
     persona,
     triggers,
     added,
@@ -94,12 +105,22 @@ export async function POST(req: Request) {
     goalCalories: user.goalCalories,
     recent,
     style: user.commentStyle,
+    avoidNicknames: nicks,
+    avoidMotifs: motifs,
   });
-  if (!comment) return NextResponse.json({ comment: null });
+  if (!out) return NextResponse.json({ comment: null });
+  const comment = out.text;
 
   await prisma.user.update({
     where: { id: userId },
-    data: { commentLog: { at: new Date().toISOString(), recent: [comment, ...recent].slice(0, 6) } },
+    data: {
+      commentLog: {
+        at: new Date().toISOString(),
+        recent: [comment, ...recent].slice(0, KEEP_RECENT),
+        nicks: out.nickname ? [out.nickname, ...nicks].slice(0, KEEP_NICKS) : nicks,
+        motifs: out.motif ? [out.motif, ...motifs].slice(0, KEEP_MOTIFS) : motifs,
+      },
+    },
   });
 
   return NextResponse.json({ comment, persona, kind: triggers[0]?.kind ?? "random" });

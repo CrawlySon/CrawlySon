@@ -673,7 +673,11 @@ const ROAST_PROMPT =
 
 // Napíše 1 vetu o včerajšku z konkrétnych čísel. Pri zlyhaní vráti null –
 // volajúci použije fallbackSummaryLine, nech notifikácia odíde tak či tak.
-export async function writeDaySummary(f: DaySummaryFacts, roast = false): Promise<string | null> {
+export async function writeDaySummary(
+  f: DaySummaryFacts,
+  roast = false,
+  avoidNicknames: string[] = []
+): Promise<string | null> {
   if (!isOpenAIConfigured()) return null;
   try {
     const r = await openAIChatJSON({
@@ -687,7 +691,11 @@ export async function writeDaySummary(f: DaySummaryFacts, roast = false): Promis
         'ak bol deň dobrý, pochváľ konkrétne a radu vynechaj; nevypisuj znova všetky čísla z riadku nad vetou; ' +
         'žiadne všeobecné frázy typu „dnes to zvládneš lepšie"; tykaj; bez oslovenia; najviac jedno emoji. ' +
         'Odpovedz IBA JSON objektom {"body":"…"}.',
-      user: `Údaje o včerajšku:\n${factLines(f)}`,
+      user: `Údaje o včerajšku:\n${factLines(f)}${
+        roast && avoidNicknames.length
+          ? `\nNedávno použité prezývky (nepoužívaj, vymysli novú): ${avoidNicknames.join(", ")}`
+          : ""
+      }`,
       temperature: roast ? 0.95 : 0.7,
       maxTokens: 300,
     });
@@ -708,8 +716,10 @@ const COMMENT_RULES =
   'kontext ber z jedla dňa, do ktorého bolo jedlo pridané (raňajky, obed…) – NIE z aktuálneho času, používateľ často zapisuje ' +
   'spätne, takže ranná káva zapísaná večer je stále raňajková káva; nikdy nespomínaj hodinu ani „o takomto čase"; ' +
   'komentuj jedlo a voľby, NIKDY telo ani vzhľad; nikdy nechváľ hladovanie ani extrémne malé jedenie; ' +
-  'neopakuj hlášky zo zoznamu „už povedané"; slovensky, tykaj, najviac jedno emoji. ' +
-  'Odpovedz IBA JSON objektom {"text":"…"}.';
+  'ORIGINALITA je najdôležitejšia: štýl sa môže opakovať, konkrétne vtipy, obraty ani prezývky nie – ' +
+  'nepoužívaj nič zo zoznamov „už povedané", „zakázané prezývky" a „nedávne motívy"; prezývku (ak nejakú použiješ) ' +
+  'vymysli zakaždým novú a nečakanú, príklady nižšie sú len ilustrácia tónu, nie zásobník; slovensky, tykaj, najviac jedno emoji. ' +
+  'Odpovedz IBA JSON objektom {"text":"…","nickname":"použitá prezývka alebo null","motif":"2–4 slová, pointa vtipu"}.';
 
 const COMMENT_PERSONA: Record<"nice" | "normal" | "roast", string> = {
   nice:
@@ -721,7 +731,7 @@ const COMMENT_PERSONA: Record<"nice" | "normal" | "roast", string> = {
     '„Brokolica? Kto si a čo si spravil s mojím používateľom?"',
   roast:
     'Si drsný, ale vtipný kouč, ktorý používateľa „roastuje" za jedlo – sám si to zapol a chce to. Láskavé nadávky ' +
-    '(„ty pažravá prasnica", „ty tlstý bravček", „ty bucľatý pampúšik") a hovorové slová („dodrbal", „napchal", ' +
+    '(vždy nové a vynaliezavé – napr. v duchu „ty pažravá prasnica", ale nikdy nie stále tie isté) a hovorové slová („dodrbal", „napchal", ' +
     '„žrádlo") sú OK, hrubé vulgarizmy nie. Príklady: „Tretia klobása dnes, ty prasa – rozhodol si sa stať údeninou?" · ' +
     '„Šalát po 2 000 kcal, ty bravček, to je ako umyť si ruky po bitke." · ' +
     '„Brokolica? Kto si a čo si spravil s mojou nenažranou prasnicou?"',
@@ -736,7 +746,9 @@ export async function writeFoodComment(input: {
   meal: string; // jedlo dňa, do ktorého sa položka pridala
   recent: string[];
   style?: string | null; // naučený vkus používateľa (destilát z 👍/👎)
-}): Promise<string | null> {
+  avoidNicknames?: string[]; // prezývky z posledných bublín
+  avoidMotifs?: string[]; // pointy z posledných ~20 bublín
+}): Promise<{ text: string; nickname: string | null; motif: string | null } | null> {
   if (!isOpenAIConfigured()) return null;
   const facts = [
     `Práve pridané: ${input.added.map((a) => `${a.name} (${Math.round(a.calories)} kcal)`).join(", ")}`,
@@ -746,6 +758,8 @@ export async function writeFoodComment(input: {
       ? `Udalosti (od najvýraznejšej): ${input.triggers.map((t) => t.note).join("; ")}`
       : "Nič výnimočné – stačí ľahká poznámka k jedlu.",
     input.recent.length ? `Už povedané (neopakuj): ${input.recent.map((r) => `„${r}"`).join(" ")}` : "",
+    input.avoidNicknames?.length ? `Zakázané prezývky (nedávno použité): ${input.avoidNicknames.join(", ")}` : "",
+    input.avoidMotifs?.length ? `Nedávne motívy (teraz nepoužívaj, ani v obmene): ${input.avoidMotifs.join("; ")}` : "",
   ]
     .filter(Boolean)
     .join("\n");
@@ -763,9 +777,14 @@ export async function writeFoodComment(input: {
       maxTokens: 150,
       timeoutMs: 20000,
     });
-    const text = String(JSON.parse(r.text)?.text ?? "").trim();
+    const out = JSON.parse(r.text) ?? {};
+    const text = String(out.text ?? "").trim();
     if (!text) return null;
-    return text.length > 160 ? text.slice(0, 157) + "…" : text;
+    const clean = (v: any) => {
+      const t = v == null ? "" : String(v).trim();
+      return t && t.toLowerCase() !== "null" ? t.slice(0, 60) : null;
+    };
+    return { text: text.length > 160 ? text.slice(0, 157) + "…" : text, nickname: clean(out.nickname), motif: clean(out.motif) };
   } catch (e) {
     console.error("writeFoodComment zlyhal:", (e as any)?.message || e);
     return null;
@@ -792,10 +811,12 @@ export async function distillCommentStyle(
       system:
         "Analyzuješ humorový vkus jedného používateľa nutričnej appky, ktorej kouč komentuje jedlo. " +
         "Dostaneš doterajší profil jeho vkusu a nové hlášky, ktoré ohodnotil palcom hore alebo dole. " +
-        "Vráť AKTUALIZOVANÝ profil: krátke odrážky po slovensky v dvoch blokoch „Baví ho:“ a „Nebaví ho:“. " +
+        "Vráť AKTUALIZOVANÝ profil: krátke odrážky po slovensky v troch blokoch „Baví ho:“, „Nebaví ho:“ " +
+        "a „Obľúbené motívy:“ (konkrétne nápady či koncepty, ktoré zabrali, napr. „bravčový koeficient“, " +
+        "„prirovnanie k údenine“ – max 2–4 slová každý, ako téma na nové variácie, nie celá hláška). " +
         "Popisuj ŠTÝL a MECHANIZMY humoru (napr. absurdné prirovnanie, prehnaná dráma, irónia, láskavé nadávky, " +
         "slovné hračky, moralizovanie, dĺžka, emoji), prípadne témy, pri ktorých chce/nechce komentár. " +
-        "NIKDY necituj ani neparafrázuj konkrétne vtipy – profil nesmie byť zásobník hlášok. " +
+        "Celé vtipy ani ich znenie NIKDY necituj – profil nesmie byť zásobník hlášok. " +
         "Zlúč nové poznatky s doterajším profilom: drž to stabilné, jednotlivé hodnotenie ho neprevráti, " +
         "ale opakujúci sa vzorec áno; protichodné či zastarané body odstráň. " +
         `Max ${STYLE_MAX} znakov. Odpovedz IBA JSON objektom {"profile":"…"}.`,
