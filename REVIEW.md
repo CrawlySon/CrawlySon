@@ -198,6 +198,64 @@ Nové formáty:
   je zoznam najlepších, dajú sa zdieľať. Dnes sa hlášky držia len v JSON
   `commentLog` a po 6 ďalších zmiznú.
 
+### 3.6 Odznaky a série v hlase Rypáka
+
+Dnešné názvy sú generické („Prvý krok“, „Hydratovaný“, „Fooddiarista“). Návrh:
+**názov je vtipný, podtitul zostáva vecný** – UI už dnes zobrazuje oba (`title`
++ `desc`), takže význam sa nikdy nestratí. Kľúče odznakov (`cal_7`…) sa nemenia,
+takže už získané odznaky ostanú. Návrh na výber / úpravu:
+
+| Výzva (skupina) | 1 deň | 3 dni | 7 dní | 30 dní |
+|---|---|---|---|---|
+| **Kalorický cieľ** (dni po sebe v limite) | Výnimka potvrdzuje pravidlo | Náhoda? Trikrát. | Týždeň bez prasačín | Rypák mlčí |
+| **Zápis** (úplné dni po sebe) | Priznal si sa | Tri dni bez zatajovania | Týždeň pod dohľadom | Rypák vie všetko |
+| **Voda** (splnený cieľ) | Už nie sušená klobása | Tri dni zavlažovaný | Týždeň pod vodou | Vodník |
+| **Surové ovocie** | Jablko sa našlo | Trikrát zo stromu | Ovocinár | Sad v bruchu |
+| **Surová zelenina** | Zelené? Dobrovoľne? | Tri dni na paši | Týždeň na paši | Bylinožravec |
+| **Zdravé dni** (zdravosť ≥ 7) | Deň bez hanby | Tri dni bez hanby | Rypák hľadá chybu | Podozrivo zdravý |
+| **Proteínový šejk** | Pretrepané | Tri dni pretrepaný | Srvátkový týždeň | Svalnaté prasa |
+| **Bez sladkého** | Makovník prežil bez teba | Cukráreň na suchu | Cukráreň krachuje | Zubár zúfa |
+| **Bez alkoholu** | Suchý deň | Triezve prasa | Suchý týždeň | Abstinent (Rypák neverí) |
+| **Bez tvrdého alkoholu** | Pálenka ostala vo fľaši | Tri dni bez štamperlíka | Štamperlík pozbieral prach | Borovička plače |
+| **Bez pečiva** (nové – séria existuje, odznaky nie) | Rožok ostal v pekárni | Tri dni bez kôrky | Pekár smúti | Bezlepkový bravček |
+
+Míľniky: „Začiatočník“ (10 jedál) → **Prvých desať priznaní**, „Foodlogger“
+(100 jedál) → **Sto priznaní**, „Presný zásah“ (±10 % cieľa) → **Mäsiarska
+presnosť** (sedí k dizajnu Mäsiarstvo). Názvy skupín (výziev) ostanú vecné
+(„Kalorický cieľ“, „Voda“…), aby bola orientácia jasná; vtip nesie odznak.
+Rekordy sérií hlási Rypák svojím hlasom („12 dní bez sladkého. Rypák si to
+zapísal a neverí ti.“), názvy sérií ostávajú vecné.
+
+Odznaky a série pre vypnuté sledovanie (voda, hmotnosť…) sa v Profile skryjú.
+
+### 3.7 Pohyb – ľahký záznam aktivity (návrh, čaká na rozhodnutie)
+
+Otázka od používateľa: pridať beh, bicykel, cvičenie? **Áno, ale ľahko** – v duchu
+„hodinu som cvičil“, nie tréningový denník so sériami a váhami.
+
+- **Čo sa zapisuje:** druh (chôdza, beh, bicykel, posilňovňa, plávanie, iné),
+  trvanie v minútach, voliteľne intenzita (ľahká / stredná / ťažká). Nič viac.
+- **Spálené kcal** deterministicky z MET tabuľky × hmotnosť × hodiny (bez AI),
+  vždy označené ako odhad („~350 kcal“).
+- **Kľúčové rozhodnutie: spálené kcal sa predvolene NEZAPOČÍTAVAJÚ do denného
+  cieľa.** Odhady bývajú nadsadené o 20–40 % a „zjem si to späť“ je najčastejší
+  dôvod, prečo ľudia s trackerom nechudnú. Ukáže sa oddelene („zjedené 1 870 ·
+  spálené ~350“); kto chce, zapne si „započítať do cieľa“ v Profile. Rypák to
+  komentuje presne v tomto duchu („Hodina behu a odmena makovník? To je ako
+  oprať sa a hneď sa vyváľať.“).
+- **Kde:** dlaždica „Pohyb 45 min“ v Ďalších záznamoch (voliteľné sledovanie ako
+  ostatné) a **kompozér rozumie aj „bežal som 40 minút“** – to isté pole,
+  rozpoznanie vráti `activities` popri `items` a `waterMl` (ako dnes voda).
+- **Kouč:** spúšťače `workout` (pochvala alebo rýpnutie podľa úrovne) a
+  `rewardAfterWorkout` (sladké krátko po pohybe); séria „Pohyb“ s odznakmi
+  (1 deň „Prasa sa pohlo“, 7 dní „Bežiace prasa“, 30 dní „Maratónsky bravček“).
+  Na 4. úrovni robí komentár k váhe férovejším („priberáš napriek trom behom
+  týždenne“ je iná veta než „nebeháš“).
+- **Čo nie:** import z Apple Health (PWA naň prístup nemá), Strava a hodinky –
+  až keby bol reálny záujem (Fáza 4+).
+- **Dáta:** `ActivityLog` (userId, date, kind, minutes, intensity?, kcal, note?,
+  createdAt) – aditívne. Náročnosť ~pol session, keď existuje kompozér (Fáza 2).
+
 ---
 
 ## 4. Dizajn
@@ -305,7 +363,10 @@ Dnes
  │    ťuknutie = detail / gramáž · podržanie alebo ⋯ = Presunúť do…,
  │    Uložiť ako obľúbené, Zmazať (swipe s možnosťou vrátiť)
  ├ Ďalšie záznamy – JEDEN riadok dlaždíc: Voda 1,2 l · Spánok 7 · Váha 84,2 ·
- │    Suplementy 2/3 → ťuknutie otvorí malý sheet (dnešné karty sa stanú sheetmi)
+ │    Suplementy 2/3 · (Pohyb 45 min, ak sa schváli §3.7) → ťuknutie otvorí malý
+ │    sheet (dnešné karty sa stanú sheetmi).
+ │    Zobrazia sa LEN tie, ktoré si používateľ zapol („Čo sledujem“ v onboardingu
+ │    aj v Profile); vypnutá vec zmizne z denníka, pripomienok aj sérií, dáta ostanú
  └ hlavička: dátum, kalendár, ⋯ (Vybrať položky, Presunúť záznamy dňa,
       Uložiť celý deň ako obľúbené)
 
@@ -320,8 +381,14 @@ Dnes
  ├ odfotiť → malá voľba „Jedlo na tanieri“ / „Tabuľka z obalu“
  ├ skenovať → nájdené: rovno do návrhu s porciou; neznáme: krok „Neznámy produkt“
  │    (Dohľadať · Odfotiť tabuľku · Zadať ručne) → uloží do mojich potravín + do návrhu
- └ Návrh: položky s gramážou (stepper), istota ako pečiatka, jedlo dňa pri položke,
-      voda, Spolu, „Pridať (3)“. Späť = kompozér s položkami (dnes ich rozpoznanie prepíše)
+ └ Návrh (= dnešné „Návrh (3) – skontroluj a uprav“, len ako samostatný krok):
+      položky s množstvom, istota ako pečiatka, jedlo dňa pri položke, voda, Spolu,
+      „Pridať (3)“. Späť = kompozér s položkami (dnes ich rozpoznanie prepíše).
+      MNOŽSTVO V KUSOCH AJ V GRAMOCH: potravina si pamätá porciu („1 ks = 30 g“,
+      „1 miska = 250 ml“, „1 plátok = 25 g“); stepper potom počíta v kusoch
+      („7 ks = 210 g“) a ťuknutím na jednotku prepneš na gramy. Potravina bez
+      porcie ide v gramoch, porciu si uložíš priamo z návrhu („uložiť porciu
+      1 hrsť“). Rozpoznanie z textu „7 nigiri“ vráti kusy aj gramy na kus.
 
 Analytika – ako dnes, v novom vizuáli; + hmotnosť s trendom, týždenný Rypákov výkaz
 
@@ -330,12 +397,13 @@ Potraviny – správa katalógu: moje / zdieľané, recepty, SPRÁVA OBĽÚBENÝ
 
 Profil – sekcie / podstránky:
  ├ Tvoj Rypák – úroveň (4), vkus „Čo ťa baví“, sieň slávy, týždenný výkaz
- ├ Telo a ciele – údaje, TDEE, ciele
+ ├ Telo a ciele – údaje, TDEE, ciele, „Čo sledujem“ (voda, spánok, váha, suplementy)
  ├ Pripomienky – push, voda, kouč
  ├ Odznaky a série
  └ Účet – heslo, export, zmazanie, odhlásenie
 
-Onboarding (3 kroky, nový účet): výber úrovne Rypáka s ukážkami hlášok →
+Onboarding (4 kroky, nový účet): výber úrovne Rypáka s ukážkami hlášok →
+      čo chceš sledovať (voda / hmotnosť / spánok / suplementy; jedlo vždy) →
       telo a cieľ → notifikácie (iOS: „pridaj na plochu“)
 Prázdne „Dnes“: spiaci Rypák + jediná výzva „Čo si mal na raňajky?“
 ```
@@ -604,6 +672,10 @@ konfliktoch zlyhá build, pri „data loss“ sa zastaví. Pre serióznu appku:
 | `Invite` (code, createdBy, maxUses, uses, expiresAt) | pozvánky namiesto jedného kódu |
 | `WeeklyReport` (userId, weekStart, facts JSON, text, imageUrl?) | nedeľný výkaz, zdieľateľná karta |
 | `Favorite.foodId String?` | čistejšie párovanie hviezdičky (HANDOVER §6) |
+| `Food.servingName String?`, `Food.servingGrams Float?` (napr. „ks“, 30) | porcia na kusy: „7 ks = 210 g“; gramy ostávajú pravdou pre výživu |
+| `Entry.quantity Float?`, `Entry.unit String?` (+ to isté v `Favorite.items`) | čo používateľ zadal („7 ks“), aby sa to dalo zobraziť a upraviť; `quantityGrams` sa počíta |
+| `User.trackWater/trackSleep/trackWeight/trackSupplements Boolean @default(true)` | „Čo sledujem“ – dlaždice, pripomienky a série len pre zapnuté; existujúcim účtom ostane všetko zapnuté |
+| `ActivityLog` (userId, date, kind, minutes, intensity?, kcal, note?) + `User.trackActivity`, `User.countActivityKcal @default(false)` | ľahký záznam pohybu (§3.7), ak sa schváli |
 | skript: `WaterLog/AiUsage.userId null → admin` | adopcia legacy dát |
 
 Nič sa nemaže ani nepremenúva. `Profile`, `coachRoast` ostávajú, kým ich kód číta.
@@ -654,7 +726,10 @@ Odhad v „sessionách“ (jeden sústredený blok práce, každý končí commi
 - prompty a pravidlá 4. úrovne (§3.4) + fallbacky; reálne otestovať tón
   a odmietnutia modelu (ty, screenshoty),
 - nové spúšťače (§3.5), ambientná hláška, „Dnes ma nechaj“,
-- `CoachLine` + sieň slávy, týždenný výkaz + zdieľateľná karta.
+- `CoachLine` + sieň slávy, týždenný výkaz + zdieľateľná karta,
+- odznaky v hlase Rypáka (§3.6) + odznaky „bez pečiva“,
+- množstvo v kusoch (porcia potraviny, §4.4) a „Čo sledujem“ (dlaždice podľa
+  výberu); ľahký záznam pohybu (§3.7), ak sa schváli.
 
 ### Fáza 3 – Viac používateľov (2–3 sessions)
 - pozvánky, e-mail + reset hesla (napr. Resend, free tier), zmena hesla,
