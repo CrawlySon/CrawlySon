@@ -15,7 +15,7 @@ export default function QuickFavorites({
 }: {
   date: string;
   reloadSignal: number;
-  onLogged: (added?: { name: string; calories: number; protein?: number; category?: string | null; healthIndex?: number | null }[]) => void;
+  onLogged: (added?: { name: string; calories: number; protein?: number; category?: string | null; healthIndex?: number | null; mealType?: string | null }[]) => void;
 }) {
   const [favorites, setFavorites] = useState<Favorite[]>(() => getCache<Favorite[]>(FAVORITES_KEY) ?? []);
   const [busy, setBusy] = useState<string | null>(null);
@@ -44,7 +44,7 @@ export default function QuickFavorites({
     setBusy(fav.id);
     try {
       await api.logFavorite(fav.id, date);
-      onLogged(fav.items);
+      onLogged(fav.items.map((it) => ({ ...it, mealType: fav.mealType })));
     } finally {
       setBusy(null);
     }

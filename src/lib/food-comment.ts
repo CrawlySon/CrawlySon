@@ -2,8 +2,12 @@
 // Čisté funkcie bez DB – dajú sa testovať samostatne.
 //
 // Čaro je v náhodnosti: keby komentoval vždy, po týždni ho prestaneš vnímať.
-// Ale nie čisto náhodne – výrazné veci (tretia klobása, nutella o polnoci,
-// šalát po prejedení) komentuje skoro vždy, banality (káva, voda) skoro nikdy.
+// Ale nie čisto náhodne – výrazné veci (tretia klobása, šalát po prejedení)
+// komentuje skoro vždy, banality (káva, voda) skoro nikdy.
+//
+// DÔLEŽITÉ: nič sa neodvodzuje od času ZÁPISU. Ľudia zapisujú hromadne a
+// spätne – ranná káva zapísaná o 21:00 je stále raňajková káva. Poradie dňa
+// sa preto berie podľa jedla dňa (raňajky → … → druhá večera), nie podľa hodín.
 
 export type CommentItem = {
   name: string;
@@ -11,20 +15,39 @@ export type CommentItem = {
   protein: number;
   category: string | null;
   healthIndex: number | null;
+  mealType?: string | null;
 };
 
+export type DayEntry = { name: string; calories: number; mealType: string | null };
+
 export type CommentContext = {
-  hour: number; // lokálna hodina (Europe/Bratislava)
-  added: CommentItem[]; // čo sa práve pridalo
-  dayBefore: { calories: number; protein: number; entryCount: number }; // dnešok PRED pridaním
+  added: CommentItem[]; // čo sa práve pridalo (aj s jedlom dňa)
+  others: DayEntry[]; // ostatné dnešné záznamy BEZ práve pridaných
   goalCalories: number;
   goalProtein: number;
-  todayNames: string[]; // názvy všetkých dnešných záznamov (vrátane práve pridaných)
 };
 
 export type Trigger = { kind: string; weight: number; note: string };
 
+export const MEAL_ORDER = ["breakfast", "snack", "lunch", "afternoon", "dinner", "supper", "other"];
+export const MEAL_SK: Record<string, string> = {
+  breakfast: "raňajky",
+  snack: "desiata",
+  lunch: "obed",
+  afternoon: "olovrant",
+  dinner: "večera",
+  supper: "druhá večera",
+  other: "iné",
+};
+
+// Neznáme jedlo dňa („iné") radíme na koniec – o jeho poradí nič nevieme.
+function slot(meal: string | null | undefined): number {
+  const i = MEAL_ORDER.indexOf(meal || "other");
+  return i < 0 ? MEAL_ORDER.length - 1 : i;
+}
+
 const JUNK_CAT_RX = /slad|fast ?food|alkohol/i;
+const DRINK_CAT_RX = /nápoj|napoj/i;
 
 function norm(s: string): string {
   return s.trim().toLowerCase();
@@ -41,38 +64,50 @@ export function countToday(name: string, todayNames: string[]): number {
   }).length;
 }
 
+// Jedlo, na ktoré sa komentár sústredí – najkalorickejšie z pridaných.
+export function focusItem(added: CommentItem[]): CommentItem {
+  return [...added].sort((a, b) => b.calories - a.calories)[0];
+}
+
 export function commentTriggers(ctx: CommentContext): Trigger[] {
   const out: Trigger[] = [];
-  const addedKcal = ctx.added.reduce((s, i) => s + i.calories, 0);
-  const after = ctx.dayBefore.calories + addedKcal;
   const goal = ctx.goalCalories;
+  const focus = focusItem(ctx.added);
+  const s = slot(focus.mealType);
+
+  // Čo bolo zjedené „do tohto jedla dňa" – podľa poradia jedál, nie zápisu.
+  const before = ctx.others.filter((e) => slot(e.mealType) <= s).reduce((t, e) => t + e.calories, 0);
+  const addedKcal = ctx.added.reduce((t, i) => t + i.calories, 0);
+  const after = before + addedKcal;
+  const todayNames = [...ctx.others.map((e) => e.name), ...ctx.added.map((a) => a.name)];
 
   for (const it of ctx.added) {
-    const n = countToday(it.name, ctx.todayNames);
+    const n = countToday(it.name, todayNames);
     if (n >= 2) {
       out.push({ kind: "repeat", weight: 0.9, note: `„${it.name}" je dnes už ${n}. krát` });
     }
   }
 
-  if ((ctx.hour >= 22 || ctx.hour < 4) && addedKcal >= 150) {
-    const big = [...ctx.added].sort((a, b) => b.calories - a.calories)[0];
-    out.push({ kind: "late", weight: 0.8, note: `je ${ctx.hour}:00 a práve si pridal ${big.name} (${Math.round(big.calories)} kcal)` });
-  }
-
-  // Za „zdravú voľbu" berieme len skutočné jedlo – espresso či voda majú síce
-  // vysokú zdravosť, ale je to banalita, ku ktorej sa kouč nemá vyjadrovať.
-  const healthyNow = ctx.added.find(
-    (i) => (i.healthIndex ?? 0) >= 8 && i.calories >= 40 && !(i.category && /nápoj|napoj/i.test(i.category))
-  );
-  if (healthyNow && goal > 0 && ctx.dayBefore.calories > goal) {
+  if (focus.mealType === "supper" && addedKcal >= 150) {
     out.push({
-      kind: "saladAfterBinge",
-      weight: 0.9,
-      note: `zdravé jedlo (${healthyNow.name}) až potom, čo už mal ${Math.round(ctx.dayBefore.calories)} kcal pri cieli ${goal}`,
+      kind: "lateMeal",
+      weight: 0.8,
+      note: `do druhej večere si pridal ${focus.name} (${Math.round(focus.calories)} kcal)`,
     });
   }
 
-  if (goal > 0 && ctx.dayBefore.calories <= goal && after > goal) {
+  const healthyNow = ctx.added.find(
+    (i) => (i.healthIndex ?? 0) >= 8 && i.calories >= 40 && !(i.category && DRINK_CAT_RX.test(i.category))
+  );
+  if (healthyNow && goal > 0 && before > goal) {
+    out.push({
+      kind: "saladAfterBinge",
+      weight: 0.9,
+      note: `zdravé jedlo (${healthyNow.name}) až po tom, čo už mal do ${MEAL_SK[focus.mealType || "other"]} ${Math.round(before)} kcal pri cieli ${goal}`,
+    });
+  }
+
+  if (goal > 0 && before <= goal && after > goal) {
     out.push({ kind: "crossedGoal", weight: 0.85, note: `týmto prekročil denný cieľ ${goal} kcal (teraz ${Math.round(after)})` });
   }
 

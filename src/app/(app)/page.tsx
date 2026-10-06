@@ -147,7 +147,7 @@ export default function TodayPage() {
   const [bubble, setBubble] = useState<{ text: string; persona?: string } | null>(null);
   const closeBubble = useCallback(() => setBubble(null), []);
   const onAdded = useCallback(
-    (added?: { name: string; calories: number; protein?: number; category?: string | null; healthIndex?: number | null }[]) => {
+    (added?: { name: string; calories: number; protein?: number; category?: string | null; healthIndex?: number | null; mealType?: string | null }[]) => {
       refreshAll();
       if (!added?.length) return;
       api

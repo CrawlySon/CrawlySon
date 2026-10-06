@@ -38,7 +38,7 @@ export const api = {
     }),
 
   // Komentár kouča k práve pridanému jedlu (väčšinou null – ozve sa len niekedy)
-  comment: (date: string, items: { name: string; calories: number; protein?: number; category?: string | null; healthIndex?: number | null }[]) =>
+  comment: (date: string, items: { name: string; calories: number; protein?: number; category?: string | null; healthIndex?: number | null; mealType?: string | null }[]) =>
     req<{ comment: string | null; persona?: string }>(`/api/comment`, {
       method: "POST",
       body: JSON.stringify({ date, items }),

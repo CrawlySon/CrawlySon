@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getUserId } from "@/lib/server-auth";
-import { skToday, skHour } from "@/lib/coach";
-import { commentTriggers, shouldComment, type CommentItem } from "@/lib/food-comment";
+import { skToday } from "@/lib/coach";
+import { commentTriggers, shouldComment, focusItem, MEAL_SK, type CommentItem, type DayEntry } from "@/lib/food-comment";
 import { writeFoodComment } from "@/lib/ai";
 import { personaOf } from "@/lib/types";
 
@@ -27,10 +27,12 @@ export async function POST(req: Request) {
       protein: Math.max(0, Number(i?.protein) || 0),
       category: i?.category ? String(i.category) : null,
       healthIndex: i?.healthIndex != null && Number.isFinite(Number(i.healthIndex)) ? Number(i.healthIndex) : null,
+      mealType: i?.mealType ? String(i.mealType) : null,
     }))
     .filter((i: CommentItem) => i.name);
 
-  // Komentujeme len dnešok – „je 23:00" ani „tretia dnes" pri spätnom dopĺňaní nesedia.
+  // Komentujeme len dnešok – „tretia klobása dnes" pri dopĺňaní minulých dní nesedí.
+  // (Čas zápisu NEhrá rolu – kontext dáva jedlo dňa, do ktorého sa položka pridala.)
   if (!added.length || date !== skToday()) return NextResponse.json({ comment: null });
 
   const user = await prisma.user.findUnique({
@@ -39,24 +41,24 @@ export async function POST(req: Request) {
   });
   if (!user || !user.coachComments) return NextResponse.json({ comment: null });
 
-  const today = await prisma.entry.findMany({ where: { userId, date }, select: { name: true, calories: true, protein: true } });
-  const addedKcal = added.reduce((s, i) => s + i.calories, 0);
-  const addedProtein = added.reduce((s, i) => s + i.protein, 0);
-  const totalKcal = today.reduce((s, e) => s + e.calories, 0);
-  const totalProtein = today.reduce((s, e) => s + e.protein, 0);
+  const today = await prisma.entry.findMany({
+    where: { userId, date },
+    select: { name: true, calories: true, mealType: true },
+  });
 
-  const hour = skHour();
+  // Práve pridané položky už sú v DB – zo zvyšku dňa ich vyberieme
+  // (po jednej na každú pridanú), nech sa nerátajú dvakrát.
+  const others: DayEntry[] = [...today];
+  for (const a of added) {
+    const i = others.findIndex((e) => e.name === a.name && Math.abs(e.calories - a.calories) < 0.5);
+    if (i >= 0) others.splice(i, 1);
+  }
+
   const triggers = commentTriggers({
-    hour,
     added,
-    dayBefore: {
-      calories: Math.max(0, totalKcal - addedKcal),
-      protein: Math.max(0, totalProtein - addedProtein),
-      entryCount: Math.max(0, today.length - added.length),
-    },
+    others,
     goalCalories: user.goalCalories,
     goalProtein: user.goalProtein,
-    todayNames: today.map((e) => e.name),
   });
 
   const log = (user.commentLog && typeof user.commentLog === "object" ? user.commentLog : {}) as Log;
@@ -65,13 +67,14 @@ export async function POST(req: Request) {
 
   const persona = personaOf(user);
   const recent = Array.isArray(log.recent) ? log.recent.slice(0, 6) : [];
+  const focus = focusItem(added);
   const comment = await writeFoodComment({
     persona,
     triggers,
     added,
-    dayCalories: totalKcal,
+    meal: MEAL_SK[focus.mealType || "other"] || "iné",
+    dayCalories: today.reduce((t, e) => t + e.calories, 0),
     goalCalories: user.goalCalories,
-    hour,
     recent,
   });
   if (!comment) return NextResponse.json({ comment: null });

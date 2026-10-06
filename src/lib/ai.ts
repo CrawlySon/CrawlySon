@@ -705,6 +705,8 @@ export async function writeDaySummary(f: DaySummaryFacts, roast = false): Promis
 const COMMENT_RULES =
   'Pravidlá pre všetky štýly: JEDNA krátka veta, max 110 znakov; reaguj na NAJVÝRAZNEJŠIU udalosť z podkladov ' +
   '(sú zoradené od najdôležitejšej) a pomenuj konkrétne jedlo; kontext dňa je najlepší zdroj humoru; ' +
+  'kontext ber z jedla dňa, do ktorého bolo jedlo pridané (raňajky, obed…) – NIE z aktuálneho času, používateľ často zapisuje ' +
+  'spätne, takže ranná káva zapísaná večer je stále raňajková káva; nikdy nespomínaj hodinu ani „o takomto čase"; ' +
   'komentuj jedlo a voľby, NIKDY telo ani vzhľad; nikdy nechváľ hladovanie ani extrémne malé jedenie; ' +
   'neopakuj hlášky zo zoznamu „už povedané"; slovensky, tykaj, najviac jedno emoji. ' +
   'Odpovedz IBA JSON objektom {"text":"…"}.';
@@ -731,14 +733,14 @@ export async function writeFoodComment(input: {
   added: { name: string; calories: number }[];
   dayCalories: number;
   goalCalories: number;
-  hour: number;
+  meal: string; // jedlo dňa, do ktorého sa položka pridala
   recent: string[];
 }): Promise<string | null> {
   if (!isOpenAIConfigured()) return null;
   const facts = [
     `Práve pridané: ${input.added.map((a) => `${a.name} (${Math.round(a.calories)} kcal)`).join(", ")}`,
     `Dnes spolu: ${Math.round(input.dayCalories)} kcal${input.goalCalories > 0 ? ` z cieľa ${input.goalCalories}` : ""}`,
-    `Čas: ${input.hour}:00`,
+    `Pridané do: ${input.meal}`,
     input.triggers.length
       ? `Udalosti (od najvýraznejšej): ${input.triggers.map((t) => t.note).join("; ")}`
       : "Nič výnimočné – stačí ľahká poznámka k jedlu.",
