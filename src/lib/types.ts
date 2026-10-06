@@ -95,6 +95,7 @@ export type Profile = {
   waterRemind?: boolean;
   waterReminders?: { hour: number; minMl: number }[] | null;
   coachRemind?: boolean;
+  coachRoast?: boolean;
 };
 
 export type Badge = {

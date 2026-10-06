@@ -36,6 +36,8 @@ model User {
 
   // Motivačný „kouč" – chytré pripomienky (kalórie, ovocie, gratulácie k odznakom)
   coachRemind Boolean @default(true)
+  // „Drsný kouč" – ranné zhrnutie v štýle roastu (opt-in, štandardne vypnuté)
+  coachRoast  Boolean @default(false)
   coachState  Json?   // { [druh]: "YYYY-MM-DD" } – proti opakovaniu tej istej pripomienky za deň
 
   entries      Entry[]

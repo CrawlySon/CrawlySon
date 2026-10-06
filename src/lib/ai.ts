@@ -561,7 +561,8 @@ function factLines(f: DaySummaryFacts): string {
 // Skladá JEDNU vetu hodnotiacu deň ako celok: čo zaostalo, čo naopak sedelo,
 // a jedna rada na dnes. Pri prekročení kalórií pomenuje konkrétne jedlo –
 // „údené koleno ťa vyšlo na 1 150 kcal" povie viac než „zjedol si veľa".
-export function fallbackSummaryLine(f: DaySummaryFacts): string {
+export function fallbackSummaryLine(f: DaySummaryFacts, roast = false): string {
+  if (roast) return roastFallbackLine(f);
   const top = f.topItems[0];
   const over = f.goalCalories > 0 ? f.calories - f.goalCalories : 0;
   const good: string[] = [];
@@ -623,14 +624,62 @@ export function fallbackSummaryLine(f: DaySummaryFacts): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+// „Drsný kouč" – rovnaká analýza dňa, ale podaná ako roast. Mieri na to, čo
+// si zjedol (konkrétne jedlo, čísla), nadávky sú láskavé, nie vulgárne.
+const ROAST_NICKS = [
+  "Ty pažravá prasnica",
+  "Ty tlstý bravček",
+  "Ty bucľatý pampúšik",
+  "Ty nenažraný škrečok",
+  "Ty guľatý knedlík",
+];
+
+export function roastFallbackLine(f: DaySummaryFacts): string {
+  const nick = ROAST_NICKS[Math.floor(Math.random() * ROAST_NICKS.length)];
+  const top = f.topItems[0];
+  const over = f.goalCalories > 0 ? f.calories - f.goalCalories : 0;
+  const l = (ml: number) => (ml / 1000).toFixed(1).replace(".", ",");
+
+  if (f.goalCalories > 0 && f.calories > f.goalCalories * 1.15) {
+    return top
+      ? `${nick}, ${top.name} za ${top.calories} kcal a deficit si si zase dodrbal o ${over} kcal – dnes večer len šalát.`
+      : `${nick}, ${over} kcal nad cieľom, deficit si si zase dodrbal – dnes jedz ako človek, nie ako kombajn.`;
+  }
+  if (f.goalProtein > 0 && f.protein < f.goalProtein * 0.7) {
+    return `${nick}, ${f.protein} g bielkovín a ty čakáš svaly – dnes daj tvaroh, nie rohlík.`;
+  }
+  if (!f.hasVegetable) {
+    return `${nick}, zelenina včera nikde, len ty a tvoje žrádlo – dnes aspoň jedna paprika, neumrieš.`;
+  }
+  if (f.goalWaterMl > 0 && f.waterMl < f.goalWaterMl * 0.6) {
+    return `Ty vysušená klobáska, ${l(f.waterMl)} l vody za celý deň – dnes pi, nech sa z teba nedá strúhať.`;
+  }
+  if (f.goalCalories > 0 && f.calories > f.goalCalories) {
+    return `${nick}, ${over} kcal nad cieľom, len trošku, ale prasiatko sa nezaprie – dnes stiahni porcie.`;
+  }
+  return "No pozrime sa, bravček sa včera zmestil do cieľa – nezvykaj si, prasiatko.";
+}
+
+const ROAST_PROMPT =
+  'Si drsný, ale vtipný výživový kouč, ktorý po slovensky „roastuje" používateľa za jeho včerajšie jedlo. ' +
+  'Používateľ si tento štýl sám zapol a chce ho. Pod riadkom so základnými číslami dňa bude tvoja JEDNA veta ' +
+  '(max 170 znakov). Pravidlá: začni láskavou nadávkou v štýle „Ty pažravá prasnica", „Ty tlstý bravček", ' +
+  '„Ty bucľatý pampúšik" (obmieňaj, nemusí byť vždy prasa); pomenuj KONKRÉTNE jedlo, ktoré deň pokazilo, aj s jeho kcal; ' +
+  'zhodnoť deň ako celok a zakonči jednou rýpavou radou na dnes. Hovorové slová ako „dodrbal", „napchal", „žrádlo" sú OK, ' +
+  'ale bez hrubých vulgarizmov (žiadne kurva, piča a pod.). Ak bol deň dobrý, pochváľ, ale aj tak rýpni. ' +
+  'Príklady tónu: „Ty pažravá prasnica, s tým údeným kolenom za 1 150 kcal si si zase dodrbal deficit – dnes večer len šalát." ' +
+  '„Ty lenivá pampúšková hlava, 62 g bielkovín a čakáš svaly – dnes daj tvaroh, nie rohlík." ' +
+  'Tykaj, jedna veta, nevypisuj znova všetky čísla z riadku nad vetou. Odpovedz IBA JSON objektom {"body":"…"}.';
+
 // Napíše 1 vetu o včerajšku z konkrétnych čísel. Pri zlyhaní vráti null –
 // volajúci použije fallbackSummaryLine, nech notifikácia odíde tak či tak.
-export async function writeDaySummary(f: DaySummaryFacts): Promise<string | null> {
+export async function writeDaySummary(f: DaySummaryFacts, roast = false): Promise<string | null> {
   if (!isOpenAIConfigured()) return null;
   try {
     const r = await openAIChatJSON({
-      system:
-        'Si stručný výživový kouč píšuci po slovensky. Pod riadkom so základnými číslami dňa (kcal, bielkoviny, voda, ' +
+      system: roast
+        ? ROAST_PROMPT
+        : 'Si stručný výživový kouč píšuci po slovensky. Pod riadkom so základnými číslami dňa (kcal, bielkoviny, voda, ' +
         'zdravosť) bude tvoja JEDNA veta (max 170 znakov), ktorá zhodnotí včerajšok AKO CELOK. Pravidlá: ' +
         'presne jedna veta – nie samostatný komentár ku každej metrike, ale súvislé zhodnotenie (môžeš spojiť, čo zaostalo ' +
         'a čo naopak sedelo); ak deň pokazilo konkrétne jedlo, POMENUJ ho aj s jeho kcal z údajov ' +
@@ -639,7 +688,7 @@ export async function writeDaySummary(f: DaySummaryFacts): Promise<string | null
         'žiadne všeobecné frázy typu „dnes to zvládneš lepšie"; tykaj; bez oslovenia; najviac jedno emoji. ' +
         'Odpovedz IBA JSON objektom {"body":"…"}.',
       user: `Údaje o včerajšku:\n${factLines(f)}`,
-      temperature: 0.7,
+      temperature: roast ? 0.95 : 0.7,
       maxTokens: 300,
     });
     const body = String(JSON.parse(r.text)?.body ?? "").trim();

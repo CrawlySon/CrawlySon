@@ -287,6 +287,22 @@ export default function ProfilePage() {
           </span>
         </label>
 
+        {/* Drsný kouč – ranné zhrnutie v štýle roastu */}
+        <label className="flex items-start gap-3 rounded-xl bg-slate-50 p-3">
+          <input
+            type="checkbox"
+            className="mt-0.5 h-5 w-5 accent-brand-600"
+            checked={p.coachRoast ?? false}
+            onChange={(e) => set("coachRoast", e.target.checked)}
+          />
+          <span className="text-sm text-slate-600">
+            <b className="text-slate-700">🐷 Drsný kouč</b>
+            <br />
+            Ranné zhrnutie včerajška bez servítky – vtipne ti vytmaví, čo si zas napchal. Čísla aj rada ostávajú, mení
+            sa len tón.
+          </span>
+        </label>
+
         {pushOn && (
           <button onClick={sendTest} disabled={pushBusy} className="btn-ghost w-full py-2 text-sm">
             Poslať testovaciu notifikáciu

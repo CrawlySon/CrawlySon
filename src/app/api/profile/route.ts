@@ -21,6 +21,7 @@ const PROFILE_SELECT = {
   waterRemind: true,
   waterReminders: true,
   coachRemind: true,
+  coachRoast: true,
 };
 
 export async function GET() {
@@ -52,6 +53,7 @@ export async function PATCH(req: Request) {
 
   if (b.waterRemind !== undefined) data.waterRemind = !!b.waterRemind;
   if (b.coachRemind !== undefined) data.coachRemind = !!b.coachRemind;
+  if (b.coachRoast !== undefined) data.coachRoast = !!b.coachRoast;
   if (b.waterReminders !== undefined) {
     data.waterReminders = Array.isArray(b.waterReminders)
       ? b.waterReminders

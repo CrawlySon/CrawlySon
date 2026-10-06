@@ -45,6 +45,7 @@ async function run(req: Request) {
     select: {
       id: true,
       coachState: true,
+      coachRoast: true,
       goalCalories: true,
       goalProtein: true,
       goalWaterMl: true,
@@ -94,10 +95,10 @@ async function run(req: Request) {
         if (y.healthScore != null) parts.push(`♥ ${oneDec(y.healthScore)}`);
 
         const facts = await buildDayFacts(u.id, yDate, ctx, u);
-        const line = (await writeDaySummary(facts)) ?? fallbackSummaryLine(facts);
+        const line = (await writeDaySummary(facts, u.coachRoast)) ?? fallbackSummaryLine(facts, u.coachRoast);
 
         const sent = await sendToSubs(u.pushSubs, {
-          title: "📊 Zhrnutie včera",
+          title: u.coachRoast ? "🐷 Včerajšie žrádlo" : "📊 Zhrnutie včera",
           body: `${parts.join(" · ")}\n${line}`,
           url: "/history",
         });
