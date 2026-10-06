@@ -1,90 +1,89 @@
-# 🥗 NutriAI – osobný nutričný denník s AI
+# 🥗 NutriAI – nutričný denník s AI a koučom s osobnosťou
 
-Webová aplikácia (PWA) na sledovanie stravy a kalórií. Jedlo zadávaš
-**voľným textom alebo diktovaním** – umelá inteligencia (Google Gemini)
-rozpozná jednotlivé položky, odhadne kalórie a makrá (bielkoviny, sacharidy,
-tuky), zobrazí ti návrh a **až po potvrdení** sa záznam uloží do denníka.
+Webová aplikácia (PWA) na sledovanie stravy, vody, spánku, hmotnosti a
+suplementov. Jedlo zadávaš **voľným textom, diktovaním, fotkou taniera,
+čiarovým kódom alebo z databázy** – AI rozpozná položky, odhadne porcie,
+kalórie, makrá a zdravosť, ukáže návrh a **až po potvrdení** ho uloží.
 
-> Príklad: *„Zjedol som zhruba 400 g porciu sviečkovej s knedľou.“*
-> → AI to rozloží na omáčku/mäso a knedľu, prepočíta podľa gramáže a navrhne hodnoty.
+Odlišuje ju **kouč s osobnosťou** (milý / normálny / drsný „roast"), ktorý
+občas okomentuje, čo si práve zjedol, ráno zhrnie včerajšok a učí sa z tvojich
+👍/👎, aký humor ťa baví.
+
+> Repozitár: <https://github.com/CrawlySon/CrawlySon> · vetva
+> `claude/nutrition-tracker-app-mTVJ7` (default aj produkčná).
+> Pre pokračovanie vo vývoji si prečítaj **[HANDOVER.md](HANDOVER.md)**.
 
 ## ✨ Funkcie
 
-- **AI rozpoznávanie jedál** z textu alebo hlasu (diktovanie cez mikrofón)
-- **Návrh + potvrdenie** – každú položku môžeš pred uložením upraviť
-- **Denník po jedlách** (raňajky, obed, večera, desiata) s dennými súčtami
-- **Denné ciele** kalórií a makier s farebnými ukazovateľmi pokroku
-- **História** s priemerným príjmom a grafom za 7/14/30 dní
-- **Databáza potravín** – predvyplnené slovenské jedlá + vlastné položky
-- **Profil** s výpočtom odporúčaného príjmu (BMR/TDEE podľa Mifflin–St Jeor)
-- **PWA** – na iPhone pridáš na plochu a používaš ako appku (Safari → Zdieľať → *Pridať na plochu*)
-- **Ochrana heslom** – dáta sú len tvoje
+**Zápis jedla**
+- **AI z textu / hlasu** – aj celý deň naraz („Raňajky: … / Obed: …"); každá
+  sekcia sa spracuje samostatným volaním, takže sa nič nestratí
+- **AI z fotky taniera** – rozpozná jedlo a odhadne gramáž z vizuálnych opôr
+- **Čiarový kód** (Open Food Facts + vlastná DB, s baterkou) a **fotka tabuľky
+  nutričných hodnôt** z obalu
+- **Databáza potravín** – zdieľaná + vlastná, vyhľadávanie s naposledy
+  použitými pre dané jedlo dňa navrchu; zmena základnej gramáže prepočíta hodnoty
+- **⚡ Rýchle pridanie** – obľúbené položky/jedlá, hviezdičkovanie priamo z Potravín
+- Presun/kópia celého dňa na iný dátum, drag & drop medzi jedlami
+
+**Denné sledovanie** – voda, spánok (0–10), hmotnosť, suplementy a lieky
+(katalóg + denné odškrtávanie)
+
+**Analytika** – kalórie, zdravosť, voda, spánok; 7/14/30 dní alebo vlastné
+obdobie (týždenná/mesačná agregácia), 7-dňový medián, filtre podľa kategórie,
+**jedla dňa** a **bez nápojov / bez alkoholu**; neúplné dni sa nezapočítavajú
+
+**Motivácia**
+- **Odznaky a série** (zápis, kalorický cieľ, voda, ovocie, zelenina, zdravé dni,
+  proteínový šejk, bez sladkého/alkoholu/tvrdého alkoholu/pečiva) s osobnými rekordmi
+- **Kouč** – Web Push: ranné zhrnutie včerajška (riadok čísel + jedna veta),
+  poobedné upozornenie na kalórie, večerné na ovocie, gratulácie k odznakom
+- **Bubliny pri pridaní jedla** – náhodne, ale „s rozumom" (tretia klobása áno,
+  espresso skoro nikdy), podľa jedla dňa, nie času zápisu; 👍/👎 → naučený vkus
+
+**Účty** – viac používateľov, registrácia kódom, prvý účet je admin; profil
+s výpočtom TDEE (Mifflin–St Jeor) a cieľmi
 
 ## 🧱 Technológie
 
-Next.js 14 (App Router) · TypeScript · Tailwind CSS · Prisma + PostgreSQL · Google Gemini
+Next.js 14 (App Router) · TypeScript · Tailwind CSS · Prisma 5 + PostgreSQL ·
+OpenAI (Chat Completions, vision) · Web Push (VAPID) · Vercel (hosting + cron)
 
 ---
 
-## 🚀 Rýchle nasadenie na Vercel (odporúčané)
+## 🚀 Nasadenie na Vercel
 
-### 1. Priprav si databázu (zadarmo)
-Vytvor Postgres databázu, napr. na [Neon](https://neon.tech) alebo
-[Supabase](https://supabase.com). Skopíruj si **connection string**
-(`postgresql://…`).
+1. **Postgres** – napr. [Neon](https://neon.tech) / Supabase, skopíruj connection string.
+2. **Import repa** do [Vercel](https://vercel.com/new), produkčná vetva
+   `claude/nutrition-tracker-app-mTVJ7`.
+3. **Environment Variables** (detaily v `.env.example`):
 
-### 2. Získaj Gemini API kľúč
-Na [Google AI Studio](https://aistudio.google.com/apikey) vytvor API kľúč
-(má štedrý free tier).
+   | Premenná | Povinné | Účel |
+   |---|---|---|
+   | `DATABASE_URL` | áno | Postgres |
+   | `SESSION_SECRET` | áno | podpis prihlasovacej cookie (min. 16 znakov) |
+   | `REGISTRATION_CODE` | áno | kód na vytváranie účtov |
+   | `OPENAI_API_KEY` | áno (pre AI) | všetky AI funkcie |
+   | `OPENAI_MODEL` | nie | default `gpt-4.1` |
+   | `OPENAI_FALLBACK_MODEL` | nie | default `gpt-4o-mini` |
+   | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | pre notifikácie | `npx web-push generate-vapid-keys` |
+   | `CRON_SECRET` | pre cron | ochrana `/api/cron/*` |
 
-### 3. Deploy
-1. Naimportuj toto repo do [Vercel](https://vercel.com/new).
-2. V **Settings → Environment Variables** nastav:
+4. **Deploy.** Build sám spustí `prisma db push` (vytvorí/aktualizuje tabuľky)
+   a `scripts/ensure-indexes.mjs` (trigramový index na vyhľadávanie).
+5. Prvá registrácia vytvorí **admin** účet. Referenčné potraviny naplníš cez
+   `npm run db:seed` (lokálne s produkčným `DATABASE_URL`).
 
-   | Premenná | Hodnota |
-   |---|---|
-   | `DATABASE_URL` | connection string z Neon/Supabase |
-   | `GEMINI_API_KEY` | tvoj kľúč z AI Studio |
-   | `GEMINI_MODEL` | `gemini-3.5-flash` (voliteľné) |
-   | `REGISTRATION_CODE` | tajný kód na vytváranie účtov (dáš ho kamarátovi) |
-   | `SESSION_SECRET` | náhodný dlhý reťazec (`openssl rand -base64 32`) |
+Cron joby sú vo `vercel.json` (časy v UTC; logika okien beží v Europe/Bratislava).
 
-3. Klikni **Deploy**.
-
-### 4. Vytvor tabuľky a naplň databázu
-Po prvom deployi raz spusti lokálne (s rovnakým `DATABASE_URL` v `.env`):
-
+### Import Open Food Facts (voliteľné)
 ```bash
-npm install
-npm run db:push     # vytvorí tabuľky
-npm run db:seed     # naplní referenčnú databázu potravín
-```
-
-Hotovo – otvor URL z Vercelu, prihlás sa heslom a na iPhone pridaj na plochu.
-
-### 5. (Voliteľné) Import verejnej databázy potravín
-Okrem predvyplnených slovenských jedál si môžeš natiahnuť tisíce produktov
-z [Open Food Facts](https://openfoodfacts.org) – vrátane **čiarových kódov**
-a značiek, prepočítané na 100 g:
-
-```bash
-# najpopulárnejšie produkty predávané na Slovensku (default)
-npm run db:import
-
-# vlastné voľby
+npm run db:import                                         # populárne produkty na SK
 node scripts/import-openfoodfacts.mjs --country=slovakia --pages=30 --limit=3000
 node scripts/import-openfoodfacts.mjs --search=jogurt --country=
 ```
-
-Voľby: `--country` (en názov krajiny, prázdne = celý svet), `--pages`,
-`--pageSize` (max 100), `--search`, `--limit`, `--dryRun`. Import beží
-slušným tempom voči verejnému API a duplikáty rozpoznáva podľa čiarového kódu.
-Importované potraviny sa hneď objavia vo vyhľadávaní aj ako referencia pre AI.
-
-> Pozn.: spúšťaj lokálne alebo z prostredia s prístupom na internet
-> (nie z obmedzeného sandboxu).
-
----
+Voľby: `--country`, `--pages`, `--pageSize` (max 100), `--search`, `--limit`,
+`--dryRun`. Duplikáty sa rozpoznajú podľa čiarového kódu.
 
 ## 💻 Lokálny vývoj
 
@@ -96,23 +95,35 @@ npm run db:seed
 npm run dev              # http://localhost:3000
 ```
 
-## 🔐 Premenné prostredia
-Pozri `.env.example`. Všetky AI volania bežia **na serveri**, takže
-`GEMINI_API_KEY` sa nikdy nedostane do prehliadača.
+Overenie bez databázy a bez AI kľúča:
+```bash
+npx tsc --noEmit -p tsconfig.json
+DATABASE_URL="postgresql://u:p@localhost:5432/db" npx prisma validate
+npx next build
+```
 
 ## 📁 Štruktúra
+
 ```
-prisma/schema.prisma     – dátový model (Profile, Entry, Food)
-prisma/seed.ts           – referenčná databáza potravín
-src/lib/gemini.ts        – rozpoznávanie jedál cez Gemini (structured output)
-src/lib/nutrition.ts     – výpočty (TDEE, súčty, makrá)
-src/app/api/*            – API (parse, entries, foods, profile, history, auth)
-src/app/(app)/*          – obrazovky: Dnes, História, Potraviny, Profil
-src/components/*         – UI komponenty (AddFoodSheet = AI vkladanie)
+prisma/schema.prisma          dátový model (User, Entry, Food, WaterLog, SleepLog,
+                              WeightLog, Supplement*, Favorite, Achievement,
+                              StreakRecord, CommentFeedback, PushSubscription, AiUsage)
+src/app/(app)/                obrazovky: Dnes (page.tsx), history = Analytika, foods, profile
+src/app/api/                  API routes (parse, entries, foods, history, comment, cron, …)
+src/components/               UI (AddFoodSheet, CoachBubble, WaterCard, SleepCard, …)
+src/lib/ai.ts                 všetky AI prompty a volania
+src/lib/openai.ts             HTTP klient OpenAI (fallback modelu, parametre podľa rodiny)
+src/lib/badges.ts             odznaky a série (čisté funkcie)
+src/lib/coach.ts              kontext dňa pre odznaky/kouča, rekordy sérií
+src/lib/food-comment.ts       kedy komentovať jedlo + učenie z 👍/👎 (čisté funkcie)
+src/lib/food-tags.ts          rozpoznanie alkoholu a nápojov (zdieľané)
+src/lib/nutrition.ts          výpočty (TDEE, súčty, zaokrúhľovanie)
+scripts/                      indexy, import OFF, ikony
 ```
 
 ## 🛠️ Poznámky
-- Diktovanie používa Web Speech API (`sk-SK`). Na iPhone v Safari funguje
-  spoľahlivo aj systémový mikrofón priamo na klávesnici.
-- Hodnoty z AI sú **odhady** – pri presnom vážení si ich uprav v návrhu.
-- Aplikácia je jednopoužívateľská (personalizovaná pre teba).
+- Všetky AI volania bežia **na serveri**, kľúče sa do prehliadača nedostanú.
+  Repo je verejné – tajomstvá patria výhradne do env premenných hostingu.
+- Hodnoty z AI sú **odhady** – pred uložením sa dajú upraviť.
+- Diktovanie používa Web Speech API (`sk-SK`); na iPhone spoľahlivo funguje
+  mikrofón priamo na klávesnici.
