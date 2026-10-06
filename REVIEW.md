@@ -203,7 +203,7 @@ Nové formáty:
 Dnešné názvy sú generické („Prvý krok“, „Hydratovaný“, „Fooddiarista“). Návrh:
 **názov je vtipný, podtitul zostáva vecný** – UI už dnes zobrazuje oba (`title`
 + `desc`), takže význam sa nikdy nestratí. Kľúče odznakov (`cal_7`…) sa nemenia,
-takže už získané odznaky ostanú. Návrh na výber / úpravu:
+takže už získané odznaky ostanú. Tabuľku používateľ schválil 6. 10. 2026 tak, ako je:
 
 | Výzva (skupina) | 1 deň | 3 dni | 7 dní | 30 dní |
 |---|---|---|---|---|
@@ -228,10 +228,11 @@ zapísal a neverí ti.“), názvy sérií ostávajú vecné.
 
 Odznaky a série pre vypnuté sledovanie (voda, hmotnosť…) sa v Profile skryjú.
 
-### 3.7 Pohyb – ľahký záznam aktivity (návrh, čaká na rozhodnutie)
+### 3.7 Pohyb – ľahký záznam aktivity (schválené 6. 10. 2026)
 
 Otázka od používateľa: pridať beh, bicykel, cvičenie? **Áno, ale ľahko** – v duchu
-„hodinu som cvičil“, nie tréningový denník so sériami a váhami.
+„hodinu som cvičil“, nie tréningový denník so sériami a váhami. Používateľ návrh
+schválil vrátane pravidla, že spálené kcal sa predvolene do cieľa nezapočítavajú.
 
 - **Čo sa zapisuje:** druh (chôdza, beh, bicykel, posilňovňa, plávanie, iné),
   trvanie v minútach, voliteľne intenzita (ľahká / stredná / ťažká). Nič viac.
@@ -255,6 +256,64 @@ Otázka od používateľa: pridať beh, bicykel, cvičenie? **Áno, ale ľahko**
   až keby bol reálny záujem (Fáza 4+).
 - **Dáta:** `ActivityLog` (userId, date, kind, minutes, intensity?, kcal, note?,
   createdAt) – aditívne. Náročnosť ~pol session, keď existuje kompozér (Fáza 2).
+
+### 3.8 Postrehy – týždenné, dátovo podložené korelácie (návrh)
+
+Požiadavka: okrem ranných zhrnutí a ad hoc bublín má Rypák **sem-tam konštruktívnu
+pripomienku** – nájde v dátach vzťah („po klobáse spíš horšie“, „keď piješ málo,
+na druhý deň viac ješ“) a povie ho s vtipným nádychom, ale **podložene číslami**.
+
+**Princíp:** štatistika v kóde (čisté funkcie, testovateľné), AI len formuluje.
+Rovnako ako nálada maskota – čísla robí kód, slová model.
+
+**Čo sa porovnáva (hypotézy, zoznam sa dá rozširovať):**
+
+| Deň D (podmienka) | Deň D+1 alebo ten istý deň (účinok) |
+|---|---|
+| alkohol / tvrdý alkohol | spánok nasledujúcu noc, kalórie na druhý deň („opičí hlad“), hmotnosť na druhý deň |
+| sladké 2+ / kalórie nad cieľ / druhá večera ≥ 300 kcal | spánok nasledujúcu noc |
+| voda < 60 % cieľa | spánok, kalórie na druhý deň |
+| **zlý spánok** (≤ 5) | kalórie a sladké **v ten deň** – známy efekt „nevyspatý = hladný“ |
+| víkend vs. pracovný deň | kalórie, alkohol, zdravosť |
+| pohyb (keď bude §3.7) | spánok nasledujúcu noc, kalórie v ten deň |
+| bielkoviny ≥ cieľ | kalórie na druhý deň (sýtosť) |
+| priemerné kalórie týždňa | trend hmotnosti (sedí energetická bilancia?) |
+
+Pozor na dátum spánku: `SleepLog.date` je ráno, ktorým noc končí – spánok „po dni D“
+je záznam s dátumom D+1. Toto je presne miesto, kde sa v naivnej implementácii
+pomýli index a postreh je nezmysel.
+
+**Kedy sa postreh vôbec vysloví (poistky proti náhodným „objavom“):**
+- minimálne **5 dní v každej skupine** (s klobásou / bez) a aspoň **3 týždne dát**;
+- rozdiel musí byť **vecne veľký** (napr. spánok o ≥ 1 bod z 10, kalórie o ≥ 15 %)
+  **a** štatisticky nenáhodný – permutačný test (2 000 premiešaní) alebo
+  Mann–Whitney, prah p < 0,01, lebo testujeme ~15 hypotéz naraz a pri p < 0,05 by
+  vyšla každá tretia náhodou;
+- **najviac jeden postreh týždenne**, ten najsilnejší;
+- nový vzťah sa prvýkrát povie opatrne („zdá sa, že…“, stav *kandidát*) a za
+  *vzorec* sa vyhlási, až keď sa potvrdí v ďalšom týždennom prepočte – Rypák si
+  to „ešte týždeň overí“;
+- postrehy len pre veci, ktoré používateľ sleduje (§4.4 „Čo sledujem“);
+- **nikdy nie postreh, ktorého „dobrá“ strana je málo jedla** („keď ješ pod cieľ,
+  spíš lepšie“) – pravidlo z §3.4 platí aj tu. Žiadne medicínske tvrdenia; vždy
+  korelácia, nie príčina – Rypák to môže aj zahrať: „Netvrdím, že klobása. Tvrdím,
+  že čísla.“
+
+**Ako to znie (úroveň 3):** „Po klobáse spíš ako po klobáse: 5,1 z 10 oproti 7,2.
+Štyri z piatich klobásových nocí. Rypák nesúdi, Rypák počíta.“ · „Keď vypiješ
+pod liter, na druhý deň zješ v priemere o 410 kcal viac. Smäd sa tvári ako hlad,
+ty mu to žerieš.“ · Úroveň 1 to isté bez rýpnutia, úroveň 4 smie pridať trend váhy.
+
+**Kde sa ukáže:** ako „Postreh týždňa“ v nedeľnom Rypákovom výkaze (§3.5) a ako
+hero hláška v pondelok; v Profile → Tvoj Rypák sekcia **Postrehy** s históriou
+a s dátami za každým postrehom (dve čísla, počty dní, mini-graf) – transparentnosť
+je to, čo robí „dátovo podložené“ dôveryhodným. 👍/👎 funguje aj tu.
+
+**Dáta:** `CoachInsight` (userId, weekStart, key, stats JSON, text, level, status
+`candidate | pattern | dismissed`, rating, createdAt) – aditívne. Beží v týždennom
+crone (nedeľa večer) alebo pri generovaní výkazu. Náročnosť ~1 session na
+štatistiku s testami + ~pol session na výkaz a Profil (Fáza 2, po `CoachLine`).
+Prvé postrehy sa reálne objavia až po ~3–4 týždňoch zápisov so spánkom.
 
 ---
 
@@ -675,7 +734,8 @@ konfliktoch zlyhá build, pri „data loss“ sa zastaví. Pre serióznu appku:
 | `Food.servingName String?`, `Food.servingGrams Float?` (napr. „ks“, 30) | porcia na kusy: „7 ks = 210 g“; gramy ostávajú pravdou pre výživu |
 | `Entry.quantity Float?`, `Entry.unit String?` (+ to isté v `Favorite.items`) | čo používateľ zadal („7 ks“), aby sa to dalo zobraziť a upraviť; `quantityGrams` sa počíta |
 | `User.trackWater/trackSleep/trackWeight/trackSupplements Boolean @default(true)` | „Čo sledujem“ – dlaždice, pripomienky a série len pre zapnuté; existujúcim účtom ostane všetko zapnuté |
-| `ActivityLog` (userId, date, kind, minutes, intensity?, kcal, note?) + `User.trackActivity`, `User.countActivityKcal @default(false)` | ľahký záznam pohybu (§3.7), ak sa schváli |
+| `ActivityLog` (userId, date, kind, minutes, intensity?, kcal, note?) + `User.trackActivity`, `User.countActivityKcal @default(false)` | ľahký záznam pohybu (§3.7, schválené) |
+| `CoachInsight` (userId, weekStart, key, stats JSON, text, level, status, rating) | týždenné postrehy z korelácií (§3.8) |
 | skript: `WaterLog/AiUsage.userId null → admin` | adopcia legacy dát |
 
 Nič sa nemaže ani nepremenúva. `Profile`, `coachRoast` ostávajú, kým ich kód číta.
@@ -729,7 +789,9 @@ Odhad v „sessionách“ (jeden sústredený blok práce, každý končí commi
 - `CoachLine` + sieň slávy, týždenný výkaz + zdieľateľná karta,
 - odznaky v hlase Rypáka (§3.6) + odznaky „bez pečiva“,
 - množstvo v kusoch (porcia potraviny, §4.4) a „Čo sledujem“ (dlaždice podľa
-  výberu); ľahký záznam pohybu (§3.7), ak sa schváli.
+  výberu); ľahký záznam pohybu (§3.7),
+- **Postrehy** – týždenné korelácie s poistkami (§3.8), najprv ako čisté funkcie
+  s testami nad syntetickými dátami, potom výkaz + Profil.
 
 ### Fáza 3 – Viac používateľov (2–3 sessions)
 - pozvánky, e-mail + reset hesla (napr. Resend, free tier), zmena hesla,
@@ -745,6 +807,28 @@ Odhad v „sessionách“ (jeden sústredený blok práce, každý končí commi
 **Poradie je zámerné**: Fáza 0 chráni tvoje dáta a peňaženku a nič nerozbije;
 Fáza 1 je viditeľná zmena, ktorú chceš; Fáza 2 je to, čím sa appka odlišuje;
 Fáza 3 až keď švagor reálne nastupuje.
+
+### Nočný autonómny beh (dohodnuté 6. 10. 2026 večer)
+
+Používateľ dal súhlas na samostatný vývoj cez noc bez zásahu, s týmito
+rozhodnutiami:
+- **Rozsah:** Fáza 0 + 1 + 2 v tomto poradí; čo sa nestihne, ostáva na ďalšiu noc.
+  Fáza 3 (e-mail, reset hesla, pozvánky) nie – potrebuje externé služby.
+- **Nasadenie:** priebežne na produkciu – každý krok až po `tsc` → testy →
+  `next build`; pred každou zmenou schémy čerstvý dump (`scripts/db-backup.sh dump`).
+- **Legacy dáta:** riadky `WaterLog`/`AiUsage` s `userId: null` priradiť admin
+  účtu používateľa (prvý účet). Počty zapísať do HANDOVER.
+- **Názov a ikona:** zmeniť na Rypák hneď (manifest, ikony, nadpisy, prihlásenie).
+  Cookie `nutri_session` sa nemení, aby používateľa neodhlásilo; na iPhone sa
+  názov na ploche zmení po opakovanom „Pridať na plochu“.
+- **Ručné úlohy používateľa pred štartom:** lokálny `.env` (`DATABASE_URL` =
+  Supabase Session pooler, voliteľne `OPENAI_API_KEY`, testovacie `SESSION_SECRET`
+  a `REGISTRATION_CODE`); vo Verceli `CRON_SECRET` a `DIRECT_URL`; v GitHube
+  secrets `APP_URL` a `CRON_SECRET`; produkčná URL pre smoke test; session bez
+  potvrdzovania; žiadna iná session na vetve.
+- **Hlásenie ráno:** HANDOVER.md §7 „Posledná práca“ sa prepíše: čo je hotové,
+  čo overené (lokálne nad kópiou DB, build, testy), čo nie (reálne AI výstupy,
+  iPhone), čo ostalo. Každý commit má v tele dôvod.
 
 ---
 
