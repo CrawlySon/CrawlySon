@@ -24,7 +24,8 @@ občas okomentuje, čo si práve zjedol, ráno zhrnie včerajšok a učí sa z t
 - **Databáza potravín** – zdieľaná + vlastná, vyhľadávanie s naposledy
   použitými pre dané jedlo dňa navrchu; zmena základnej gramáže prepočíta hodnoty
 - **⚡ Rýchle pridanie** – obľúbené položky/jedlá, hviezdičkovanie priamo z Potravín
-- Presun/kópia celého dňa na iný dátum, drag & drop medzi jedlami
+- Presun/kópia celého dňa na iný dátum, drag & drop medzi jedlami, výber viacerých
+  položiek → kopírovať na dnes / uložiť ako jedno jedlo
 
 **Denné sledovanie** – voda, spánok (0–10), hmotnosť, suplementy a lieky
 (katalóg + denné odškrtávanie)
@@ -74,7 +75,11 @@ OpenAI (Chat Completions, vision) · Web Push (VAPID) · Vercel (hosting + cron)
 5. Prvá registrácia vytvorí **admin** účet. Referenčné potraviny naplníš cez
    `npm run db:seed` (lokálne s produkčným `DATABASE_URL`).
 
-Cron joby sú vo `vercel.json` (časy v UTC; logika okien beží v Europe/Bratislava).
+**Notifikácie spúšťa GitHub Actions** (`.github/workflows/reminders.yml`) každú celú
+hodinu – Vercel Hobby púšťa cron len raz denne v nepresnom čase. V GitHube nastav
+*Settings → Secrets and variables → Actions*: `APP_URL` (URL appky bez lomky na konci)
+a `CRON_SECRET` (rovnaký ako vo Verceli). Endpointy si samy vyberú okno v SK čase a
+deduplikujú; Vercel crony vo `vercel.json` sú len záloha.
 
 ### Import Open Food Facts (voliteľné)
 ```bash

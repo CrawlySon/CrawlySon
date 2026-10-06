@@ -1,7 +1,12 @@
 # HANDOVER – NutriAI (CrawlySon)
 
 Dokument na plynulé pokračovanie vývoja v novej session / inom prostredí.
-Stav k commitu na vrchu vetvy `claude/nutrition-tracker-app-mTVJ7` (október 2026).
+Stav k vrcholu vetvy `claude/nutrition-tracker-app-mTVJ7` (október 2026, ~130 commitov).
+
+Obsah: 1 Kde je čo · 2 Ako appka funguje (obrazovky a toky) · 3 Ako sa tu pracuje ·
+4 Architektúra · 5 AI · 6 Doménové pravidlá a ich dôvody · 7 Posledná práca ·
+8 História vývoja · 9 Rozhodnutia, ktoré sa nemajú opakovať · 10 Otvorené veci ·
+11 Rýchly štart
 
 ---
 
@@ -9,12 +14,14 @@ Stav k commitu na vrchu vetvy `claude/nutrition-tracker-app-mTVJ7` (október 202
 
 | | |
 |---|---|
-| **Repozitár** | <https://github.com/CrawlySon/CrawlySon> (verejný) |
+| **Repozitár** | <https://github.com/CrawlySon/CrawlySon> (verejný – žiadne tajomstvá do kódu!) |
 | **Vetva** | `claude/nutrition-tracker-app-mTVJ7` – jediná vetva, default aj produkčná |
-| **Hosting** | Vercel, nasadzuje sa automaticky po pushi na túto vetvu |
-| **DB** | PostgreSQL (Neon/Supabase), schéma cez Prisma `db push` – **žiadne migračné súbory** |
-| **AI** | výhradne **OpenAI** (default `gpt-4.1`); Gemini v kóde **nie je** |
-| **Jazyk** | UI, komentáre v kóde aj komunikácia s používateľom: **slovenčina** |
+| **Hosting** | Vercel, nasadzuje sa automaticky po pushi; build sám spraví `prisma db push` |
+| **Notifikácie** | GitHub Actions `.github/workflows/reminders.yml` – každú hodinu „štuchne" `/api/cron/coach` a `/api/cron/water` (viď §4) |
+| **DB** | PostgreSQL (Neon/Supabase), Prisma `db push` – **žiadne migračné súbory** |
+| **AI** | výhradne **OpenAI** (default `gpt-4.1`); Gemini bolo zámerne odstránené (§9) |
+| **Jazyk** | UI, komentáre v kóde aj komunikácia s používateľom: **slovenčina**; commity anglicky |
+| **Používateľ** | autor appky ju denne používa na iPhone ako PWA |
 
 ```bash
 git clone https://github.com/CrawlySon/CrawlySon.git
@@ -24,28 +31,94 @@ npm ci
 npx prisma generate
 ```
 
-Prečítaj aj `README.md` (funkcie, env, nasadenie) a `.env.example` (všetky premenné s popisom).
+**Kde hľadať detaily:** `README.md` (funkcie, env, nasadenie), `.env.example` (všetky
+premenné s popisom), komentáre v kóde (po slovensky vysvetľujú *prečo*), a hlavne
+**`git log`** – každý commit má telo s dôvodom zmeny. Pri otázke „prečo je to takto?"
+pomôže `git log -S "<kus kódu>"` alebo `git log --follow <súbor>`.
 
 ---
 
-## 2. Ako sa tu pracovalo (dôležité pre nadviazanie)
+## 2. Ako appka funguje (obrazovky a toky)
+
+Spodné menu: **Dnes · Analytika · Potraviny · Profil**.
+
+### Dnes (`src/app/(app)/page.tsx`)
+Zhora nadol:
+1. **Hlavička s dátumom** – šípky deň dozadu/dopredu, ťuknutím vlastný kalendár s bodkami
+   pri dňoch so záznamom.
+2. **Súhrn dňa** (`MacroSummary`) – kalorický krúžok (žltý/červený oblúk pri prekročení),
+   makrá, priemerná zdravosť dňa.
+3. **💧 Pitný režim** (`WaterCard`) – +250/500/750 ml, späť.
+4. **⚡ Rýchle pridanie** (`QuickFavorites`) – obľúbené položky/zostavy, jedno ťuknutie = zápis.
+5. **Jedlá dňa** – Raňajky, Desiata, Obed, Olovrant, Večera, Druhá večera, (Iné).
+   Drag & drop medzi jedlami, ✎ úprava gramáže (prepočíta makrá), ★ uložiť ako obľúbené,
+   **„✓ Vybrať položky"** → kopírovať na dnes / uložiť ako jedno jedlo.
+6. **⇄ Presunúť záznamy dňa** – presun/kópia všetkých jedál dňa na iný dátum.
+7. **💊 Suplementy a lieky** (`SupplementCard`) – katalóg + denné −/+ (optimistické,
+   debounce), forma z výberu.
+8. **😴 Spánok** (`SleepCard`) – hodnotenie 0–10.
+9. **⚖️ Hmotnosť** (`WeightCard`) – jeden záznam/deň, zmena oproti minulému meraniu,
+   synchronizuje `User.weightKg` (len z najnovšieho záznamu).
+10. Plávajúce **„✨ Pridať jedlo"** → `AddFoodSheet`.
+11. **Bublina kouča** (`CoachBubble`) – občas vyskočí po pridaní jedla, 👍/👎.
+
+### Pridať jedlo (`src/components/AddFoodSheet.tsx`)
+Hore výber jedla dňa, potom tri záložky:
+- **✨ AI** – textové pole + 🎤 diktovanie → „Spracovať AI" (zvládne aj celý deň s nadpismi
+  „Raňajky: … / Obed: …"); **📷 Odfotiť jedlo** → odhad z fotky taniera. Výsledkom je
+  **návrh**, každá položka sa dá upraviť/zmazať, ukladá sa až tlačidlom „Pridať (n)".
+- **🔍 Databáza** – vyhľadávanie (naposledy použité pre dané jedlo dňa navrchu, štítok
+  „naposledy"), **▮▮ Čiarový kód** (skener s baterkou → Open Food Facts / vlastná DB → pri
+  neznámom kóde dohľadanie cez AI alebo fotka tabuľky), **📸 Odfotiť tabuľku** (aj bez kódu).
+- **★ Obľúbené**.
+
+### Analytika (`src/app/(app)/history/page.tsx`)
+Rozsah 7/14/30 dní alebo vlastný (dlhé obdobie → týždenná/mesačná agregácia), filter
+kategórie, filter **jedla dňa**, prepínače **bez nápojov / bez alkoholu**, metriky Kalórie /
+Zdravosť / Voda / Spánok, 7d medián, stĺpcový graf (farby podľa cieľa), súhrnné karty,
+zoznam dní (nekompletné označené).
+
+### Potraviny (`src/app/(app)/foods/page.tsx`)
+Vyhľadávanie (všetko / moje / globálne), pridanie potraviny, **skladanie receptu zo surovín**,
+☆ do rýchleho pridania, úprava vlastných potravín (zmena „Na koľko g" prepočíta hodnoty).
+
+### Profil (`src/app/(app)/profile/page.tsx`)
+Osobné údaje + výpočet TDEE, denné ciele, notifikácie (push, pravidlá pripomienok vody),
+🏅 Motivačný kouč, **🎭 Osobnosť kouča** (Milý/Normálny/Drsný), 💬 Komentáre k jedlu,
+**🧠 Čo ťa baví** (naučený vkus + zabudnúť), test notifikácie, **odznaky** (výzvy po 4
+úrovniach), **🔥 Série a rekordy**, odhlásenie.
+
+### Notifikácie (Web Push)
+- **Ráno (7–11 SK):** zhrnutie včerajška – riadok čísel + jedna veta (pri Drsnom koučovi
+  s nadpisom „🐷 Včerajšie žrádlo").
+- **Poobede (15–18):** blížiš sa ku kalorickému cieľu / si nad ním.
+- **Večer (18–21):** ešte žiadne ovocie.
+- Kedykoľvek: nový odznak (najvyššia priorita). Max jedna notifikácia za beh, deduplikácia
+  cez `User.coachState`.
+- Voda: pravidlá „do hodiny H aspoň X ml" (`User.waterReminders`).
+
+---
+
+## 3. Ako sa tu pracuje
 
 ### Prostredie session
-- Session typicky **nemá** `DATABASE_URL` ani `OPENAI_API_KEY` → nedá sa spustiť appka
-  s dátami ani reálne AI volanie. Všetko sa overuje staticky a testami čistých funkcií.
-- Po resete kontajnera býva pracovný adresár prázdny – treba `git fetch` + `checkout` vetvy
-  a `npm ci`.
+- Session typicky **nemá** `DATABASE_URL` ani `OPENAI_API_KEY` → appka sa nedá spustiť
+  s dátami a AI sa nedá zavolať. Overuje sa staticky a testami čistých funkcií.
+  **Vždy povedz používateľovi, čo overené je a čo nie** (AI výstupy).
+- Po resete kontajnera býva pracovný adresár prázdny → `git fetch origin
+  claude/nutrition-tracker-app-mTVJ7 && git checkout -B claude/nutrition-tracker-app-mTVJ7
+  origin/claude/nutrition-tracker-app-mTVJ7 && npm ci`.
 
-### Overenie pred každým commitom (vždy všetko tri)
+### Overenie pred každým commitom
 ```bash
-npx tsc --noEmit -p tsconfig.json                                   # musí byť 0 chýb
+npx tsc --noEmit -p tsconfig.json                                      # 0 chýb
 DATABASE_URL="postgresql://u:p@localhost:5432/db" npx prisma validate  # pri zmene schémy
-SKIP_ENV_VALIDATION=1 npx next build                                # musí prejsť
+SKIP_ENV_VALIDATION=1 npx next build                                   # musí prejsť
 ```
 
 ### Testovanie logiky
 Logika sa zámerne píše ako **čisté funkcie bez DB** (`badges.ts`, `food-comment.ts`,
-`food-tags.ts`, časti `ai.ts`), aby sa dala overiť ad-hoc skriptom cez `tsx`:
+`food-tags.ts`, `fallbackSummaryLine` v `ai.ts`), aby sa dala overiť ad-hoc skriptom:
 ```bash
 mkdir -p .tmp-test && cat > .tmp-test/x.test.ts <<'EOF'
 import { commentTriggers } from "../src/lib/food-comment";
@@ -53,188 +126,245 @@ import { commentTriggers } from "../src/lib/food-comment";
 EOF
 npx tsx .tmp-test/x.test.ts; rm -rf .tmp-test
 ```
-Testovací framework v projekte nie je; `.tmp-test/` sa po overení maže (necommituje sa).
+Testovací framework v projekte nie je; `.tmp-test/` sa necommituje. Osvedčilo sa testovať
+presne scenár zo screenshotu používateľa a pravdepodobnosti odhadnúť z ~2000 pokusov.
 
 ### Schéma – POZOR
 Build spúšťa `prisma db push --skip-generate` **bez** `--accept-data-loss`.
-- Pridávať polia/modely: **áno** (len nullable alebo s defaultom).
-- Mazať/premenovávať stĺpce s dátami: **nie** – build na Verceli by zlyhal.
-  Príklad: `User.coachRoast` je nahradený `coachPersona`, ale v schéme ostáva a drží sa
-  v súlade (pozri §5).
+- Pridávať polia/modely: áno (nullable alebo s defaultom).
+- Mazať/premenovávať stĺpce s dátami: **nie** – build na Verceli zlyhá. Príklad:
+  `User.coachRoast` je nahradený `coachPersona`, ale v schéme ostáva a drží sa v súlade.
+
+### Gotchy, na ktoré sa už narazilo
+- Slovenské úvodzovky `„…"` v JS reťazci ohraničenom `"` – uzatváracia `"` reťazec
+  ukončí. V takých reťazcoch používaj `“` alebo jednoduché úvodzovky okolo reťazca.
+- `Json` polia Prismy sú typovo voľné – `tsc` neodhalí, keď uložíš objekt namiesto textu.
+- Klient počíta dátum lokálne (`todayISO()`), server v Europe/Bratislava (`skToday()`).
 
 ### Git konvencie
-- Commit message: anglicky, conventional (`feat(scope):`, `fix(scope):`, `refactor:`),
-  **telo vysvetľuje prečo**, nie len čo. Na konci attribution riadky podľa prostredia.
-- Push: `git push -u origin HEAD:claude/nutrition-tracker-app-mTVJ7`.
-- **PR sa nevytvára**, kým o to používateľ nepožiada.
+- Commit: anglicky, conventional (`feat(scope):`, `fix(scope):`…), **telo vysvetľuje prečo**.
+  Na konci attribution riadky podľa prostredia.
+- Push: `git push -u origin HEAD:claude/nutrition-tracker-app-mTVJ7`. **PR len na požiadanie.**
 
 ### Ako komunikuje používateľ
-- Píše po slovensky, často posiela **screenshoty z iPhonu** (PWA) s popisom problému.
-- Iteruje: najprv chce **príklady/návrhy**, potom „postav to". Keď si nie si istý
-  zadaním, ukáž mu konkrétne varianty (napr. vety notifikácie) a nechaj ho vybrať.
-- Oceňuje **úprimné hlásenie**: čo je overené, čo nie (AI výstupy sa zo session overiť nedajú).
-- Pri bugu chce vysvetlenie **príčiny**, nielen opravu.
+- Píše po slovensky, posiela **screenshoty z iPhonu** s popisom problému.
+- Často chce najprv **návrhy / príklady** („daj mi príklady, aby som vedel, či sme sa
+  pochopili") a až potom „postav to". Keď si nie si istý, ukáž konkrétne varianty.
+- Pri bugu chce vysvetlenie **príčiny**, nielen opravu. Oceňuje úprimnosť a nadhľad
+  (napr. „tvoje zadanie by ten omyl neopravilo – myslel si presun?").
+- Píše počas behu práce doplňujúce správy – zohľadni ich v rozpracovanej úlohe.
 
 ---
 
-## 3. Architektúra
+## 4. Architektúra
 
 ```
-src/app/(app)/page.tsx          Dnes – súhrn, voda, rýchle pridanie, jedlá, suplementy,
-                                spánok, hmotnosť, bublina kouča
-src/app/(app)/history/page.tsx  Analytika (graf, priemery, filtre)
-src/app/(app)/foods/page.tsx    Potraviny (DB, úpravy, ☆ do rýchleho pridania, recepty)
-src/app/(app)/profile/page.tsx  Profil, ciele, notifikácie, osobnosť kouča, vkus, odznaky, série
-src/components/AddFoodSheet.tsx Pridávanie jedla: AI text/hlas, fotka taniera, DB, kód, obľúbené
+src/app/(app)/page.tsx          Dnes
+src/app/(app)/history/page.tsx  Analytika
+src/app/(app)/foods/page.tsx    Potraviny
+src/app/(app)/profile/page.tsx  Profil (+ TasteProfile, StreaksSection, BadgesSection)
+src/components/                 AddFoodSheet, CoachBubble, QuickFavorites, WaterCard,
+                                SleepCard, WeightCard, SupplementCard, MoveDaySheet,
+                                MacroSummary, CalendarPopup, BarcodeScanner, BottomNav, Toaster
 src/lib/ai.ts                   VŠETKY prompty a AI funkcie
-src/lib/openai.ts               HTTP klient: fallback modelu, parametre pre gpt-5/o-série
-src/lib/coach.ts                kontext dňa (DailyStat), rekordy sérií, podklady zhrnutia
+src/lib/openai.ts               HTTP klient OpenAI
+src/lib/coach.ts                kontext dňa (DailyStat), rekordy sérií, podklady zhrnutia,
+                                skToday()/skHour()
 src/lib/badges.ts               katalóg odznakov a sérií (čisté funkcie)
-src/lib/food-comment.ts         kedy komentovať jedlo, učenie z 👍/👎 (čisté funkcie)
-src/lib/food-tags.ts            rozpoznanie alkoholu / tvrdého alkoholu / nápojov (zdieľané)
-src/lib/page-cache.ts           in-memory cache stránok (len RAM, nie localStorage)
-src/middleware.ts               auth (cookie), verejné cesty, /api/cron chránený CRON_SECRET
-vercel.json                     cron: water 10,16 UTC; coach 6,14,17 UTC
+src/lib/food-comment.ts         kedy komentovať + učenie z 👍/👎 (čisté funkcie)
+src/lib/food-tags.ts            alkohol / tvrdý alkohol / nápoje (zdieľané)
+src/lib/nutrition.ts            TDEE, súčty, zaokrúhľovanie
+src/lib/page-cache.ts           in-memory cache stránok (stale-while-revalidate)
+src/lib/auth.ts, server-auth.ts session cookie, getUserId()
+src/middleware.ts               auth; /api/cron/* je verejné, chránené CRON_SECRET
 ```
 
-### Dátový model (Prisma)
-`User` (profil, ciele, nastavenia kouča, pamäť komentárov) · `Entry` (záznam jedla;
-`mealType`, `category`, `healthIndex`) · `Food` (DB potravín, hodnoty na `baseGrams`;
-`userId null` = zdieľaná) · `Favorite` (rýchle pridanie, `items` JSON) · `WaterLog` ·
-`SleepLog` (0–10) · `WeightLog` · `Supplement` + `SupplementLog` · `Achievement` ·
-`StreakRecord` · `CommentFeedback` · `PushSubscription` · `AiUsage` · `Profile` (zastaraný,
-ponechaný kvôli DB).
+**API** (`src/app/api/…`): `parse`, `parse/photo`, `entries` (+`[id]`, `move`), `foods`,
+`favorites` (+`log`), `history`, `water`, `sleep`, `weight`, `supplements` (+`log`),
+`barcode` (+`ai`, `photo`), `comment` (+`feedback`), `badges`, `calendar`, `profile`,
+`push/*`, `cron/coach`, `cron/water`, `admin/reevaluate-health`, `usage`, `seed`, `auth/*`.
 
-### Typy jedál
-`breakfast, snack (desiata), lunch, afternoon (olovrant), dinner, supper (druhá večera), other`.
-Poradie dňa je dôležité pre kouča (§5).
+**Plánovač:** hlavný je GitHub Actions (`reminders.yml`, každú celú hodinu UTC, vyžaduje
+repo secrets `APP_URL` a `CRON_SECRET`). Endpointy si samy vyberú okno v SK čase a
+deduplikujú. `vercel.json` obsahuje aj Vercel crony (Hobby: raz denne, nepresný čas) –
+sú len záloha.
 
-### Čas a dátumy
-- Dátum záznamu je reťazec `YYYY-MM-DD` (lokálny dátum klienta).
-- Server/cron počíta v **Europe/Bratislava** (`skToday()`, `skHour()` v `coach.ts`).
+**Dátový model:** `User` (profil, ciele, nastavenia kouča, `coachState`, `commentLog`,
+`commentStyle`, `commentStats`) · `Entry` (`mealType`, `category`, `subcategory`,
+`healthIndex`, `source`) · `Food` (hodnoty na `baseGrams`; `userId null` = zdieľaná) ·
+`Favorite` (`items` JSON) · `WaterLog` · `SleepLog` (0–10) · `WeightLog` · `Supplement` +
+`SupplementLog` · `Achievement` · `StreakRecord` · `CommentFeedback` · `PushSubscription` ·
+`AiUsage` · `Profile` (pozostatok, nepoužívaný).
+
+**Typy jedál:** `breakfast, snack (desiata), lunch, afternoon (olovrant), dinner,
+supper (druhá večera), other`. Poradie je dôležité pre kouča (§6).
 
 ---
 
-## 4. AI – čo kde beží (`src/lib/ai.ts`)
+## 5. AI (`src/lib/ai.ts`, `src/lib/openai.ts`)
 
 | Funkcia | Použitie | Pozn. |
 |---|---|---|
-| `parseFood` | text/hlas → položky | rozdelí vstup podľa nadpisov jedál („Obed: …") a každú sekciu pošle **samostatne, paralelne** (jedno veľké volanie vynechávalo sekcie); jedlo dňa berie z nadpisu |
-| `parseMealPhoto` | fotka taniera → položky | odhad gramáže z vizuálnych opôr, nižšia `confidence` |
-| `parseNutritionLabel` | fotka tabuľky z obalu → hodnoty na 100 g | |
-| `lookupProductByWeb` | dohľadanie produktu podľa názvu/kódu | z vedomostí modelu, nie reálny web |
-| `scoreHealthBatch` | prehodnotenie zdravosti | posiela **hodnoty na 100 g**, nie len názov; pravidlo „rovnaké hodnoty = rovnaké skóre" |
-| `writeDaySummary` | ranná veta | normálna aj `roast`; jedna veta o celom dni |
-| `fallbackSummaryLine` / `roastFallbackLine` | keď AI zlyhá | deterministické, s konkrétnymi číslami |
-| `writeFoodComment` | bublina pri pridaní jedla | vracia `{text, nickname, motif}` |
-| `distillCommentStyle` | 👍/👎 → profil vkusu | max 700 znakov, bez citovania vtipov |
+| `parseFood` | text/hlas → položky | delí vstup podľa nadpisov jedál, **každá sekcia samostatne a paralelne**; jedlo dňa z nadpisu; ak sekcia zlyhá, ostatné prejdú + varovanie |
+| `parseMealPhoto` | fotka taniera → položky | gramáž z vizuálnych opôr (tanier, príbor), nižšia `confidence` |
+| `parseNutritionLabel` | fotka tabuľky → hodnoty na 100 g | |
+| `lookupProductByWeb` | produkt podľa názvu/kódu | z vedomostí modelu |
+| `scoreHealthBatch` | prehodnotenie zdravosti | **hodnoty na 100 g**, rovnaké hodnoty = rovnaké skóre |
+| `writeDaySummary` | ranná veta | normálna / roast; vyhýba sa nedávnym prezývkam |
+| `fallbackSummaryLine`, `roastFallbackLine` | keď AI zlyhá | deterministické, s číslami |
+| `writeFoodComment` | bublina | `{text, nickname, motif}` |
+| `distillCommentStyle` | 👍/👎 → profil vkusu | max 700 znakov, bez citácie vtipov |
 
-`openai.ts`: pri 404/400 s chybou modelu skúsi `OPENAI_FALLBACK_MODEL`; pre `gpt-5*` a `o1–o9`
-posiela `max_completion_tokens` a vynechá `temperature`; timeout 45 s; kontroluje
-`finish_reason === "length"` (odseknutý JSON → zrozumiteľná chyba).
+`openai.ts`: pri 404/400 s chybou modelu skúsi `OPENAI_FALLBACK_MODEL`; pre `gpt-5*` a
+`o1–o9` posiela `max_completion_tokens` bez `temperature` (prepnutie modelu = len env);
+timeout 45 s; `finish_reason === "length"` → zrozumiteľná chyba namiesto „neplatný JSON".
 
-Admin nástroj: `GET /api/admin/reevaluate-health` (náhľad) a `?apply=1` (zápis) – prehodnotí
-zdravosť záznamov, obľúbených aj vlastných potravín.
+Rubrika zdravosti (0–10) je v `SYSTEM_INSTRUCTION` aj `HEALTH_RUBRIC`: 9–10 ovocie/zelenina/
+ryby; 7–8 celozrnné, vajcia, biele mäso, neslazené mliečne; 5–6 prílohy, syry; 3–4 biele
+pečivo, údeniny, vyprážané, sladené nápoje a ochutené mliečne (proteínové +1); 0–2 fast food,
+sladkosti, alkohol. Admin: `GET /api/admin/reevaluate-health` (náhľad), `?apply=1` (zápis).
 
 ---
 
-## 5. Doménové pravidlá a rozhodnutia (nemeniť bez dôvodu)
+## 6. Doménové pravidlá a ich dôvody
 
-Každé z týchto pravidiel vzniklo z konkrétnej sťažnosti používateľa.
+Každé pravidlo vzniklo z konkrétnej sťažnosti používateľa – nemeniť bez dôvodu.
 
 ### „Úplný / nekompletný deň"
-- Deň je **úplný**, ak má zápis a aspoň **50 % kalorického cieľa** (`INCOMPLETE_FRACTION`
-  v `badges.ts` aj v Analytike). Dnešok je zhovievavý (stačí akýkoľvek zápis).
-- Analytika: nekompletné minulé dni sa **v grafe nezobrazujú** a nerátajú do priemerov ani
-  mediánu; dnešok je vidieť priebežne. Kompletnosť sa posudzuje z kalórií **celého dňa**
-  (`fullCalories`), aby filter „bez nápojov" neoznačil deň za nekompletný.
-- Pri filtri jedla dňa sa namiesto 50 % prahu kontroluje len, či to jedlo v ten deň je.
+- Úplný = zápis + aspoň **50 % kalorického cieľa** (`INCOMPLETE_FRACTION` v `badges.ts`
+  aj Analytike). Dnešok je zhovievavý.
+- Analytika: nekompletné minulé dni sa v grafe nezobrazujú a nerátajú do priemerov ani
+  mediánu; dnešok je vidieť priebežne. Kompletnosť z kalórií **celého dňa** (`fullCalories`),
+  aby filter „bez nápojov" nezmenil, ktoré dni sa počítajú. Priemer vody len z dní s vodou.
+- Pri filtri jedla dňa sa kontroluje len, či to jedlo v ten deň existuje.
 
-### Série a rekordy (`badges.ts`, `coach.ts`)
+### Série a rekordy
 - Série „bez …" (alkohol, tvrdý alkohol, sladké, pečivo) **vyžadujú úplný zápis dňa** –
-  nezapísaný deň sériu **preruší** (nedá sa tvrdiť, že bol čistý). Používateľ si vybral
-  „reset, ale s jasným dôvodom": stav série nesie `stop: {date, reason: "missing" | "unmet"}`
-  a Profil ukáže „Chýba úplný záznam za 19. 8." namiesto „séria prerušená".
-- Rovnaké pravidlo pre „Kalorický cieľ" a „Zdravé dni" (300 kcal deň nie je „v cieli").
-  Výskytové série (ovocie, zelenina, šejk, voda) úplný deň nevyžadujú.
-- Rekord **smie klesnúť**: okno 400 dní; ak najstarší načítaný deň leží za začiatkom
-  okna (máme celú históriu), rekord sa počíta z dát; inak sa uložená hodnota drží ako spodná
-  hranica. Dôvod: po presune/zmazaní záznamov alebo zmene cieľa ostával neplatný rekord.
+  nezapísaný deň sériu preruší. Používateľ zvolil „reset, ale s jasným dôvodom": stav nesie
+  `stop: {date, reason: "missing" | "unmet"}`, Profil ukáže „Chýba úplný záznam za 19. 8.".
+  (Pôvodne sa nezapísané dni rátali ako čisté – používateľ to odmietol.)
+- To isté pre „Kalorický cieľ" a „Zdravé dni". Výskytové série (ovocie, zelenina, šejk,
+  voda) úplný deň nevyžadujú.
+- „Zápis jedál" počíta len úplné dni. „Proteínový šejk" sa nespúšťa na tyčinky/jogurty/mlieko.
+- Rekord **smie klesnúť**: okno 400 dní; ak najstarší načítaný deň je za začiatkom okna
+  (celá história), rekord sa počíta z dát, inak sa uložená hodnota drží ako spodná hranica.
 
 ### Rozpoznávanie (`food-tags.ts`)
-Alkohol a nápoje sa poznajú regexom nad **kategóriou + podkategóriou + názvom** (pivo býva
-pod „Nápoje"). Používa to séria aj filter v Analytike – **jedna definícia**. Pečivo:
-kategória „Pečivo" + názvy (chlieb, rožok, bageta…), ryža/bulgur/cestoviny nie.
+Alkohol a nápoje regexom nad **kategóriou + podkategóriou + názvom** (pivo býva pod
+„Nápoje"); používa séria aj filter Analytiky. Pečivo: kategória „Pečivo" + názvy.
 
 ### Kouč
-- **Osobnosť** `User.coachPersona` ∈ `nice | normal | roast`; `null` = odvodí sa zo
-  staršieho `coachRoast` (`personaOf()` v `types.ts`). PATCH profilu drží `coachRoast`
-  v súlade. Drsný: láskavé nadávky („ty pažravá prasnica"), hovorové „dodrbal" OK,
-  hrubé vulgarizmy nie; komentuje **jedlo, nikdy telo**; nikdy nechváli hladovanie.
-- **Ranné zhrnutie** (cron, okno 7–11 SK): **riadok čísel + JEDNA veta** o celom dni
-  (čo zaostalo, čo sedelo, konkrétne jedlo, ktoré pokazilo deň, jedna rada na dnes).
-  Používateľ výslovne nechce komentár ku každej metrike zvlášť. Ďalšie okná: kalórie
-  15–18, ovocie 18–21; max jedna notifikácia za beh.
-- **Bubliny pri pridaní jedla** (`/api/comment`, `food-comment.ts`):
-  - spúšťače: `repeat` (to isté jedlo opäť), `lateMeal` (druhá večera), `saladAfterBinge`,
-    `crossedGoal`, `junk`, `healthy`, `protein`; silné ~80–90 %, bežné 40–50 %,
-    banality (espresso, voda, < 40 kcal) ~8 %; cooldown 15 min okrem najsilnejších
-  - **všetko podľa jedla dňa, NIE času zápisu** – ľudia zapisujú spätne; deň sa radí
-    raňajky → … → druhá večera a „predtým" = jedlá do daného jedla dňa
-  - komentuje sa **len dnešok**
-  - beží na pozadí po uložení; zápis jedla na komentár nečaká, chyba sa ticho zahodí
-- **Učenie z 👍/👎**:
-  - *kedy* – `commentStats` (počty na druh spúšťača), faktor 0,5–1,5 (Laplace), strop 95 %
-  - *ako* – každých 5 hodnotení destilácia do `commentStyle` (bloky Baví ho / Nebaví ho /
-    Obľúbené motívy), max 700 znakov; surové hodnotenia sa do promptu **nikdy** neposielajú
-  - *originalita* – `commentLog` drží posledných 6 hlášok, 15 prezývok a 20 motívov
-    (pointa v 2–4 slovách); sú zakázané, po ~20 bublinách motív vypadne a smie sa vrátiť
-    v novej podobe. Používateľovi záleží na originalite najviac.
-  - Profil vkusu je viditeľný v Profile („🧠 Čo ťa baví") s možnosťou zabudnúť.
+- **Osobnosť** `coachPersona` ∈ `nice | normal | roast`; `null` → odvodí sa z `coachRoast`
+  (`personaOf()` v `types.ts`). Drsný: láskavé nadávky, hovorové „dodrbal" OK, hrubé
+  vulgarizmy nie; **komentuje jedlo, nikdy telo**; nikdy nechváli hladovanie.
+- **Ranné zhrnutie**: riadok čísel + **jedna veta o celom dni** (čo zaostalo, čo sedelo,
+  konkrétne jedlo, ktoré deň pokazilo, s kcal, jedna rada). Používateľ výslovne nechce
+  komentár ku každej metrike zvlášť ani výpis bez čísel – trvalo tri iterácie, kým sme
+  sa pochopili (vybral štýl „fokus + vinník + rada").
+- **Bubliny pri pridaní jedla** (`/api/comment` + `food-comment.ts`):
+  - spúšťače `repeat`, `lateMeal` (druhá večera), `saladAfterBinge`, `crossedGoal`, `junk`,
+    `healthy`, `protein`; silné ~80–90 %, bežné 40–50 %, banality (espresso, voda,
+    < 40 kcal) ~8 %; cooldown 15 min okrem najsilnejších
+  - **podľa jedla dňa, NIE času zápisu** – používateľ zapisuje spätne („ranná káva zapísaná
+    večer je raňajková"); „predtým" = jedlá do daného jedla dňa
+  - len dnešok; beží na pozadí po uložení, chyba sa ticho zahodí
+- **Učenie z 👍/👎**: *kedy* – `commentStats`, faktor 0,5–1,5, strop 95 %; *ako* – každých
+  5 hodnotení destilácia do `commentStyle` (Baví ho / Nebaví ho / Obľúbené motívy), surové
+  hodnotenia sa do promptu nikdy neposielajú; *originalita* – `commentLog` drží 6 hlášok,
+  15 prezývok, 20 motívov ako zákaz, po ~20 bublinách motív vypadne. **Originalita je
+  používateľovi najdôležitejšia.**
 
 ### Potraviny a obľúbené
-- `Food` má hodnoty na `baseGrams`. Zmena základnej gramáže v editore **prepočíta** kcal
-  a makrá – vždy z pôvodného uloženého záznamu (pri písaní „5" → „52" by sa reťazenie
-  faktorov zaokrúhľovaním rozsypalo).
-- ☆ v Potravinách vytvorí obľúbené s jednou položkou (porcia = `baseGrams`); funguje aj pre
-  globálne potraviny. Stav hviezdičky sa páruje **podľa názvu**.
-- Vyhľadávanie v DB dáva navrch naposledy použité položky pre zvolené jedlo dňa.
+- Zmena `baseGrams` v editore prepočíta hodnoty **z pôvodného záznamu** (pri písaní cez
+  medzistavy by sa reťazenie faktorov rozsypalo).
+- ☆ v Potravinách = obľúbené s jednou položkou (porcia = `baseGrams`), aj pre globálne
+  potraviny; párovanie hviezdičky **podľa názvu**.
 
 ---
 
-## 6. Otvorené veci a nápady
+## 7. Posledná práca (september – október 2026)
 
-**Na overenie (zo session sa nedali)**
-- Reálne AI výstupy: tón bubliniek a ranných viet, destilácia profilu, rozpoznávanie
-  fotky taniera, rozdeľovanie dňa na sekcie. Používateľ sľúbil poslať screenshoty.
-- Karta **Hmotnosť** – používateľ ju po nasadení nevidel; kód je správne, podozrenie na
-  zlyhaný deploy / `db push` (tabuľka `WeightLog`). Pridané zobrazenie chyby na karte.
+Posledný blok sa venoval **„osobnosti" appky**. Používateľ prišiel s myšlienkou, že
+nutričných appiek je veľa, ale žiadna si zo stravovania nerobí vtipnú srandu cez LLM –
+a že to môže byť hlavná odlišnosť. Postupne vzniklo:
+1. Ranné zhrnutie z reálnych dát → ladenie tvaru vety (3 iterácie).
+2. Drsný (roast) mód zhrnutia → zovšeobecnený na osobnosť Milý/Normálny/Drsný.
+3. Bubliny pri pridaní jedla s rozumnou náhodnosťou.
+4. Oprava: kontext podľa jedla dňa, nie času zápisu.
+5. 👍/👎 a učenie vkusu; doplnok o originalite (prezývky a motívy).
+6. Zobrazenie naučeného vkusu v Profile.
+
+**Stav:** všetko nasadené, typy a build overené, logika otestovaná scenármi. **Neoverené:**
+reálne výstupy AI (tón, originalita, destilácia) – používateľ sľúbil screenshoty prvých
+bublín. Ďalší logický krok je ladenie podľa nich.
+
+Predtým (august–september): fotka taniera, hviezdičky v Potravinách, prepočet gramáže,
+oprava zdravosti podľa hodnôt na 100 g, prechod na `gpt-4.1`, spracovanie dňa po sekciách,
+série vyžadujúce úplný zápis, hmotnosť, séria bez pečiva, filtre Analytiky.
+
+---
+
+## 8. História vývoja (fázy)
+
+| Obdobie | Čo vzniklo |
+|---|---|
+| jún 2026 | základ: AI z textu, denník po jedlách, DB potravín, multi-user, voda, drag&drop, graf, skener kódov, obľúbené, push notifikácie, odznaky, kouč, série |
+| jún–júl | ladenie AI (fallbacky, zdravostná rubrika), fotka tabuľky, analytika (vlastný rozsah, medián), suplementy, spánok, baterka |
+| 22. 7. | **prechod z Gemini na OpenAI** ako jediný engine |
+| júl–august | nekompletné dni v analytike, výber položiek, presun dňa, filtre jedla dňa a nápojov/alkoholu, opravy sérií a rekordov, hmotnosť |
+| september | fotka taniera, ☆ v Potravinách, prepočet `baseGrams` |
+| október | osobnosť kouča, bubliny, učenie z 👍/👎, profil vkusu, dokumentácia |
+
+Kompletný zoznam: `git log --reverse --format='%ad %s' --date=short`.
+
+---
+
+## 9. Rozhodnutia, ktoré sa nemajú opakovať bez opýtania
+
+- **Neumorphism dizajn** (18. 7.) sa skúsil a o dva dni bol **revertnutý** – používateľovi
+  nesedel. Neskôr naň padla ešte otázka a používateľ ju zamietol. Neponúkať znova.
+- **Gemini** bolo 22. 7. zámerne odstránené (spoľahlivosť). Používateľ neskôr spomenul,
+  že má prístup aj ku Gemini modelom (vrátane obrazových) – návrh prepnúť vision na Gemini
+  kvôli cene je otvorený, ale nie rozhodnutý. `@google/genai` v závislostiach je zvyšok.
+- **„Mini" modely** (`gpt-4o-mini`) vynechávali položky z dlhých zoznamov – preto `gpt-4.1`.
+- Spánok bol pôvodne 1–10, zmenený na **0–10**.
+- Kouč nesmie komentovať telo ani chváliť hladovanie (aj v drsnom móde).
+
+---
+
+## 10. Otvorené veci
+
+**Na overenie**
+- Reálne AI výstupy kouča a fotky taniera (screenshoty od používateľa).
+- Karta **Hmotnosť** – používateľ ju po nasadení nevidel; kód je v poriadku, podozrenie na
+  zlyhaný deploy / `db push` tabuľky `WeightLog`. Na karte sa teraz zobrazí chyba.
   Overiť `GET /api/weight?date=…` (404 = starý build, 500 = chýba tabuľka).
+- GitHub Actions secrets `APP_URL` a `CRON_SECRET` – bez nich hodinové pripomienky nebežia.
 
-**Známe obmedzenia / dlh**
-- `@google/genai` v závislostiach je nepoužívaný – dá sa odstrániť.
-- Obľúbené sa s potravinou párujú podľa názvu; čistejšie by bolo `Favorite.foodId`.
-- Nové potraviny (sken, fotka) sa hodnotia zdravosťou po jednej, bez porovnania
-  s podobnými – nekonzistencia sa môže vrátiť; riešenie: priložiť podobné ohodnotené
-  potraviny ako referenciu.
-- Milý a Normálny kouč majú rovnaké ranné zhrnutie (roast má vlastné).
-- `page-cache` je len v RAM – po tvrdom refreshi sa vyprázdni (zámer).
-- Model `Profile` je pozostatok jednopoužívateľskej verzie.
+**Dlh / obmedzenia**
+- `@google/genai` nepoužívaný – ostal zámerne, aby sa pri deployi nerozišiel `package-lock.json`;
+  pri odstránení treba spraviť `npm uninstall @google/genai` a commitnúť aj lockfile.
+- `Profile` model nepoužívaný.
+- Obľúbené párované s potravinou podľa názvu (lepšie `Favorite.foodId`).
+- Nové potraviny (sken, fotka) sa hodnotia zdravosťou po jednej – nekonzistencia sa môže
+  vrátiť; riešenie: priložiť podobné ohodnotené potraviny ako referenciu.
+- Milý a Normálny kouč majú rovnaké ranné zhrnutie.
+- `page-cache` len v RAM (zámer).
 
-**Nápady, o ktorých sa hovorilo**
-- Graf hmotnosti v Analytike (s trendovou krivkou).
-- Odznaky pre „bez pečiva" (séria existuje, odznaky nie).
-- Kontext dňa pre ranné zhrnutie pri Milom koučovi (vrúcnejší tón).
-- Zdieľanie vydarených hlášok kouča (virálny potenciál – „osobnosť" je hlavná odlišnosť
-  appky; precedens CARROT Weather / CARROT Fit).
-- Prepnutie vision na Gemini kvôli cene (vyžaduje nový klient `src/lib/gemini.ts`).
+**Nápady**
+- Graf hmotnosti v Analytike s trendom.
+- Odznaky „bez pečiva" (séria existuje).
+- Zdieľanie vydarených hlášok kouča (osobnosť = hlavná odlišnosť appky; precedens
+  CARROT Weather / CARROT Fit).
+- Vision cez Gemini kvôli cene (nový klient `src/lib/gemini.ts`).
 
 ---
 
-## 7. Rýchly štart pre novú session
+## 11. Rýchly štart pre novú session
 
-1. Naklonuj repo, `checkout claude/nutrition-tracker-app-mTVJ7`, `npm ci`, `npx prisma generate`.
-2. Prečítaj `README.md`, tento súbor a `prisma/schema.prisma`.
-3. Pred zmenou v kouči/sériách si prečítaj §5 – pravidlá tam majú konkrétne dôvody.
-4. Po každej zmene: `tsc` → (`prisma validate`) → `next build` → commit s vysvetlením → push.
-5. Používateľovi hláste po slovensky, stručne, s tým, čo je overené a čo nie.
+1. Klon, `checkout claude/nutrition-tracker-app-mTVJ7`, `npm ci`, `npx prisma generate`.
+2. Prečítaj tento súbor, `README.md`, `prisma/schema.prisma`, a pri práci na kouči
+   `src/lib/food-comment.ts` + koniec `src/lib/ai.ts`.
+3. Pred zmenou v kouči/sériách/analytike si prečítaj §6 a §9.
+4. Po každej zmene: `tsc` → (`prisma validate`) → `next build` → commit s dôvodom → push.
+5. Hlás po slovensky, stručne, s jasným rozlíšením overené / neoverené.
