@@ -19,7 +19,7 @@ import { checkBadges } from "@/lib/badge-check";
 import { showToast } from "@/lib/toast";
 import { round, sumTotals, todayISO } from "@/lib/nutrition";
 import { MEAL_LABELS, MEAL_ORDER, type Entry, type FavoriteItem, type MealType, type Profile } from "@/lib/types";
-import MacroSummary from "@/components/MacroSummary";
+import RypakHero from "@/components/RypakHero";
 import AddFoodSheet from "@/components/AddFoodSheet";
 import WaterCard from "@/components/WaterCard";
 import SleepCard from "@/components/SleepCard";
@@ -189,6 +189,8 @@ export default function TodayPage() {
   // Kouč sa k pridanému jedlu ozve len niekedy. Pýtame sa na pozadí, zápis
   // jedla na komentár nečaká.
   const [bubble, setBubble] = useState<{ text: string; persona?: string; kind?: string } | null>(null);
+  // Posledná skutočná hláška – ostane na hero karte aj po zmiznutí bubliny.
+  const [lastLine, setLastLine] = useState<string | null>(null);
   const closeBubble = useCallback(() => setBubble(null), []);
   const onAdded = useCallback(
     (added?: { name: string; calories: number; protein?: number; category?: string | null; healthIndex?: number | null; mealType?: string | null }[]) => {
@@ -197,7 +199,10 @@ export default function TodayPage() {
       api
         .comment(date, added)
         .then((r) => {
-          if (r.comment) setBubble({ text: r.comment, persona: r.persona, kind: r.kind });
+          if (r.comment) {
+            setBubble({ text: r.comment, persona: r.persona, kind: r.kind });
+            setLastLine(r.comment);
+          }
         })
         .catch(() => {
           /* komentár je bonus – chyba nevadí */
@@ -420,7 +425,17 @@ export default function TodayPage() {
         </button>
       </header>
 
-      {profile && <MacroSummary totals={totals} profile={profile} healthScore={dayHealth} />}
+      {profile && (
+        <RypakHero
+          date={date}
+          isToday={date === todayISO()}
+          entries={entries}
+          totals={totals}
+          profile={profile}
+          healthScore={dayHealth}
+          lastLine={date === todayISO() ? lastLine : null}
+        />
+      )}
 
       <WaterCard date={date} reloadSignal={reload} />
 
