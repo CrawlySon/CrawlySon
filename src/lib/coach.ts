@@ -234,3 +234,60 @@ export async function buildStreaks(userId: string, ctx: BadgeContext): Promise<S
 export function todayStat(ctx: BadgeContext): DailyStat {
   return dayStat(ctx, ctx.today);
 }
+
+// Podklady pre personalizované zhrnutie dňa. Okrem agregátov ťaháme aj
+// konkrétne jedlá – bez nich by sa dalo napísať len „zjedol si veľa kalórií",
+// nie „najviac dala pizza (820 kcal)".
+export type DayFacts = {
+  date: string;
+  calories: number;
+  goalCalories: number;
+  protein: number;
+  goalProtein: number;
+  waterMl: number;
+  goalWaterMl: number;
+  healthScore: number | null;
+  sleepScore: number | null;
+  entryCount: number;
+  hasFruit: boolean;
+  hasVegetable: boolean;
+  hasSweets: boolean;
+  hasAlcohol: boolean;
+  topItems: { name: string; calories: number }[];
+};
+
+export async function buildDayFacts(
+  userId: string,
+  date: string,
+  ctx: BadgeContext,
+  goals: UserGoals
+): Promise<DayFacts> {
+  const s = dayStat(ctx, date);
+  const [sleep, top] = await Promise.all([
+    prisma.sleepLog.findUnique({ where: { userId_date: { userId, date } }, select: { score: true } }),
+    prisma.entry.findMany({
+      where: { userId, date },
+      select: { name: true, calories: true },
+      orderBy: { calories: "desc" },
+      take: 3,
+    }),
+  ]);
+
+  return {
+    date,
+    calories: Math.round(s.calories),
+    goalCalories: goals.goalCalories,
+    protein: Math.round(s.protein),
+    goalProtein: goals.goalProtein,
+    waterMl: s.waterMl,
+    goalWaterMl: goals.goalWaterMl,
+    healthScore: s.healthScore != null ? Math.round(s.healthScore * 10) / 10 : null,
+    sleepScore: sleep?.score ?? null,
+    entryCount: s.entryCount,
+    hasFruit: s.hasFruit,
+    hasVegetable: s.hasVegetable,
+    hasSweets: s.hasSweets,
+    hasAlcohol: s.hasAlcohol,
+    topItems: top.map((t) => ({ name: t.name, calories: Math.round(t.calories) })),
+  };
+}

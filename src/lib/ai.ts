@@ -1,6 +1,6 @@
 // Výživová AI logika appky – beží výhradne na OpenAI (žiadny Gemini).
 import type { ParsedItem } from "./types";
-import { openAIChatJSON, openAIVisionJSON } from "./openai";
+import { openAIChatJSON, openAIVisionJSON, isOpenAIConfigured } from "./openai";
 
 export type ReferenceFood = {
   name: string;
@@ -518,4 +518,93 @@ Ak tabuľku nevieš spoľahlivo prečítať, vráť {"found": false}.`;
     found: true,
   };
   return { food, usage };
+}
+
+// ── Personalizované zhrnutie včerajška do push notifikácie ───────────────────
+
+export type DaySummaryFacts = {
+  calories: number;
+  goalCalories: number;
+  protein: number;
+  goalProtein: number;
+  waterMl: number;
+  goalWaterMl: number;
+  healthScore: number | null;
+  sleepScore: number | null;
+  entryCount: number;
+  hasFruit: boolean;
+  hasVegetable: boolean;
+  hasSweets: boolean;
+  hasAlcohol: boolean;
+  topItems: { name: string; calories: number }[];
+};
+
+function factLines(f: DaySummaryFacts): string {
+  const l: string[] = [
+    `Kalórie: ${f.calories} z cieľa ${f.goalCalories} (${f.calories - f.goalCalories >= 0 ? "+" : ""}${f.calories - f.goalCalories})`,
+    `Bielkoviny: ${f.protein} g z cieľa ${f.goalProtein} g`,
+    `Voda: ${(f.waterMl / 1000).toFixed(1)} l z cieľa ${(f.goalWaterMl / 1000).toFixed(1)} l`,
+    `Počet zapísaných položiek: ${f.entryCount}`,
+    `Ovocie: ${f.hasFruit ? "áno" : "nie"}, zelenina: ${f.hasVegetable ? "áno" : "nie"}, sladké: ${
+      f.hasSweets ? "áno" : "nie"
+    }, alkohol: ${f.hasAlcohol ? "áno" : "nie"}`,
+  ];
+  if (f.healthScore != null) l.push(`Zdravosť dňa: ${f.healthScore} z 10`);
+  if (f.sleepScore != null) l.push(`Spánok: ${f.sleepScore} z 10`);
+  if (f.topItems.length) {
+    l.push(`Najkalorickejšie položky: ${f.topItems.map((t) => `${t.name} (${t.calories} kcal)`).join(", ")}`);
+  }
+  return l.join("\n");
+}
+
+// Deterministická záloha – použije sa, keď AI nie je nakonfigurovaná alebo zlyhá.
+// Vyberie najvýraznejšiu odchýlku dňa, nech to nie je prázdna fráza.
+export function fallbackSummaryLine(f: DaySummaryFacts): string {
+  const top = f.topItems[0];
+  if (f.goalProtein > 0 && f.protein < f.goalProtein * 0.7) {
+    return `Bielkoviny zaostali – ${f.protein} g z ${f.goalProtein} g. Dnes skús pridať tvaroh, vajcia či kuracie.`;
+  }
+  if (f.goalCalories > 0 && f.calories > f.goalCalories * 1.2) {
+    const over = f.calories - f.goalCalories;
+    return top
+      ? `Cieľ si prekročil o ${over} kcal, najviac dala položka ${top.name} (${top.calories} kcal).`
+      : `Cieľ si prekročil o ${over} kcal.`;
+  }
+  if (f.goalWaterMl > 0 && f.waterMl < f.goalWaterMl * 0.6) {
+    return `Pitný režim zaostal – ${(f.waterMl / 1000).toFixed(1)} l z ${(f.goalWaterMl / 1000).toFixed(1)} l. Dnes to doháňaj od rána.`;
+  }
+  if (!f.hasVegetable) return "Včera chýbala zelenina – dnes ju skús dostať aspoň do obeda.";
+  if (!f.hasFruit) return "Ovocie včera nebolo – dnes stačí jedno jablko alebo hrsť bobúľ.";
+  if (f.goalCalories > 0 && f.calories <= f.goalCalories && (f.healthScore ?? 0) >= 7) {
+    return `Cieľ aj zdravosť ${f.healthScore} z 10 – včerajšok ti vyšiel, drž to.`;
+  }
+  if (f.goalCalories > 0 && f.calories <= f.goalCalories) {
+    return `Zmestil si sa do cieľa (${f.calories} z ${f.goalCalories} kcal).`;
+  }
+  return `Zapísané ${f.entryCount} položiek, ${f.calories} kcal.`;
+}
+
+// Napíše 1 vetu o včerajšku z konkrétnych čísel. Pri zlyhaní vráti null –
+// volajúci použije fallbackSummaryLine, nech notifikácia odíde tak či tak.
+export async function writeDaySummary(f: DaySummaryFacts): Promise<string | null> {
+  if (!isOpenAIConfigured()) return null;
+  try {
+    const r = await openAIChatJSON({
+      system:
+        'Si stručný výživový kouč píšuci po slovensky. Z údajov o včerajšom dni napíš JEDNU vetu (max 160 znakov) ' +
+        'do push notifikácie. Pravidlá: vždy sa opri o KONKRÉTNE číslo alebo konkrétne jedlo z údajov; ' +
+        'žiadne všeobecné frázy typu „dnes to zvládneš lepšie"; tykaj; bez oslovenia a bez úvodu; ' +
+        'najviac jedno emoji a len ak sa hodí; ak bol deň dobrý, pochváľ konkrétne, ak nie, daj jednu vecnú radu na dnes. ' +
+        'Odpovedz IBA JSON objektom {"body":"…"}.',
+      user: `Údaje o včerajšku:\n${factLines(f)}`,
+      temperature: 0.7,
+      maxTokens: 300,
+    });
+    const body = String(JSON.parse(r.text)?.body ?? "").trim();
+    if (!body) return null;
+    return body.length > 200 ? body.slice(0, 197) + "…" : body;
+  } catch (e) {
+    console.error("writeDaySummary zlyhal:", (e as any)?.message || e);
+    return null;
+  }
 }

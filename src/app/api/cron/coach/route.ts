@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { sendToSubs } from "@/lib/push";
 import { BADGE_BY_KEY, shiftISO } from "@/lib/badges";
-import { buildBadgeContext, unlockNewBadges, todayStat, dayStat, skToday } from "@/lib/coach";
+import { buildBadgeContext, unlockNewBadges, todayStat, dayStat, buildDayFacts, skToday } from "@/lib/coach";
+import { writeDaySummary, fallbackSummaryLine } from "@/lib/ai";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -80,21 +81,23 @@ async function run(req: Request) {
       });
     };
 
-    // 2) Ráno: zhrnutie včerajška
+    // 2) Ráno: zhrnutie včerajška – veta sa generuje z reálnych čísel dňa
     if (MORNING_WINDOW(hour) && state.summary !== today) {
-      const y = dayStat(ctx, shiftISO(today, -1));
+      const yDate = shiftISO(today, -1);
+      const y = dayStat(ctx, yDate);
       if (y.entryCount > 0) {
         const cal = Math.round(y.calories);
         const g = u.goalCalories;
-        const inGoal = g > 0 && cal <= g;
         const parts = [`${cal} kcal${g > 0 ? ` z ${g}` : ""}`, `B ${Math.round(y.protein)} g`];
         if (y.waterMl > 0) parts.push(`💧 ${oneDec(y.waterMl / 1000)} l`);
         if (y.healthScore != null) parts.push(`♥ ${oneDec(y.healthScore)}`);
-        const tail =
-          g > 0 ? (inGoal ? " Pekná práca, drž to tak! 💪" : " Dnes to zvládneš lepšie 🙂") : "";
+
+        const facts = await buildDayFacts(u.id, yDate, ctx, u);
+        const line = (await writeDaySummary(facts)) ?? fallbackSummaryLine(facts);
+
         const sent = await sendToSubs(u.pushSubs, {
           title: "📊 Zhrnutie včera",
-          body: parts.join(" · ") + tail,
+          body: `${parts.join(" · ")}\n${line}`,
           url: "/history",
         });
         if (sent > 0) {
