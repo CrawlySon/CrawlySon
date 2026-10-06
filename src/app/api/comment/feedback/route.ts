@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { getUserId } from "@/lib/server-auth";
 import { bumpStats, type CommentStats } from "@/lib/food-comment";
@@ -52,4 +53,46 @@ export async function POST(req: Request) {
 
   if (Object.keys(data).length) await prisma.user.update({ where: { id: userId }, data });
   return NextResponse.json({ ok: true, learned: !!data.commentStyle });
+}
+
+// GET /api/comment/feedback -> čo sa kouč o vkuse používateľa naučil
+export async function GET() {
+  const userId = await getUserId();
+  if (!userId) return NextResponse.json({ error: "Neprihlásený" }, { status: 401 });
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { commentStyle: true, styleDistilledAt: true },
+  });
+  const [up, down, pending] = await Promise.all([
+    prisma.commentFeedback.count({ where: { userId, rating: 1 } }),
+    prisma.commentFeedback.count({ where: { userId, rating: -1 } }),
+    prisma.commentFeedback.count({
+      where: { userId, ...(user?.styleDistilledAt ? { createdAt: { gt: user.styleDistilledAt } } : {}) },
+    }),
+  ]);
+
+  return NextResponse.json({
+    style: user?.commentStyle ?? null,
+    updatedAt: user?.styleDistilledAt ?? null,
+    up,
+    down,
+    // koľko hodnotení ešte chýba do najbližšieho prepočtu profilu
+    untilUpdate: Math.max(0, DISTILL_EVERY - pending),
+  });
+}
+
+// DELETE /api/comment/feedback -> zabudne naučený vkus aj hodnotenia
+export async function DELETE() {
+  const userId = await getUserId();
+  if (!userId) return NextResponse.json({ error: "Neprihlásený" }, { status: 401 });
+
+  await prisma.$transaction([
+    prisma.commentFeedback.deleteMany({ where: { userId } }),
+    prisma.user.update({
+      where: { id: userId },
+      data: { commentStyle: null, commentStats: Prisma.DbNull, styleDistilledAt: null },
+    }),
+  ]);
+  return NextResponse.json({ ok: true });
 }

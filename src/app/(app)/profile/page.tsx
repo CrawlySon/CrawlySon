@@ -335,6 +335,8 @@ export default function ProfilePage() {
               Keď si niečo pridáš, kouč sa občas ozve – pri tretej klobáse skoro určite, pri káve skoro nikdy.
             </span>
           </label>
+
+          <TasteProfile />
         </div>
 
         {pushOn && (
@@ -394,6 +396,71 @@ export default function ProfilePage() {
 type BadgesData = { badges: Badge[]; streaks: Streak[]; earnedCount: number; total: number };
 
 // Slovenský tvar slova „deň" podľa počtu.
+// Čo sa kouč naučil o tvojom humore z 👍/👎 v bublinách.
+function TasteProfile() {
+  const [data, setData] = useState<{
+    style: string | null;
+    updatedAt: string | null;
+    up: number;
+    down: number;
+    untilUpdate: number;
+  } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    api.getTaste().then(setData).catch(() => {});
+  }, []);
+
+  async function reset() {
+    if (!confirm("Zabudnúť všetko, čo sa kouč naučil o tvojom humore? Zmažú sa aj tvoje hodnotenia.")) return;
+    setBusy(true);
+    try {
+      await api.resetTaste();
+      setData(await api.getTaste());
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!data) return null;
+  const total = data.up + data.down;
+
+  return (
+    <div className="mt-3 rounded-xl bg-white p-3 ring-1 ring-slate-200">
+      <div className="flex items-center justify-between">
+        <b className="text-sm text-slate-700">🧠 Čo ťa baví</b>
+        {total > 0 && (
+          <span className="text-xs text-slate-400">
+            👍 {data.up} · 👎 {data.down}
+          </span>
+        )}
+      </div>
+
+      {data.style ? (
+        <>
+          <p className="mt-2 whitespace-pre-line text-[13px] leading-relaxed text-slate-600">{data.style}</p>
+          <p className="mt-2 text-[11px] text-slate-400">
+            {data.updatedAt && `Naposledy upravené ${new Date(data.updatedAt).toLocaleDateString("sk-SK")}. `}
+            Ďalšia úprava po {data.untilUpdate} {data.untilUpdate === 1 ? "hodnotení" : "hodnoteniach"}.
+          </p>
+        </>
+      ) : (
+        <p className="mt-2 text-[13px] text-slate-500">
+          {total === 0
+            ? "Zatiaľ nič. Hodnoť bubliny kouča 👍 / 👎 a po 5 hodnoteniach tu uvidíš, aký humor ťa baví."
+            : `Ešte ${data.untilUpdate} ${data.untilUpdate === 1 ? "hodnotenie" : data.untilUpdate < 5 ? "hodnotenia" : "hodnotení"} a kouč si spíše prvý profil tvojho vkusu.`}
+        </p>
+      )}
+
+      {total > 0 && (
+        <button onClick={reset} disabled={busy} className="mt-2 text-xs text-slate-400 underline hover:text-red-500">
+          {busy ? "Mažem…" : "Zabudnúť naučený vkus"}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function dni(n: number): string {
   if (n === 1) return "deň";
   if (n >= 2 && n <= 4) return "dni";

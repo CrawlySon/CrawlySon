@@ -43,6 +43,12 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ date, items }),
     }),
+  // Naučený vkus kouča (profil štýlu + štatistika palcov)
+  getTaste: () =>
+    req<{ style: string | null; updatedAt: string | null; up: number; down: number; untilUpdate: number }>(
+      `/api/comment/feedback`
+    ),
+  resetTaste: () => req<{ ok: true }>(`/api/comment/feedback`, { method: "DELETE" }),
   // 👍/👎 ku komentáru – učí kouča, čo sa páči
   commentFeedback: (payload: { text: string; kind?: string; persona?: string; rating: 1 | -1 }) =>
     req<{ ok: true; learned?: boolean }>(`/api/comment/feedback`, { method: "POST", body: JSON.stringify(payload) }),
