@@ -558,11 +558,13 @@ function factLines(f: DaySummaryFacts): string {
 }
 
 // Deterministická záloha – použije sa, keď AI nie je nakonfigurovaná alebo zlyhá.
-// Vyberie najvýraznejšiu odchýlku dňa, nech to nie je prázdna fráza.
+// Vyberie najvýraznejšiu odchýlku dňa a zhrnie ju do JEDNEJ vety s konkrétnymi
+// číslami, nech to nie je prázdna fráza ani výpis štatistík.
 export function fallbackSummaryLine(f: DaySummaryFacts): string {
+  const l = (ml: number) => (ml / 1000).toFixed(1).replace(".", ",");
   const top = f.topItems[0];
   if (f.goalProtein > 0 && f.protein < f.goalProtein * 0.7) {
-    return `Bielkoviny zaostali – ${f.protein} g z ${f.goalProtein} g. Dnes skús pridať tvaroh, vajcia či kuracie.`;
+    return `Bielkoviny zaostali – ${f.protein} g z ${f.goalProtein} g, dnes skús pridať tvaroh či vajcia.`;
   }
   if (f.goalCalories > 0 && f.calories > f.goalCalories * 1.2) {
     const over = f.calories - f.goalCalories;
@@ -571,12 +573,12 @@ export function fallbackSummaryLine(f: DaySummaryFacts): string {
       : `Cieľ si prekročil o ${over} kcal.`;
   }
   if (f.goalWaterMl > 0 && f.waterMl < f.goalWaterMl * 0.6) {
-    return `Pitný režim zaostal – ${(f.waterMl / 1000).toFixed(1)} l z ${(f.goalWaterMl / 1000).toFixed(1)} l. Dnes to doháňaj od rána.`;
+    return `Pitný režim zaostal – ${l(f.waterMl)} l z ${l(f.goalWaterMl)} l, dnes to doháňaj od rána.`;
   }
   if (!f.hasVegetable) return "Včera chýbala zelenina – dnes ju skús dostať aspoň do obeda.";
   if (!f.hasFruit) return "Ovocie včera nebolo – dnes stačí jedno jablko alebo hrsť bobúľ.";
   if (f.goalCalories > 0 && f.calories <= f.goalCalories && (f.healthScore ?? 0) >= 7) {
-    return `Cieľ aj zdravosť ${f.healthScore} z 10 – včerajšok ti vyšiel, drž to.`;
+    return `Cieľ aj zdravosť ${String(f.healthScore).replace(".", ",")} z 10 – včerajšok ti vyšiel, drž to.`;
   }
   if (f.goalCalories > 0 && f.calories <= f.goalCalories) {
     return `Zmestil si sa do cieľa (${f.calories} z ${f.goalCalories} kcal).`;
@@ -591,8 +593,9 @@ export async function writeDaySummary(f: DaySummaryFacts): Promise<string | null
   try {
     const r = await openAIChatJSON({
       system:
-        'Si stručný výživový kouč píšuci po slovensky. Z údajov o včerajšom dni napíš JEDNU vetu (max 160 znakov) ' +
-        'do push notifikácie. Pravidlá: vždy sa opri o KONKRÉTNE číslo alebo konkrétne jedlo z údajov; ' +
+        'Si stručný výživový kouč píšuci po slovensky. Z údajov o včerajšom dni napíš PRESNE JEDNU vetu (max 160 znakov) ' +
+        'do push notifikácie. Pravidlá: jedna veta, nikdy viac – žiadne odrážky, žiadny výpis štatistík ani reťazenie čísel; ' +
+        'oprí sa o JEDEN konkrétny údaj alebo jedno konkrétne jedlo z údajov, nie o všetky naraz; ' +
         'žiadne všeobecné frázy typu „dnes to zvládneš lepšie"; tykaj; bez oslovenia a bez úvodu; ' +
         'najviac jedno emoji a len ak sa hodí; ak bol deň dobrý, pochváľ konkrétne, ak nie, daj jednu vecnú radu na dnes. ' +
         'Odpovedz IBA JSON objektom {"body":"…"}.',
