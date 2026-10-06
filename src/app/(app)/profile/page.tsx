@@ -6,7 +6,7 @@ import { api } from "@/lib/api";
 import { recommendedCalories, suggestedMacros, tdee } from "@/lib/nutrition";
 import { enablePush, disablePush, isPushSupported, isStandalone } from "@/lib/push-client";
 import { getCache, setCache } from "@/lib/page-cache";
-import type { Profile, Badge, Streak } from "@/lib/types";
+import { personaOf, type Profile, type Badge, type Streak } from "@/lib/types";
 import { CHALLENGE_META, CHALLENGE_ORDER } from "@/lib/badges";
 
 const DEFAULT_WATER_RULES = [
@@ -287,21 +287,55 @@ export default function ProfilePage() {
           </span>
         </label>
 
-        {/* Drsný kouč – ranné zhrnutie v štýle roastu */}
-        <label className="flex items-start gap-3 rounded-xl bg-slate-50 p-3">
-          <input
-            type="checkbox"
-            className="mt-0.5 h-5 w-5 accent-brand-600"
-            checked={p.coachRoast ?? false}
-            onChange={(e) => set("coachRoast", e.target.checked)}
-          />
-          <span className="text-sm text-slate-600">
-            <b className="text-slate-700">🐷 Drsný kouč</b>
-            <br />
-            Ranné zhrnutie včerajška bez servítky – vtipne ti vytmaví, čo si zas napchal. Čísla aj rada ostávajú, mení
-            sa len tón.
-          </span>
-        </label>
+        {/* Osobnosť kouča – riadi rannú vetu aj komentáre pri pridaní jedla */}
+        <div className="rounded-xl bg-slate-50 p-3">
+          <b className="text-sm text-slate-700">🎭 Osobnosť kouča</b>
+          <div className="mt-2 grid grid-cols-3 gap-2">
+            {(
+              [
+                ["nice", "🥰", "Milý"],
+                ["normal", "🤨", "Normálny"],
+                ["roast", "🐷", "Drsný"],
+              ] as const
+            ).map(([key, emoji, label]) => {
+              const active = personaOf(p) === key;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => set("coachPersona", key)}
+                  className={`rounded-xl px-2 py-2 text-sm font-medium transition ${
+                    active ? "bg-brand-600 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200"
+                  }`}
+                >
+                  <span className="block text-lg leading-none">{emoji}</span>
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          <p className="mt-2 text-[11px] text-slate-500">
+            {personaOf(p) === "roast"
+              ? "Bez servítky – vtipne ti vytmaví, čo si zas napchal. Komentuje jedlo, nie teba."
+              : personaOf(p) === "nice"
+                ? "Povzbudzuje a pri horšej voľbe láskavo pošťuchne."
+                : "Suchý humor a irónia, ale bez urážok."}
+          </p>
+
+          <label className="mt-3 flex items-start gap-3">
+            <input
+              type="checkbox"
+              className="mt-0.5 h-5 w-5 accent-brand-600"
+              checked={p.coachComments ?? true}
+              onChange={(e) => set("coachComments", e.target.checked)}
+            />
+            <span className="text-sm text-slate-600">
+              <b className="text-slate-700">💬 Komentáre k jedlu</b>
+              <br />
+              Keď si niečo pridáš, kouč sa občas ozve – pri tretej klobáse skoro určite, pri káve skoro nikdy.
+            </span>
+          </label>
+        </div>
 
         {pushOn && (
           <button onClick={sendTest} disabled={pushBusy} className="btn-ghost w-full py-2 text-sm">

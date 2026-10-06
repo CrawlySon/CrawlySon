@@ -45,6 +45,13 @@ export function skToday(d = new Date()): string {
   return p; // en-CA dáva rovno YYYY-MM-DD
 }
 
+// Aktuálna hodina v Europe/Bratislava (0–23).
+export function skHour(d = new Date()): number {
+  const p = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Bratislava", hour: "2-digit", hour12: false }).formatToParts(d);
+  const h = parseInt(p.find((x) => x.type === "hour")?.value || "0", 10);
+  return h === 24 ? 0 : h;
+}
+
 // Váha položky pre vážený priemer zdravosti (hmotnosť, fallback z kalórií).
 function weightOf(grams: number | null, calories: number): number {
   if (grams && grams > 0) return grams;

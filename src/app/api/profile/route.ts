@@ -22,6 +22,8 @@ const PROFILE_SELECT = {
   waterReminders: true,
   coachRemind: true,
   coachRoast: true,
+  coachPersona: true,
+  coachComments: true,
 };
 
 export async function GET() {
@@ -54,6 +56,12 @@ export async function PATCH(req: Request) {
   if (b.waterRemind !== undefined) data.waterRemind = !!b.waterRemind;
   if (b.coachRemind !== undefined) data.coachRemind = !!b.coachRemind;
   if (b.coachRoast !== undefined) data.coachRoast = !!b.coachRoast;
+  if (b.coachPersona !== undefined) {
+    const p = ["nice", "normal", "roast"].includes(b.coachPersona) ? b.coachPersona : "normal";
+    data.coachPersona = p;
+    data.coachRoast = p === "roast"; // drž staré pole v súlade
+  }
+  if (b.coachComments !== undefined) data.coachComments = !!b.coachComments;
   if (b.waterReminders !== undefined) {
     data.waterReminders = Array.isArray(b.waterReminders)
       ? b.waterReminders

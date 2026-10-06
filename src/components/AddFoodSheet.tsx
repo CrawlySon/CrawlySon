@@ -10,7 +10,8 @@ type Props = {
   date: string;
   defaultMeal: MealType;
   onClose: () => void;
-  onSaved: () => void;
+  // Dostane práve uložené položky (kvôli komentáru kouča)
+  onSaved: (added?: { name: string; calories: number; protein?: number; category?: string | null; healthIndex?: number | null }[]) => void;
 };
 
 // Web Speech API typ (nie je v TS lib)
@@ -405,7 +406,7 @@ export default function AddFoodSheet({ date, defaultMeal, onClose, onSaved }: Pr
       if (water > 0) {
         await api.addWater(date, water);
       }
-      onSaved();
+      onSaved(items);
       onClose();
     } catch (e: any) {
       setError(e.message);

@@ -96,6 +96,8 @@ export type Profile = {
   waterReminders?: { hour: number; minMl: number }[] | null;
   coachRemind?: boolean;
   coachRoast?: boolean;
+  coachPersona?: "nice" | "normal" | "roast" | null;
+  coachComments?: boolean;
 };
 
 export type Badge = {
@@ -153,3 +155,11 @@ export type SupplementLog = {
   unit: string | null;
   createdAt: string;
 };
+
+export type CoachPersona = "nice" | "normal" | "roast";
+
+// Efektívna osobnosť – staršie účty majú len coachRoast.
+export function personaOf(p: { coachPersona?: string | null; coachRoast?: boolean | null }): CoachPersona {
+  if (p.coachPersona === "nice" || p.coachPersona === "normal" || p.coachPersona === "roast") return p.coachPersona;
+  return p.coachRoast ? "roast" : "normal";
+}

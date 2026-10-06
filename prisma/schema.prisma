@@ -38,6 +38,13 @@ model User {
   coachRemind Boolean @default(true)
   // „Drsný kouč" – ranné zhrnutie v štýle roastu (opt-in, štandardne vypnuté)
   coachRoast  Boolean @default(false)
+  // Osobnosť kouča: "nice" | "normal" | "roast". Null = odvodí sa z coachRoast
+  // (staršie účty). Riadi rannú vetu aj komentáre pri pridaní jedla.
+  coachPersona  String?
+  // Komentáre („bubliny") pri pridávaní jedla
+  coachComments Boolean @default(true)
+  // Pamäť komentárov: { at: ISO čas posledného, recent: [posledné hlášky] }
+  commentLog    Json?
   coachState  Json?   // { [druh]: "YYYY-MM-DD" } – proti opakovaniu tej istej pripomienky za deň
 
   entries      Entry[]

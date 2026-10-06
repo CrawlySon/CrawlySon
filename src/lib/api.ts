@@ -37,6 +37,12 @@ export const api = {
       body: JSON.stringify({ imageBase64, mimeType }),
     }),
 
+  // Komentár kouča k práve pridanému jedlu (väčšinou null – ozve sa len niekedy)
+  comment: (date: string, items: { name: string; calories: number; protein?: number; category?: string | null; healthIndex?: number | null }[]) =>
+    req<{ comment: string | null; persona?: string }>(`/api/comment`, {
+      method: "POST",
+      body: JSON.stringify({ date, items }),
+    }),
   getFavorites: () => req<{ favorites: Favorite[] }>(`/api/favorites`),
   addFavorite: (payload: { name: string; mealType: MealType; items: FavoriteItem[] }) =>
     req<{ favorite: Favorite }>(`/api/favorites`, { method: "POST", body: JSON.stringify(payload) }),

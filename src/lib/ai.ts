@@ -699,3 +699,67 @@ export async function writeDaySummary(f: DaySummaryFacts, roast = false): Promis
     return null;
   }
 }
+
+// ── Komentár („bublina") pri pridaní jedla ──────────────────────────────────
+
+const COMMENT_RULES =
+  'Pravidlá pre všetky štýly: JEDNA krátka veta, max 110 znakov; reaguj na NAJVÝRAZNEJŠIU udalosť z podkladov ' +
+  '(sú zoradené od najdôležitejšej) a pomenuj konkrétne jedlo; kontext dňa je najlepší zdroj humoru; ' +
+  'komentuj jedlo a voľby, NIKDY telo ani vzhľad; nikdy nechváľ hladovanie ani extrémne malé jedenie; ' +
+  'neopakuj hlášky zo zoznamu „už povedané"; slovensky, tykaj, najviac jedno emoji. ' +
+  'Odpovedz IBA JSON objektom {"text":"…"}.';
+
+const COMMENT_PERSONA: Record<"nice" | "normal" | "roast", string> = {
+  nice:
+    'Si milý, povzbudivý kouč v nutričnej appke. Pri dobrej voľbe sa úprimne poteš, pri horšej láskavo ' +
+    'a s úsmevom pošťuchni, nikdy nevyčítaj. Príklad: „Brokolica! Tvoje telo ti práve posiela srdiečko 💚"',
+  normal:
+    'Si vtipný, suchý kouč v nutričnej appke. Glosuješ s nadhľadom a iróniou, ale bez urážok. Príklady: ' +
+    '„Tretia klobása dnes – rozhodol si sa stať údeninou?" · „Šalát po 2 000 kcal, to je ako umyť si ruky po bitke." · ' +
+    '„Brokolica? Kto si a čo si spravil s mojím používateľom?"',
+  roast:
+    'Si drsný, ale vtipný kouč, ktorý používateľa „roastuje" za jedlo – sám si to zapol a chce to. Láskavé nadávky ' +
+    '(„ty pažravá prasnica", „ty tlstý bravček", „ty bucľatý pampúšik") a hovorové slová („dodrbal", „napchal", ' +
+    '„žrádlo") sú OK, hrubé vulgarizmy nie. Príklady: „Tretia klobása dnes, ty prasa – rozhodol si sa stať údeninou?" · ' +
+    '„Šalát po 2 000 kcal, ty bravček, to je ako umyť si ruky po bitke." · ' +
+    '„Brokolica? Kto si a čo si spravil s mojou nenažranou prasnicou?"',
+};
+
+export async function writeFoodComment(input: {
+  persona: "nice" | "normal" | "roast";
+  triggers: { kind: string; note: string }[];
+  added: { name: string; calories: number }[];
+  dayCalories: number;
+  goalCalories: number;
+  hour: number;
+  recent: string[];
+}): Promise<string | null> {
+  if (!isOpenAIConfigured()) return null;
+  const facts = [
+    `Práve pridané: ${input.added.map((a) => `${a.name} (${Math.round(a.calories)} kcal)`).join(", ")}`,
+    `Dnes spolu: ${Math.round(input.dayCalories)} kcal${input.goalCalories > 0 ? ` z cieľa ${input.goalCalories}` : ""}`,
+    `Čas: ${input.hour}:00`,
+    input.triggers.length
+      ? `Udalosti (od najvýraznejšej): ${input.triggers.map((t) => t.note).join("; ")}`
+      : "Nič výnimočné – stačí ľahká poznámka k jedlu.",
+    input.recent.length ? `Už povedané (neopakuj): ${input.recent.map((r) => `„${r}"`).join(" ")}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  try {
+    const r = await openAIChatJSON({
+      system: `${COMMENT_PERSONA[input.persona]}\n\n${COMMENT_RULES}`,
+      user: facts,
+      temperature: 1.0,
+      maxTokens: 150,
+      timeoutMs: 20000,
+    });
+    const text = String(JSON.parse(r.text)?.text ?? "").trim();
+    if (!text) return null;
+    return text.length > 160 ? text.slice(0, 157) + "…" : text;
+  } catch (e) {
+    console.error("writeFoodComment zlyhal:", (e as any)?.message || e);
+    return null;
+  }
+}

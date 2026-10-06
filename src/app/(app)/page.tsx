@@ -28,6 +28,7 @@ import SupplementCard from "@/components/SupplementCard";
 import QuickFavorites from "@/components/QuickFavorites";
 import CalendarPopup from "@/components/CalendarPopup";
 import MoveDaySheet from "@/components/MoveDaySheet";
+import CoachBubble from "@/components/CoachBubble";
 
 function entryToFavItem(e: Entry): FavoriteItem {
   return {
@@ -140,6 +141,26 @@ export default function TodayPage() {
     load();
     checkBadges(); // po pridaní jedla over, či pribudol odznak
   }, [load]);
+
+  // Kouč sa k pridanému jedlu ozve len niekedy. Pýtame sa na pozadí, zápis
+  // jedla na komentár nečaká.
+  const [bubble, setBubble] = useState<{ text: string; persona?: string } | null>(null);
+  const closeBubble = useCallback(() => setBubble(null), []);
+  const onAdded = useCallback(
+    (added?: { name: string; calories: number; protein?: number; category?: string | null; healthIndex?: number | null }[]) => {
+      refreshAll();
+      if (!added?.length) return;
+      api
+        .comment(date, added)
+        .then((r) => {
+          if (r.comment) setBubble({ text: r.comment, persona: r.persona });
+        })
+        .catch(() => {
+          /* komentár je bonus – chyba nevadí */
+        });
+    },
+    [refreshAll, date]
+  );
 
   // Pri prvom otvorení založ základnú líniu odznakov (bez toastov)
   useEffect(() => {
@@ -359,7 +380,7 @@ export default function TodayPage() {
 
       <WaterCard date={date} reloadSignal={reload} />
 
-      <QuickFavorites date={date} reloadSignal={favReload} onLogged={refreshAll} />
+      <QuickFavorites date={date} reloadSignal={favReload} onLogged={onAdded} />
 
       {/* Prepínač výberu položiek (kopírovať do dnes / uložiť ako jedlo) */}
       {entries.length > 0 && (
@@ -490,8 +511,10 @@ export default function TodayPage() {
       )}
 
       {sheet && (
-        <AddFoodSheet date={date} defaultMeal={sheet} onClose={() => setSheet(null)} onSaved={refreshAll} />
+        <AddFoodSheet date={date} defaultMeal={sheet} onClose={() => setSheet(null)} onSaved={onAdded} />
       )}
+
+      {bubble && <CoachBubble text={bubble.text} persona={bubble.persona} onClose={closeBubble} />}
 
       {showCal && (
         <CalendarPopup value={date} max={todayISO()} onSelect={setDate} onClose={() => setShowCal(false)} />
