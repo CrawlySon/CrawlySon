@@ -61,14 +61,15 @@ OpenAI (Chat Completions, vision) · Web Push (VAPID) · Vercel (hosting + cron)
 
    | Premenná | Povinné | Účel |
    |---|---|---|
-   | `DATABASE_URL` | áno | Postgres |
+   | `DATABASE_URL` | áno | Postgres (Supabase – Session pooler alebo priame pripojenie) |
+   | `DIRECT_URL` | odporúčané | spojenie pre migrácie pri builde; ak chýba, použije sa `DATABASE_URL` |
    | `SESSION_SECRET` | áno | podpis prihlasovacej cookie (min. 16 znakov) |
    | `REGISTRATION_CODE` | áno | kód na vytváranie účtov |
    | `OPENAI_API_KEY` | áno (pre AI) | všetky AI funkcie |
    | `OPENAI_MODEL` | nie | default `gpt-4.1` |
    | `OPENAI_FALLBACK_MODEL` | nie | default `gpt-4o-mini` |
    | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | pre notifikácie | `npx web-push generate-vapid-keys` |
-   | `CRON_SECRET` | pre cron | ochrana `/api/cron/*` |
+   | `CRON_SECRET` | áno (pre notifikácie) | ochrana `/api/cron/*`; bez neho cron odmieta všetko. Rovnaká hodnota aj v GitHub secrets (`APP_URL`, `CRON_SECRET`) – detaily v `DEPLOY.md` |
 
 4. **Deploy.** Build sám spustí `prisma db push` (vytvorí/aktualizuje tabuľky)
    a `scripts/ensure-indexes.mjs` (trigramový index na vyhľadávanie).

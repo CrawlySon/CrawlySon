@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
+import Pig from "@/components/Pig";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -28,19 +29,22 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-brand-50 to-slate-100 px-6">
-      <div className="card w-full max-w-sm p-6">
-        <div className="mb-6 text-center">
-          <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-600 text-3xl">
-            🥗
+    <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-paper px-6 py-10">
+      <div className="card-raised w-full max-w-sm p-6">
+        <div className="mb-6 flex items-center gap-4">
+          <Pig mood={error ? "suspicious" : "content"} size={88} title="Rypák" />
+          <div>
+            <h1 className="display text-3xl leading-none text-ink">Rypák</h1>
+            <p className="mt-1 text-sm font-medium text-muted">Denník, ktorý ti to povie.</p>
           </div>
-          <h1 className="text-2xl font-bold text-slate-800">NutriAI</h1>
-          <p className="text-sm text-slate-500">Tvoj osobný nutričný denník</p>
         </div>
         <form onSubmit={submit} className="space-y-3">
           <div>
-            <label className="label">Meno</label>
+            <label className="label" htmlFor="username">
+              Meno
+            </label>
             <input
+              id="username"
               className="input"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
@@ -51,8 +55,11 @@ export default function LoginPage() {
             />
           </div>
           <div>
-            <label className="label">Heslo</label>
+            <label className="label" htmlFor="password">
+              Heslo
+            </label>
             <input
+              id="password"
               type="password"
               className="input"
               value={password}
@@ -61,14 +68,18 @@ export default function LoginPage() {
               placeholder="••••••••"
             />
           </div>
-          {error && <p className="rounded-xl bg-red-50 p-2.5 text-sm text-red-600">{error}</p>}
+          {error && (
+            <p className="border-2 border-bad bg-bad-soft p-2.5 text-sm font-semibold text-bad" role="alert">
+              {error}
+            </p>
+          )}
           <button type="submit" disabled={loading} className="btn-primary w-full">
             {loading ? "Prihlasujem…" : "Prihlásiť sa"}
           </button>
         </form>
-        <p className="mt-4 text-center text-sm text-slate-500">
+        <p className="mt-4 text-center text-sm text-muted">
           Nemáš účet?{" "}
-          <Link href="/register" className="font-medium text-brand-600">
+          <Link href="/register" className="font-bold text-ink underline decoration-pig decoration-2 underline-offset-2">
             Zaregistruj sa
           </Link>
         </p>

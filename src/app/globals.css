@@ -2,8 +2,85 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+  Dizajnové tokeny Rypáka – smer „Mäsiarstvo“ (REVIEW.md §4.2).
+  Svetlý režim = baliaci papier a tuš, tmavý = čierna tabuľa s kriedou.
+  Všetky farby v appke idú cez tieto premenné; Tailwind ich mapuje v
+  tailwind.config.ts (aj staré triedy brand a slate sú premapované sem,
+  takže ešte neprepísané obrazovky vyzerajú súdržne v oboch režimoch).
+*/
 :root {
   color-scheme: light;
+  --paper: #f6eedc;
+  --paper-2: #fbf6ea;
+  --ink: #1b1a17;
+  --muted: #5b564d;
+  --line: #e6dcc4;
+  --pig: #f2a3b3;
+  --pig-deep: #e36f8c;
+  --pig-blush: #f7c1cc;
+  --pig-stroke: #1b1a17;
+  --good: #2f7d4f;
+  --good-soft: #dff0e4;
+  --warn: #e0a526;
+  --warn-text: #9a6a12;
+  --warn-soft: #fbeccb;
+  --bad: #c8322b;
+  --bad-soft: #f8dcd8;
+  --water: #2b5c86;
+  --water-soft: #dcebf5;
+  --shadow: #1b1a17;
+  --overlay: rgba(27, 26, 23, 0.55);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --paper: #1a1814;
+    --paper-2: #23201b;
+    --ink: #f3ebd9;
+    --muted: #b7ad99;
+    --line: #3a352c;
+    --pig: #e88fa3;
+    --pig-deep: #c9597a;
+    --pig-blush: #f0b4c2;
+    --pig-stroke: #f3ebd9;
+    --good: #6fcf97;
+    --good-soft: #1f3a2b;
+    --warn: #f0c04a;
+    --warn-text: #f0c04a;
+    --warn-soft: #3d3215;
+    --bad: #f0756b;
+    --bad-soft: #432420;
+    --water: #9ec9f2;
+    --water-soft: #1f3447;
+    --shadow: #000000;
+    --overlay: rgba(0, 0, 0, 0.6);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #1a1814;
+  --paper-2: #23201b;
+  --ink: #f3ebd9;
+  --muted: #b7ad99;
+  --line: #3a352c;
+  --pig: #e88fa3;
+  --pig-deep: #c9597a;
+  --pig-blush: #f0b4c2;
+  --pig-stroke: #f3ebd9;
+  --good: #6fcf97;
+  --good-soft: #1f3a2b;
+  --warn: #f0c04a;
+  --warn-text: #f0c04a;
+  --warn-soft: #3d3215;
+  --bad: #f0756b;
+  --bad-soft: #432420;
+  --water: #9ec9f2;
+  --water-soft: #1f3447;
+  --shadow: #000000;
+  --overlay: rgba(0, 0, 0, 0.6);
 }
 
 html,
@@ -12,7 +89,19 @@ body {
 }
 
 body {
-  @apply bg-slate-50 text-slate-800;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body), system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Dvojité ťuknutie nemá zoomovať (nahrádza user-scalable=no, ktoré bránilo
+   aj pinch-zoomu – prístupnosť). */
+button,
+a,
+input,
+label {
+  touch-action: manipulation;
 }
 
 /* Bezpečné zóny pre iPhone (notch / home indicator) */
@@ -41,23 +130,100 @@ body {
   animation: popcheck 0.35s ease-out both;
 }
 
+/* Maskot: pokojné dýchanie a žmurknutie. Pri prefers-reduced-motion nič. */
+@keyframes pig-breathe {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-1.5px) scale(1.015); }
+}
+@keyframes pig-blink {
+  0%, 92%, 100% { transform: scaleY(1); }
+  95% { transform: scaleY(0.1); }
+}
+@keyframes pig-shake {
+  0%, 100% { transform: rotate(0); }
+  20% { transform: rotate(-4deg); }
+  40% { transform: rotate(4deg); }
+  60% { transform: rotate(-3deg); }
+  80% { transform: rotate(3deg); }
+}
+@keyframes pig-zzz {
+  0% { opacity: 0.2; transform: translateY(2px); }
+  50% { opacity: 1; transform: translateY(-2px); }
+  100% { opacity: 0.2; transform: translateY(2px); }
+}
+.pig__head { transform-origin: 100px 110px; }
+.pig__eyes { transform-origin: 100px 90px; }
+@media (prefers-reduced-motion: no-preference) {
+  .pig--animated .pig__head { animation: pig-breathe 4s ease-in-out infinite; }
+  .pig--animated .pig__eyes { animation: pig-blink 6s ease-in-out infinite; }
+  .pig--animated.pig--shocked .pig__head,
+  .pig--animated.pig--disgusted .pig__head { animation: pig-shake 0.6s ease-in-out 1, pig-breathe 4s ease-in-out 0.6s infinite; }
+  .pig--animated .pig__zzz { animation: pig-zzz 2.4s ease-in-out infinite; }
+}
+
 @layer components {
   .card {
-    @apply rounded-2xl bg-white shadow-sm border border-slate-100;
+    @apply border-2 border-ink bg-paper-2;
+  }
+  .card-raised {
+    @apply card;
+    box-shadow: 5px 5px 0 var(--shadow);
   }
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 font-medium transition active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100;
+    @apply inline-flex items-center justify-center gap-2 border-2 border-ink px-4 py-2.5 font-semibold transition active:translate-x-[1px] active:translate-y-[1px] disabled:opacity-50;
   }
   .btn-primary {
-    @apply btn bg-brand-600 text-white hover:bg-brand-700;
+    @apply btn bg-ink text-paper;
+    box-shadow: 4px 4px 0 var(--pig-deep);
+  }
+  .btn-primary:active {
+    box-shadow: 2px 2px 0 var(--pig-deep);
   }
   .btn-ghost {
-    @apply btn bg-slate-100 text-slate-700 hover:bg-slate-200;
+    @apply btn bg-paper-2 text-ink;
+  }
+  .btn-pig {
+    @apply btn bg-pig text-ink;
   }
   .input {
-    @apply w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200;
+    @apply w-full border-2 border-ink bg-paper-2 px-3 py-2.5 text-base text-ink outline-none placeholder:text-muted placeholder:opacity-70 focus:ring-2 focus:ring-pig;
+    font-size: 16px; /* pod 16 px iOS pri fokuse zoomuje */
   }
   .label {
-    @apply block text-sm font-medium text-slate-600 mb-1;
+    @apply mb-1 block text-xs font-bold uppercase tracking-[0.14em] text-muted;
+  }
+  .display {
+    font-family: var(--font-display), var(--font-body), sans-serif;
+  }
+  .eyebrow {
+    @apply text-[10px] font-bold uppercase tracking-[0.2em] text-muted;
+  }
+  /* Pečiatka – verdikt kouča („ZATIAĽ V LIMITE“) */
+  .stamp {
+    @apply display inline-block border-[2.5px] px-2 py-0.5 text-[10px] uppercase tracking-[0.12em];
+    transform: rotate(-6deg);
+  }
+  .stamp-good { @apply stamp border-good text-good; }
+  .stamp-warn { @apply stamp border-warn text-warn-text; }
+  .stamp-bad { @apply stamp border-bad text-bad; }
+  .chip {
+    @apply inline-flex items-center gap-1 border-2 border-ink bg-paper-2 px-2.5 py-1 text-xs font-bold;
+  }
+  .chip-active {
+    @apply chip bg-ink text-paper;
+  }
+  .sheet-overlay {
+    @apply fixed inset-0 z-50 flex flex-col justify-end;
+    background: var(--overlay);
+  }
+  .sheet {
+    @apply border-t-2 border-ink bg-paper safe-bottom;
+    border-radius: 24px 24px 0 0;
+    max-height: 92dvh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .grabber {
+    @apply mx-auto mb-3 mt-2 h-1.5 w-11 bg-ink opacity-30;
   }
 }

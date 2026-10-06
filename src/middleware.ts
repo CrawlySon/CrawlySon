@@ -8,6 +8,7 @@ const PUBLIC_PATHS = [
   "/register",
   "/api/auth/login",
   "/api/auth/register",
+  "/api/version", // verejná informácia o nasadenom commite (smoke test po deployi)
   "/manifest.webmanifest",
   "/sw.js",
 ];

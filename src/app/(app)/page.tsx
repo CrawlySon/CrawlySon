@@ -65,6 +65,17 @@ function formatDate(date: string): string {
   });
 }
 
+// Jedlo dňa podľa aktuálnej hodiny – používateľ si ho v sheete môže zmeniť.
+function defaultMealForNow(d = new Date()): MealType {
+  const h = d.getHours() + d.getMinutes() / 60;
+  if (h < 10) return "breakfast";
+  if (h < 11.5) return "snack";
+  if (h < 14.5) return "lunch";
+  if (h < 17) return "afternoon";
+  if (h < 20.5) return "dinner";
+  return "supper";
+}
+
 const entriesKey = (date: string) => `entries:${date}`;
 const PROFILE_KEY = "profile";
 
@@ -78,7 +89,6 @@ export default function TodayPage() {
   const [reload, setReload] = useState(0);
   const [favReload, setFavReload] = useState(0);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [hideFab, setHideFab] = useState(false);
   const [showCal, setShowCal] = useState(false);
   const [showMove, setShowMove] = useState(false);
   // Režim výberu položiek (kopírovanie do dnes / uloženie ako jedlo)
@@ -110,17 +120,16 @@ export default function TodayPage() {
     };
   }, []);
 
-  // Plávajúce tlačidlo sa schová pri scrollovaní dole a zobrazí pri scrollovaní hore
+  // Plus v spodnom menu: na „Dnes“ príde ako udalosť, z inej záložky ako ?add=1.
+  // Predvolené jedlo dňa podľa hodiny (nie „Iné“ – zápisy končili v sekcii Iné).
   useEffect(() => {
-    let lastY = window.scrollY;
-    function onScroll() {
-      const y = window.scrollY;
-      if (y > lastY + 6 && y > 90) setHideFab(true);
-      else if (y < lastY - 6) setHideFab(false);
-      lastY = y;
+    const open = () => setSheet(defaultMealForNow());
+    window.addEventListener("rypak:add", open);
+    if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("add") === "1") {
+      window.history.replaceState(null, "", "/");
+      open();
     }
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    return () => window.removeEventListener("rypak:add", open);
   }, []);
 
   const sensors = useSensors(
@@ -506,19 +515,10 @@ export default function TodayPage() {
 
       {!loading && entries.length === 0 && (
         <p className="mt-6 text-center text-sm text-slate-400">
-          Zatiaľ žiadne jedlo. Klikni na <b className="text-brand-600">+</b> dole a nadiktuj čo si zjedol.
+          Zatiaľ žiadne jedlo. Ťukni na <b className="text-ink">+</b> dole a napíš alebo nadiktuj, čo si zjedol.
         </p>
       )}
 
-      {/* Plávajúce tlačidlo – schová sa pri scrollovaní dole aj v režime výberu */}
-      <button
-        onClick={() => setSheet("other")}
-        className={`fixed bottom-24 left-1/2 z-20 -translate-x-1/2 rounded-full bg-brand-600 px-6 py-3.5 font-semibold text-white shadow-lg shadow-brand-600/30 transition-all duration-300 active:scale-95 ${
-          hideFab || selectMode ? "pointer-events-none translate-y-28 opacity-0" : "opacity-100"
-        }`}
-      >
-        ✨ Pridať jedlo
-      </button>
 
       {/* Lišta akcií výberu */}
       {selectMode && (
