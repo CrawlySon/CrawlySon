@@ -328,7 +328,10 @@ Kompletný zoznam: `git log --reverse --format='%ad %s' --date=short`.
   kvôli cene je otvorený, ale nie rozhodnutý. `@google/genai` v závislostiach je zvyšok.
 - **„Mini" modely** (`gpt-4o-mini`) vynechávali položky z dlhých zoznamov – preto `gpt-4.1`.
 - Spánok bol pôvodne 1–10, zmenený na **0–10**.
-- Kouč nesmie komentovať telo ani chváliť hladovanie (aj v drsnom móde).
+- Kouč nesmie komentovať telo ani chváliť hladovanie (aj v drsnom móde). **Doplnené
+  6. 10. 2026:** platí pre úrovne 1–3; plánovaná 4. úroveň „Rypák bez servítky" (opt-in
+  so súhlasom) smie komentovať váhu a trend z dát appky, ale hladovanie nechváli nikdy –
+  presné pravidlá sú v `REVIEW.md` §3.4 a používateľ ich schválil.
 
 ---
 
@@ -363,7 +366,9 @@ Kompletný zoznam: `git log --reverse --format='%ad %s' --date=short`.
 ## 11. Rýchly štart pre novú session
 
 1. Klon, `checkout claude/nutrition-tracker-app-mTVJ7`, `npm ci`, `npx prisma generate`.
-2. Prečítaj tento súbor, `README.md`, `prisma/schema.prisma`, a pri práci na kouči
+2. Prečítaj tento súbor, `README.md`, `prisma/schema.prisma`, **`REVIEW.md`** (review
+   z októbra 2026 + schválené smerovanie: názov Rypák, dizajn „Mäsiarstvo", 4 úrovne
+   kouča, nová štruktúra appky, roadmapa vo fázach 0–4), a pri práci na kouči
    `src/lib/food-comment.ts` + koniec `src/lib/ai.ts`.
 3. Pred zmenou v kouči/sériách/analytike si prečítaj §6 a §9.
 4. Po každej zmene: `tsc` → (`prisma validate`) → `next build` → commit s dôvodom → push.
