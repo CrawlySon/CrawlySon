@@ -558,32 +558,69 @@ function factLines(f: DaySummaryFacts): string {
 }
 
 // Deterministická záloha – použije sa, keď AI nie je nakonfigurovaná alebo zlyhá.
-// Vyberie najvýraznejšiu odchýlku dňa a zhrnie ju do JEDNEJ vety s konkrétnymi
-// číslami, nech to nie je prázdna fráza ani výpis štatistík.
+// Skladá JEDNU vetu hodnotiacu deň ako celok: čo zaostalo, čo naopak sedelo,
+// a jedna rada na dnes. Pri prekročení kalórií pomenuje konkrétne jedlo –
+// „údené koleno ťa vyšlo na 1 150 kcal" povie viac než „zjedol si veľa".
 export function fallbackSummaryLine(f: DaySummaryFacts): string {
-  const l = (ml: number) => (ml / 1000).toFixed(1).replace(".", ",");
   const top = f.topItems[0];
-  if (f.goalProtein > 0 && f.protein < f.goalProtein * 0.7) {
-    return `Bielkoviny zaostali – ${f.protein} g z ${f.goalProtein} g, dnes skús pridať tvaroh či vajcia.`;
+  const over = f.goalCalories > 0 ? f.calories - f.goalCalories : 0;
+  const good: string[] = [];
+  const bad: string[] = [];
+  let advice = "";
+  const suggest = (s: string) => {
+    if (!advice) advice = s;
+  };
+
+  if (f.goalCalories > 0 && f.calories > f.goalCalories * 1.15) {
+    bad.push(
+      top
+        ? `${top.name} ťa vyšlo na ${top.calories} kcal a deň skončil ${over} kcal nad cieľom`
+        : `deň skončil ${over} kcal nad cieľom`
+    );
+    suggest("dnes ber jedlá naľahko");
+  } else if (f.goalCalories > 0 && f.calories <= f.goalCalories) {
+    good.push("kalórie si udržal v cieli");
   }
-  if (f.goalCalories > 0 && f.calories > f.goalCalories * 1.2) {
-    const over = f.calories - f.goalCalories;
-    return top
-      ? `Cieľ si prekročil o ${over} kcal, najviac dala položka ${top.name} (${top.calories} kcal).`
-      : `Cieľ si prekročil o ${over} kcal.`;
+
+  if (f.goalProtein > 0) {
+    if (f.protein < f.goalProtein * 0.7) {
+      bad.push("bielkovín bolo málo");
+      suggest("dnes pridaj tvaroh alebo vajcia");
+    } else if (f.protein >= f.goalProtein) {
+      good.push("bielkoviny si dal");
+    }
   }
-  if (f.goalWaterMl > 0 && f.waterMl < f.goalWaterMl * 0.6) {
-    return `Pitný režim zaostal – ${l(f.waterMl)} l z ${l(f.goalWaterMl)} l, dnes to doháňaj od rána.`;
+
+  if (!f.hasVegetable) {
+    bad.push("chýbala zelenina");
+    suggest("dnes ju dostaň aspoň do obeda");
   }
-  if (!f.hasVegetable) return "Včera chýbala zelenina – dnes ju skús dostať aspoň do obeda.";
-  if (!f.hasFruit) return "Ovocie včera nebolo – dnes stačí jedno jablko alebo hrsť bobúľ.";
-  if (f.goalCalories > 0 && f.calories <= f.goalCalories && (f.healthScore ?? 0) >= 7) {
-    return `Cieľ aj zdravosť ${String(f.healthScore).replace(".", ",")} z 10 – včerajšok ti vyšiel, drž to.`;
+
+  if (f.goalWaterMl > 0) {
+    if (f.waterMl < f.goalWaterMl * 0.6) {
+      bad.push("vody bolo málo");
+      suggest("dnes pi od rána");
+    } else if (f.waterMl >= f.goalWaterMl * 0.9) {
+      good.push("vody si pil dosť");
+    }
   }
-  if (f.goalCalories > 0 && f.calories <= f.goalCalories) {
-    return `Zmestil si sa do cieľa (${f.calories} z ${f.goalCalories} kcal).`;
-  }
-  return `Zapísané ${f.entryCount} položiek, ${f.calories} kcal.`;
+
+  if (f.healthScore != null && f.healthScore >= 7) good.push("jedlo bolo zdravé");
+  // Mierne prekročenie nie je výčitka, ale rada sa hodí.
+  if (f.goalCalories > 0 && f.calories > f.goalCalories) suggest("skús dnes kalórie trochu stiahnuť");
+
+  const joinSk = (xs: string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(", ")} a ${xs[xs.length - 1]}` : xs[0] || "");
+  const b = bad.slice(0, 2);
+  const g = good.slice(0, 1);
+
+  let core: string;
+  if (b.length && g.length) core = `${joinSk(b)}, ale ${g[0]}`;
+  else if (b.length) core = joinSk(b);
+  else if (good.length) core = joinSk(good.slice(0, 2));
+  else core = "deň vyzeral vyrovnane";
+
+  const s = advice ? `${core} – ${advice}.` : `${core}.`;
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 // Napíše 1 vetu o včerajšku z konkrétnych čísel. Pri zlyhaní vráti null –
@@ -593,11 +630,13 @@ export async function writeDaySummary(f: DaySummaryFacts): Promise<string | null
   try {
     const r = await openAIChatJSON({
       system:
-        'Si stručný výživový kouč píšuci po slovensky. Z údajov o včerajšom dni napíš PRESNE JEDNU vetu (max 160 znakov) ' +
-        'do push notifikácie. Pravidlá: jedna veta, nikdy viac – žiadne odrážky, žiadny výpis štatistík ani reťazenie čísel; ' +
-        'oprí sa o JEDEN konkrétny údaj alebo jedno konkrétne jedlo z údajov, nie o všetky naraz; ' +
-        'žiadne všeobecné frázy typu „dnes to zvládneš lepšie"; tykaj; bez oslovenia a bez úvodu; ' +
-        'najviac jedno emoji a len ak sa hodí; ak bol deň dobrý, pochváľ konkrétne, ak nie, daj jednu vecnú radu na dnes. ' +
+        'Si stručný výživový kouč píšuci po slovensky. Pod riadkom so základnými číslami dňa (kcal, bielkoviny, voda, ' +
+        'zdravosť) bude tvoja JEDNA veta (max 170 znakov), ktorá zhodnotí včerajšok AKO CELOK. Pravidlá: ' +
+        'presne jedna veta – nie samostatný komentár ku každej metrike, ale súvislé zhodnotenie (môžeš spojiť, čo zaostalo ' +
+        'a čo naopak sedelo); ak deň pokazilo konkrétne jedlo, POMENUJ ho aj s jeho kcal z údajov ' +
+        '(napr. „údené koleno ťa vyšlo na 1 150 kcal"); zakonči jednou vecnou radou na dnes; ' +
+        'ak bol deň dobrý, pochváľ konkrétne a radu vynechaj; nevypisuj znova všetky čísla z riadku nad vetou; ' +
+        'žiadne všeobecné frázy typu „dnes to zvládneš lepšie"; tykaj; bez oslovenia; najviac jedno emoji. ' +
         'Odpovedz IBA JSON objektom {"body":"…"}.',
       user: `Údaje o včerajšku:\n${factLines(f)}`,
       temperature: 0.7,

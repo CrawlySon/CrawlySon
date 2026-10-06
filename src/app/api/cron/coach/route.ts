@@ -81,17 +81,24 @@ async function run(req: Request) {
       });
     };
 
-    // 2) Ráno: zhrnutie včerajška – JEDNA veta zostavená z reálnych čísel dňa
+    // 2) Ráno: zhrnutie včerajška – riadok s číslami + JEDNA veta hodnotiaca
+    //    deň ako celok (nie komentár ku každej metrike zvlášť).
     if (MORNING_WINDOW(hour) && state.summary !== today) {
       const yDate = shiftISO(today, -1);
       const y = dayStat(ctx, yDate);
       if (y.entryCount > 0) {
+        const cal = Math.round(y.calories);
+        const g = u.goalCalories;
+        const parts = [`${cal} kcal${g > 0 ? ` z ${g}` : ""}`, `B ${Math.round(y.protein)} g`];
+        if (y.waterMl > 0) parts.push(`💧 ${oneDec(y.waterMl / 1000)} l`);
+        if (y.healthScore != null) parts.push(`♥ ${oneDec(y.healthScore)}`);
+
         const facts = await buildDayFacts(u.id, yDate, ctx, u);
         const line = (await writeDaySummary(facts)) ?? fallbackSummaryLine(facts);
 
         const sent = await sendToSubs(u.pushSubs, {
           title: "📊 Zhrnutie včera",
-          body: line,
+          body: `${parts.join(" · ")}\n${line}`,
           url: "/history",
         });
         if (sent > 0) {
