@@ -735,6 +735,7 @@ export async function writeFoodComment(input: {
   goalCalories: number;
   meal: string; // jedlo dňa, do ktorého sa položka pridala
   recent: string[];
+  style?: string | null; // naučený vkus používateľa (destilát z 👍/👎)
 }): Promise<string | null> {
   if (!isOpenAIConfigured()) return null;
   const facts = [
@@ -751,7 +752,12 @@ export async function writeFoodComment(input: {
 
   try {
     const r = await openAIChatJSON({
-      system: `${COMMENT_PERSONA[input.persona]}\n\n${COMMENT_RULES}`,
+      system: `${COMMENT_PERSONA[input.persona]}\n\n${COMMENT_RULES}${
+        input.style
+          ? `\n\nVKUS TOHTO POUŽÍVATEĽA (naučené z jeho hodnotení – je to ŠTÝL, nie zásobník vtipov; nikdy neopakuj ` +
+            `hlášky, ktoré sa mu páčili, vymysli nové v podobnom duchu a vyhni sa tomu, čo ho nebaví):\n${input.style}`
+          : ""
+      }`,
       user: facts,
       temperature: 1.0,
       maxTokens: 150,
@@ -762,6 +768,46 @@ export async function writeFoodComment(input: {
     return text.length > 160 ? text.slice(0, 157) + "…" : text;
   } catch (e) {
     console.error("writeFoodComment zlyhal:", (e as any)?.message || e);
+    return null;
+  }
+}
+
+
+// ── Destilácia vkusu z hodnotení 👍/👎 ──────────────────────────────────────
+// Surové hodnotenia sa do promptu neposielajú (rástol by do nekonečna a model
+// by recykloval pochválené vtipy). Namiesto toho ich priebežne zhustíme do
+// krátkeho, abstraktného profilu štýlu s pevným stropom dĺžky.
+const STYLE_MAX = 700;
+
+export async function distillCommentStyle(
+  current: string | null,
+  rated: { text: string; rating: number; kind: string | null; persona: string | null }[]
+): Promise<string | null> {
+  if (!isOpenAIConfigured() || !rated.length) return null;
+  const lines = rated
+    .map((r) => `${r.rating > 0 ? "👍" : "👎"} [${r.kind || "?"}${r.persona ? `, ${r.persona}` : ""}] „${r.text}"`)
+    .join("\n");
+  try {
+    const r = await openAIChatJSON({
+      system:
+        "Analyzuješ humorový vkus jedného používateľa nutričnej appky, ktorej kouč komentuje jedlo. " +
+        "Dostaneš doterajší profil jeho vkusu a nové hlášky, ktoré ohodnotil palcom hore alebo dole. " +
+        "Vráť AKTUALIZOVANÝ profil: krátke odrážky po slovensky v dvoch blokoch „Baví ho:“ a „Nebaví ho:“. " +
+        "Popisuj ŠTÝL a MECHANIZMY humoru (napr. absurdné prirovnanie, prehnaná dráma, irónia, láskavé nadávky, " +
+        "slovné hračky, moralizovanie, dĺžka, emoji), prípadne témy, pri ktorých chce/nechce komentár. " +
+        "NIKDY necituj ani neparafrázuj konkrétne vtipy – profil nesmie byť zásobník hlášok. " +
+        "Zlúč nové poznatky s doterajším profilom: drž to stabilné, jednotlivé hodnotenie ho neprevráti, " +
+        "ale opakujúci sa vzorec áno; protichodné či zastarané body odstráň. " +
+        `Max ${STYLE_MAX} znakov. Odpovedz IBA JSON objektom {"profile":"…"}.`,
+      user: `Doterajší profil:\n${current || "(zatiaľ žiadny)"}\n\nNové hodnotenia:\n${lines}`,
+      temperature: 0.3,
+      maxTokens: 500,
+    });
+    const profile = String(JSON.parse(r.text)?.profile ?? "").trim();
+    if (!profile) return null;
+    return profile.length > STYLE_MAX ? profile.slice(0, STYLE_MAX) : profile;
+  } catch (e) {
+    console.error("distillCommentStyle zlyhal:", (e as any)?.message || e);
     return null;
   }
 }

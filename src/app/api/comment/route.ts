@@ -2,7 +2,16 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getUserId } from "@/lib/server-auth";
 import { skToday } from "@/lib/coach";
-import { commentTriggers, shouldComment, focusItem, MEAL_SK, type CommentItem, type DayEntry } from "@/lib/food-comment";
+import {
+  commentTriggers,
+  applyFeedback,
+  shouldComment,
+  focusItem,
+  MEAL_SK,
+  type CommentItem,
+  type CommentStats,
+  type DayEntry,
+} from "@/lib/food-comment";
 import { writeFoodComment } from "@/lib/ai";
 import { personaOf } from "@/lib/types";
 
@@ -37,7 +46,16 @@ export async function POST(req: Request) {
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { coachComments: true, coachPersona: true, coachRoast: true, goalCalories: true, goalProtein: true, commentLog: true },
+    select: {
+      coachComments: true,
+      coachPersona: true,
+      coachRoast: true,
+      goalCalories: true,
+      goalProtein: true,
+      commentLog: true,
+      commentStyle: true,
+      commentStats: true,
+    },
   });
   if (!user || !user.coachComments) return NextResponse.json({ comment: null });
 
@@ -54,12 +72,11 @@ export async function POST(req: Request) {
     if (i >= 0) others.splice(i, 1);
   }
 
-  const triggers = commentTriggers({
-    added,
-    others,
-    goalCalories: user.goalCalories,
-    goalProtein: user.goalProtein,
-  });
+  // Váhy udalostí upravené podľa toho, čo používateľ hodnotil 👍/👎
+  const triggers = applyFeedback(
+    commentTriggers({ added, others, goalCalories: user.goalCalories, goalProtein: user.goalProtein }),
+    user.commentStats as CommentStats | null
+  );
 
   const log = (user.commentLog && typeof user.commentLog === "object" ? user.commentLog : {}) as Log;
   const minutesSinceLast = log.at ? (Date.now() - new Date(log.at).getTime()) / 60000 : null;
@@ -76,6 +93,7 @@ export async function POST(req: Request) {
     dayCalories: today.reduce((t, e) => t + e.calories, 0),
     goalCalories: user.goalCalories,
     recent,
+    style: user.commentStyle,
   });
   if (!comment) return NextResponse.json({ comment: null });
 
@@ -84,5 +102,5 @@ export async function POST(req: Request) {
     data: { commentLog: { at: new Date().toISOString(), recent: [comment, ...recent].slice(0, 6) } },
   });
 
-  return NextResponse.json({ comment, persona });
+  return NextResponse.json({ comment, persona, kind: triggers[0]?.kind ?? "random" });
 }

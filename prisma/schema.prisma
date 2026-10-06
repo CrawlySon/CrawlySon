@@ -45,6 +45,12 @@ model User {
   coachComments Boolean @default(true)
   // Pamäť komentárov: { at: ISO čas posledného, recent: [posledné hlášky] }
   commentLog    Json?
+  // Naučený vkus na humor: krátky profil štýlu (destilát z hodnotení, nie vtipy)
+  commentStyle     String?
+  // Kedy sa ozvať: { [druh udalosti]: { up, down } }
+  commentStats     Json?
+  // Kedy sa naposledy prepočítal profil štýlu
+  styleDistilledAt DateTime?
   coachState  Json?   // { [druh]: "YYYY-MM-DD" } – proti opakovaniu tej istej pripomienky za deň
 
   entries      Entry[]
@@ -59,6 +65,7 @@ model User {
   supplementLogs SupplementLog[]
   sleepLogs      SleepLog[]
   weightLogs     WeightLog[]
+  commentFeedback CommentFeedback[]
 }
 
 // Odomknutý odznak (achievement). Kľúč zodpovedá katalógu v src/lib/badges.ts.
@@ -253,6 +260,21 @@ model WeightLog {
 
   @@unique([userId, date])
   @@index([userId, date])
+}
+
+// Hodnotenie komentára kouča (👍/👎). Surová história – do promptu sa nikdy
+// neposiela priamo, len cez destilovaný profil štýlu (User.commentStyle).
+model CommentFeedback {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  text      String
+  kind      String? // druh udalosti, ktorá komentár spustila (repeat, junk…)
+  persona   String?
+  rating    Int // +1 / -1
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
 }
 
 // Referenčná databáza potravín (hodnoty na 100 g, ak nie je uvedené inak)

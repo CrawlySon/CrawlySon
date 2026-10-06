@@ -141,3 +141,30 @@ export function shouldComment(
   if (minutesSinceLast != null && minutesSinceLast < 15 && !strong) p *= 0.25;
   return rand() < p;
 }
+
+// ── Učenie z hodnotení: KEDY sa ozvať ───────────────────────────────────────
+// Ku každému druhu udalosti (repeat, junk, healthy…) si pamätáme 👍/👎.
+// Faktor je ohraničený 0,5–1,5: kouč nikdy úplne nestíchne (aj zle hodnotený
+// druh má šancu sa zlepšiť) a ani sa nerozkecá. Pri pár hodnoteniach je
+// faktor blízko 1 – jeden palec dole zo zvyku nič nezlomí.
+export type CommentStats = Record<string, { up: number; down: number }>;
+
+export function feedbackFactor(stats: CommentStats | null | undefined, kind: string): number {
+  const s = stats?.[kind];
+  if (!s) return 1;
+  // Laplaceovo vyhladenie: (up+1)/(up+down+2) je 0,5 pri žiadnych dátach.
+  return 0.5 + (s.up + 1) / (s.up + s.down + 2);
+}
+
+export function applyFeedback(triggers: Trigger[], stats: CommentStats | null | undefined): Trigger[] {
+  return triggers
+    .map((t) => ({ ...t, weight: Math.min(0.95, t.weight * feedbackFactor(stats, t.kind)) }))
+    .sort((a, b) => b.weight - a.weight);
+}
+
+export function bumpStats(stats: CommentStats | null | undefined, kind: string, rating: 1 | -1): CommentStats {
+  const next: CommentStats = { ...(stats || {}) };
+  const cur = next[kind] || { up: 0, down: 0 };
+  next[kind] = rating > 0 ? { ...cur, up: cur.up + 1 } : { ...cur, down: cur.down + 1 };
+  return next;
+}

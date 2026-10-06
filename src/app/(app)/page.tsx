@@ -144,7 +144,7 @@ export default function TodayPage() {
 
   // Kouč sa k pridanému jedlu ozve len niekedy. Pýtame sa na pozadí, zápis
   // jedla na komentár nečaká.
-  const [bubble, setBubble] = useState<{ text: string; persona?: string } | null>(null);
+  const [bubble, setBubble] = useState<{ text: string; persona?: string; kind?: string } | null>(null);
   const closeBubble = useCallback(() => setBubble(null), []);
   const onAdded = useCallback(
     (added?: { name: string; calories: number; protein?: number; category?: string | null; healthIndex?: number | null; mealType?: string | null }[]) => {
@@ -153,7 +153,7 @@ export default function TodayPage() {
       api
         .comment(date, added)
         .then((r) => {
-          if (r.comment) setBubble({ text: r.comment, persona: r.persona });
+          if (r.comment) setBubble({ text: r.comment, persona: r.persona, kind: r.kind });
         })
         .catch(() => {
           /* komentár je bonus – chyba nevadí */
@@ -514,7 +514,7 @@ export default function TodayPage() {
         <AddFoodSheet date={date} defaultMeal={sheet} onClose={() => setSheet(null)} onSaved={onAdded} />
       )}
 
-      {bubble && <CoachBubble text={bubble.text} persona={bubble.persona} onClose={closeBubble} />}
+      {bubble && <CoachBubble text={bubble.text} persona={bubble.persona} kind={bubble.kind} onClose={closeBubble} />}
 
       {showCal && (
         <CalendarPopup value={date} max={todayISO()} onSelect={setDate} onClose={() => setShowCal(false)} />
